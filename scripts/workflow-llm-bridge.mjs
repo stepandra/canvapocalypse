@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 
 const HOST = '127.0.0.1'
 const PORT = Number(process.env.WORKFLOW_LLM_PORT || 5176)
 const AMP_BIN = process.env.AMP_BIN || 'amp'
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const MAX_BODY_BYTES = 32_000
 const MAX_OUTPUT_BYTES = 120_000
 const REQUEST_TIMEOUT_MS = 120_000
@@ -49,6 +51,36 @@ const server = createServer(async (request, response) => {
 			)
 		}
 	}
+	if (request.method === 'POST' && url.pathname === '/isoflow/agent') {
+		try {
+			const payload = JSON.parse(await readBody(request))
+			const input = typeof payload.input === 'string' ? payload.input.trim() : ''
+			const instructions =
+				typeof payload.instructions === 'string' ? payload.instructions.trim() : ''
+			if (!input || !instructions) return send(response, 400, 'input and instructions are required')
+			const mode = normalizeAmpMode(payload.mode)
+			const prompt = [
+				'Use the project skill at .agents/skills/isoflow-studio/SKILL.md.',
+				'You are handling one bounded Isoflow canvas request from Canvapocalypse.',
+				'You may inspect this repository and use read-only tools to resolve IDs, contracts, and architecture.',
+				'Do not edit repository files in this bridge call. Diagram changes must be returned as JSON actions.',
+				`Instructions:\n${instructions}`,
+				`Input:\n${input}`,
+			].join('\n\n')
+			const output = await runAmp(prompt, mode, request, REPO_ROOT)
+			response.setHeader('Content-Type', 'text/plain; charset=utf-8')
+			response.setHeader('Cache-Control', 'no-store')
+			response.setHeader('X-Workflow-Provider', `amp-${mode}`)
+			response.setHeader('X-Amp-Workspace', 'canvapocalypse')
+			return send(response, 200, output)
+		} catch (error) {
+			return send(
+				response,
+				typeof error?.statusCode === 'number' ? error.statusCode : 500,
+				error instanceof Error ? error.message : String(error)
+			)
+		}
+	}
 	if (request.method !== 'POST' || url.pathname !== '/workflow/llm') {
 		return send(response, 404, 'Not found')
 	}
@@ -82,14 +114,14 @@ const server = createServer(async (request, response) => {
 				response
 			)
 		}
-		const mode = payload.model === 'amp-deep' ? 'deep' : 'rush'
+		const mode = normalizeAmpMode(payload.model)
 		const prompt = [
 			'You are executing one node in a local visual workflow.',
 			'Do not inspect or modify files. Do not invoke tools. Return only the node output.',
 			`Instructions:\n${instructions}`,
 			`Input:\n${input}`,
 		].join('\n\n')
-		const output = await runAmp(prompt, mode, request)
+		const output = await runAmp(prompt, mode, request, tmpdir())
 		response.setHeader('Content-Type', 'text/plain; charset=utf-8')
 		response.setHeader('Cache-Control', 'no-store')
 		response.setHeader('X-Workflow-Provider', `amp-${mode}`)
@@ -107,10 +139,10 @@ server.listen(PORT, HOST, () => {
 	console.log(`workflow LLM bridge listening on http://${HOST}:${PORT}`)
 })
 
-function runAmp(prompt, mode, request) {
+function runAmp(prompt, mode, request, cwd) {
 	return new Promise((resolve, reject) => {
 		const child = spawn(AMP_BIN, ['--mode', mode, '-x', prompt], {
-			cwd: tmpdir(),
+			cwd,
 			stdio: ['ignore', 'pipe', 'pipe'],
 			env: process.env,
 		})
@@ -142,6 +174,16 @@ function runAmp(prompt, mode, request) {
 			else reject(new Error(stderr.trim() || `Amp exited with code ${code}`))
 		})
 	})
+}
+
+function normalizeAmpMode(value) {
+	const mode = typeof value === 'string' ? value.replace(/^amp-/, '') : 'medium'
+	if (!['low', 'medium', 'high', 'ultra'].includes(mode)) {
+		const error = new Error('Amp mode must be low, medium, high, or ultra')
+		error.statusCode = 400
+		throw error
+	}
+	return mode
 }
 
 async function listOpenRouterModels(request, response) {

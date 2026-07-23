@@ -213,7 +213,7 @@ function IsoflowAgentControls({
 	view: IsoflowCompactView
 }) {
 	const editor = useEditor()
-	const [provider, setProvider] = useState<IsoflowAgentProvider>('amp-rush')
+	const [provider, setProvider] = useState<IsoflowAgentProvider>('amp-medium')
 	const [models, setModels] = useState<OpenRouterModel[]>(() =>
 		getCachedOpenRouterModels().filter(isGrokModel)
 	)
@@ -289,8 +289,10 @@ function IsoflowAgentControls({
 						void chooseProvider(event.target.value as IsoflowAgentProvider)
 					}
 				>
-					<option value="amp-rush">Amp Rush</option>
-					<option value="amp-deep">Amp Deep</option>
+					<option value="amp-low">Amp Low</option>
+					<option value="amp-medium">Amp Medium</option>
+					<option value="amp-high">Amp High</option>
+					<option value="amp-ultra">Amp Ultra</option>
 					<option value="openrouter">Grok via OpenRouter</option>
 				</select>
 			</label>

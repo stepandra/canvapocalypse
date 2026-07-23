@@ -34,11 +34,11 @@ icons and geometry remain authoritative inside the embed.
 
 ## Decisions
 
-### The lab bridge is the source of truth
+### Isoflow Studio is the source of truth
 
 The tldraw document stores only `provider`, `baseUrl`, `projectId`, and `viewId`
-in embed metadata. Full Isoflow models and icon catalogs stay in
-`openwiki-isoflow-lab`, avoiding duplicated state and large canvas documents.
+in embed metadata. Full Isoflow models and icon catalogs stay in the repo-local
+`isoflow-studio/` module, avoiding duplicated state and large canvas documents.
 
 ### Context is selected and bounded
 
@@ -47,13 +47,11 @@ maximum of 32 nodes and 48 connectors plus view names and the current revision.
 The full model and icon catalog are fetched only for an explicit search or
 mutation action.
 
-### Existing bridge operations remain the mutation primitive
+### Bridge transactions remain the mutation primitive
 
-Node moves, renames, adds, removes, connects, and disconnects use the bridge
-patch endpoint. Creating a diagram view uses the existing revision-guarded model
-replacement endpoint because the bridge does not currently expose `add_view`.
-The client fetches the current model, appends one validated view, and replaces
-the model at the same revision.
+View lifecycle, item, connector, rectangle, text box, color, and legend changes
+use revision-guarded Bridge v2 transactions. Full-model replacement remains
+available for imports and recovery, not as the default for ordinary agent edits.
 
 ### New Isoflow views use native icons
 
@@ -69,12 +67,14 @@ while still supporting the local lab.
 ### Provider-independent agent contract
 
 Isoflow context and actions are part of the canvas agent mode, not coupled to a
-specific model vendor. The selected embed inspector also exposes a narrow
-Amp/Grok control surface: Amp Rush/Deep use the local workflow bridge, while
+specific model vendor. The selected embed inspector exposes a narrow Amp/Grok
+control surface. Amp uses the current Low/Medium/High/Ultra dial and runs from
+the Canvapocalypse repository root with the project-specific Isoflow skill;
 Grok reuses the session-only OpenRouter connection and model catalog. Both
 receive the same bounded view contract and return the same validated
 revision-guarded action types; no provider-specific Isoflow mutation format is
-maintained.
+maintained. Ordinary workflow LLM nodes remain isolated and do not gain
+repository authority.
 
 ### Offline bridge failure is context, not a chat failure
 

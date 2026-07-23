@@ -552,5 +552,5 @@ function standaloneNodeConfig(
 			baseUrl: 'http://127.0.0.1:11434/v1',
 		}
 	}
-	return { instructions: 'Transform the input.', model: 'amp-rush', provider: 'amp' }
+	return { instructions: 'Transform the input.', model: 'amp-medium', provider: 'amp' }
 }

@@ -132,7 +132,7 @@ export function buildEditableLlmWorkflowSpec(id = `workflow-${Date.now()}`): Wor
 				config: {
 					instructions:
 						'You are an ML workflow assistant. Transform the input into a concise, executable next step.',
-					model: 'amp-rush',
+					model: 'amp-medium',
 					provider: 'amp',
 				},
 			},

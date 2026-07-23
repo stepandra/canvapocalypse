@@ -352,7 +352,7 @@ function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
 									provider: nextProvider,
 									model:
 										nextProvider === 'amp'
-											? 'amp-rush'
+											? 'amp-medium'
 											: nextProvider === 'builtin'
 												? 'claude-sonnet-4-5'
 												: nextProvider === 'openrouter'
@@ -374,12 +374,14 @@ function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
 						<label>
 							MODEL
 							<select
-								value={meta.config.model ?? 'amp-rush'}
+								value={meta.config.model ?? 'amp-medium'}
 								disabled={meta.readonly}
 								onChange={(event) => updateConfig('model', event.currentTarget.value)}
 							>
-							<option value="amp-rush">Amp Rush (local coding-agent bridge)</option>
-							<option value="amp-deep">Amp Deep (local coding-agent bridge)</option>
+							<option value="amp-low">Amp Low (isolated workflow node)</option>
+							<option value="amp-medium">Amp Medium (isolated workflow node)</option>
+							<option value="amp-high">Amp High (isolated workflow node)</option>
+							<option value="amp-ultra">Amp Ultra (isolated workflow node)</option>
 							</select>
 						</label>
 					)}
