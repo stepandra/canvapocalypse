@@ -18,7 +18,10 @@ export function registerPromptPartUtil<T extends PromptPartUtilConstructor<BaseP
 	util: T
 ): T {
 	if (registry.has(util.type)) {
-		throw new Error(`Prompt part util already registered: ${util.type}`)
+		// Vite Fast Refresh evaluates the module again. Replacing the prior
+		// constructor keeps the registry unique without requiring a full reload.
+		registry.set(util.type, util)
+		return util
 	}
 	registry.set(util.type, util)
 	return util
