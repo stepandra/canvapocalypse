@@ -1,0 +1,4 @@
+interface:
+  display_name: "Isoflow Studio"
+  short_description: "Operate the repo-local Isoflow editor and bridge"
+  default_prompt: "Use $isoflow-studio to inspect and extend the repo-local Isoflow Studio with repository context."
