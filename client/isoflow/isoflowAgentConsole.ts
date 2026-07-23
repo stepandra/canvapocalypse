@@ -52,6 +52,7 @@ export async function runIsoflowAgent({
 			cache: 'no-store',
 			signal,
 			body: JSON.stringify({
+				projectId: isOpenRouter ? undefined : view.projectId,
 				provider: isOpenRouter ? 'openrouter' : 'amp',
 				model: isOpenRouter ? model : undefined,
 				mode: isOpenRouter ? undefined : provider,

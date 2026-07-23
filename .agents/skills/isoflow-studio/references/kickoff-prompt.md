@@ -2,6 +2,11 @@
 
 Paste this into an Amp thread started from the Canvapocalypse repository root:
 
+This prompt is for implementation work on the integration itself. Amp requests
+sent from the Isoflow canvas use a different boundary: the bridge resolves the
+selected workspace's `projectRoot` and starts Amp inside that owning source
+repository so diagram work can be grounded in its files.
+
 ```text
 Use the $isoflow-studio skill.
 

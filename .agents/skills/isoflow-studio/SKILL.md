@@ -33,7 +33,8 @@ read `references/bridge-v2.md`.
 - `client/isoflow/`: tldraw provider, compact inspection, agent actions, and
   overlay UI.
 - `scripts/workflow-llm-bridge.mjs`: loopback model bridge. Isoflow Amp requests
-  run from the repository root; ordinary workflow LLM nodes remain isolated.
+  resolve the selected workspace's allowlisted `projectRoot` and run from that
+  owning source repository; ordinary workflow LLM nodes remain isolated.
 
 ## Run the stack
 

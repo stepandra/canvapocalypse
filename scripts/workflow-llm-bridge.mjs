@@ -2,11 +2,16 @@ import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { resolveIsoflowProjectContext } from './isoflow-project-context.mjs'
 
 const HOST = '127.0.0.1'
 const PORT = Number(process.env.WORKFLOW_LLM_PORT || 5176)
 const AMP_BIN = process.env.AMP_BIN || 'amp'
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+const ISOFLOW_STUDIO_ROOT = fileURLToPath(new URL('../isoflow-studio/', import.meta.url))
+const ISOFLOW_SKILL_PATH = fileURLToPath(
+	new URL('../.agents/skills/isoflow-studio/SKILL.md', import.meta.url)
+)
 const MAX_BODY_BYTES = 32_000
 const MAX_OUTPUT_BYTES = 120_000
 const REQUEST_TIMEOUT_MS = 120_000
@@ -54,24 +59,34 @@ const server = createServer(async (request, response) => {
 	if (request.method === 'POST' && url.pathname === '/isoflow/agent') {
 		try {
 			const payload = JSON.parse(await readBody(request))
+			const project = await resolveIsoflowProjectContext({
+				projectId: payload.projectId,
+				studioRoot: ISOFLOW_STUDIO_ROOT,
+				projectRootOverride: process.env.ISOFLOW_PROJECT_ROOT,
+			})
 			const input = typeof payload.input === 'string' ? payload.input.trim() : ''
 			const instructions =
 				typeof payload.instructions === 'string' ? payload.instructions.trim() : ''
 			if (!input || !instructions) return send(response, 400, 'input and instructions are required')
 			const mode = normalizeAmpMode(payload.mode)
 			const prompt = [
-				'Use the project skill at .agents/skills/isoflow-studio/SKILL.md.',
+				`Read and follow the Isoflow skill at ${ISOFLOW_SKILL_PATH}.`,
 				'You are handling one bounded Isoflow canvas request from Canvapocalypse.',
-				'You may inspect this repository and use read-only tools to resolve IDs, contracts, and architecture.',
-				'Do not edit repository files in this bridge call. Diagram changes must be returned as JSON actions.',
+				`The selected Isoflow project is ${project.projectId}.`,
+				`Your working directory is its authoritative source repository: ${project.projectRoot}.`,
+				'Read the target repository AGENTS.md first when present, then inspect only the code, specs, ADRs, and documents needed to ground the requested diagram.',
+				'Use bounded discovery such as targeted path searches. Do not dump or ingest the entire repository.',
+				'The target source repository is authoritative for diagram facts; the compact canvas context may be incomplete.',
+				'Use read-only tools for source inspection. Do not edit repository files in this browser bridge call.',
+				'Diagram changes must be returned only as validated JSON actions in the requested response shape.',
 				`Instructions:\n${instructions}`,
 				`Input:\n${input}`,
 			].join('\n\n')
-			const output = await runAmp(prompt, mode, request, REPO_ROOT)
+			const output = await runAmp(prompt, mode, request, project.projectRoot)
 			response.setHeader('Content-Type', 'text/plain; charset=utf-8')
 			response.setHeader('Cache-Control', 'no-store')
 			response.setHeader('X-Workflow-Provider', `amp-${mode}`)
-			response.setHeader('X-Amp-Workspace', 'canvapocalypse')
+			response.setHeader('X-Amp-Workspace', project.projectId)
 			return send(response, 200, output)
 		} catch (error) {
 			return send(

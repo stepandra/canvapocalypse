@@ -16,13 +16,16 @@ Date: 2026-07-24
 4. Workspace project roots are repository-relative and can be overridden with
    `ISOFLOW_PROJECT_ROOT`. Personal absolute paths are not committed.
 5. The Isoflow Amp console uses the current `low/medium/high/ultra` dial, starts
-   Amp from the Canvapocalypse repository root, and explicitly loads the
-   repo-local Isoflow skill. Generic workflow LLM nodes stay isolated in a
-   temporary directory.
+   Amp from the selected workspace's allowlisted `projectRoot`, and explicitly
+   loads the repo-local Isoflow skill by its bridge-resolved absolute path.
+   Generic workflow LLM nodes stay isolated in a temporary directory.
 6. Browser-triggered Amp calls may inspect repository context but return
    validated Isoflow actions instead of editing source files. Full coding work
    is launched in a normal Amp thread with the repo-local skill and kickoff
    prompt.
+7. The browser supplies only `projectId`, never a filesystem path. The loopback
+   bridge validates that ID, reads the matching workspace JSON, and verifies the
+   configured project root before spawning Amp.
 
 ## Observed dependency debt
 

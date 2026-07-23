@@ -17,7 +17,7 @@
 		"isoflow:install": "npm --prefix isoflow-studio install",
 		"isoflow:test": "npm --prefix isoflow-studio test",
 		"preview": "vite preview",
-		"test": "vitest run --config vitest.config.ts",
+		"test": "node --test scripts/isoflow-project-context.test.mjs && vitest run --config vitest.config.ts",
 		"workflow:bridge": "node scripts/workflow-llm-bridge.mjs"
 	},
 	"dependencies": {

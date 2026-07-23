@@ -69,12 +69,17 @@ while still supporting the local lab.
 Isoflow context and actions are part of the canvas agent mode, not coupled to a
 specific model vendor. The selected embed inspector exposes a narrow Amp/Grok
 control surface. Amp uses the current Low/Medium/High/Ultra dial and runs from
-the Canvapocalypse repository root with the project-specific Isoflow skill;
-Grok reuses the session-only OpenRouter connection and model catalog. Both
-receive the same bounded view contract and return the same validated
-revision-guarded action types; no provider-specific Isoflow mutation format is
-maintained. Ordinary workflow LLM nodes remain isolated and do not gain
-repository authority.
+the selected workspace's allowlisted `projectRoot`, reads that source
+repository's applicable `AGENTS.md`, code, specs, ADRs, and linked documents,
+and explicitly loads the Canvapocalypse Isoflow skill. Grok reuses the
+session-only OpenRouter connection and model catalog. Both receive the same
+bounded view contract and return the same validated revision-guarded action
+types; no provider-specific Isoflow mutation format is maintained. Ordinary
+workflow LLM nodes remain isolated and do not gain repository authority.
+
+The browser sends only `projectId`. It cannot supply an arbitrary filesystem
+path: the loopback bridge validates the ID and resolves `projectRoot` from the
+repo-owned workspace JSON before starting Amp in that directory.
 
 ### Offline bridge failure is context, not a chat failure
 
