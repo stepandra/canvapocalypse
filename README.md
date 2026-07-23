@@ -24,6 +24,37 @@ Run the development server with `yarn dev` or `npm run dev`.
 
 Open `http://localhost:5173/` in your browser to see the app.
 
+### OpenRouter workflow testing
+
+Start the workflow bridge alongside the development server:
+
+```sh
+npm run workflow:bridge
+```
+
+Open `http://localhost:5173/?workflow=ml-intern`, select an LLM node, choose
+OpenRouter, paste an API key, and click **Connect + load models**. The key is
+kept in `sessionStorage` for the current tab and is not written into the canvas
+or repository.
+
+Use **Duplicate as parallel model** to create another LLM branch with its own
+output node, choose a different model on each branch, and press **Run
+workflow**. Independent branches execute concurrently.
+
+The toolbar also includes a separate **OpenAI-compatible Base URL** node. It
+targets `{baseUrl}/models` and `{baseUrl}/chat/completions`, supports optional
+Bearer authentication, and still allows manual model ids when model discovery
+is unavailable. Arbitrary Base URLs are handled only by the loopback workflow
+bridge.
+
+New workflows use a resizable **Rich Output** node. JSON responses—including
+JSON wrapped in a string or fenced code block—render as a recursive disclosure
+tree. Other responses render as Markdown with raw HTML disabled.
+
+Every Play action is appended as a distinct IndexedDB run record. The Rich
+Output run selector can revisit earlier results without changing the graph or
+overwriting another run.
+
 ## Agent overview
 
 With its default configuration, the agent can perform the following actions:

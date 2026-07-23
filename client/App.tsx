@@ -18,12 +18,17 @@ import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
+import { WorkflowOverlay } from './workflow/WorkflowOverlay'
+import { WorkflowRichOutputShapeUtil } from './workflow/RichOutputShape'
+import { WORKFLOW_TOOLS } from './workflow/WorkflowTools'
+import { bootstrapMlInternWorkflows } from './workflow/workflowCanvas'
 
 // Customize tldraw's styles to play to the agent's strengths
 DefaultSizeStyle.setDefaultValue('s')
 
 // Custom tools for picking context items
-const tools = [TargetShapeTool, TargetAreaTool]
+const tools = [TargetShapeTool, TargetAreaTool, ...WORKFLOW_TOOLS]
+const shapeUtils = [WorkflowRichOutputShapeUtil]
 const overlayUtils = [AgentHighlightOverlayUtil]
 const overrides: TLUiOverrides = {
 	tools: (editor, tools) => {
@@ -57,10 +62,17 @@ function App() {
 	const handleUnmount = useCallback(() => {
 		setApp(null)
 	}, [])
+	const handleMount = useCallback((nextApp: TldrawAgentApp) => {
+		setApp(nextApp)
+		if (new URLSearchParams(window.location.search).get('workflow') === 'ml-intern') {
+			bootstrapMlInternWorkflows(nextApp.editor)
+		}
+	}, [])
 
 	// Custom components that need the agent app's React context
 	const components: TLComponents = useMemo(() => {
 		return {
+			InFrontOfTheCanvas: WorkflowOverlay,
 			HelperButtons: () =>
 				app && (
 					<TldrawAgentAppContextProvider app={app}>
@@ -77,11 +89,12 @@ function App() {
 					<Tldraw
 						persistenceKey="tldraw-agent-demo"
 						tools={tools}
+						shapeUtils={shapeUtils}
 						overlayUtils={overlayUtils}
 						overrides={overrides}
 						components={components}
 					>
-						<TldrawAgentAppProvider onMount={setApp} onUnmount={handleUnmount} />
+						<TldrawAgentAppProvider onMount={handleMount} onUnmount={handleUnmount} />
 					</Tldraw>
 				</div>
 				<ErrorBoundary fallback={ChatPanelFallback}>
