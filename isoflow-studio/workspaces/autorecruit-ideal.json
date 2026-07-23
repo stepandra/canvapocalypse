@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "projectId": "autorecruit-ideal",
+  "revision": 1,
+  "projectRoot": "../../autorecruit",
+  "nodes": [
+    {
+      "id": "proxmox-owned",
+      "itemId": "b_substrate",
+      "name": "Proxmox host",
+      "type": "bare-metal",
+      "provider": "Self-hosted",
+      "location": "Private / undisclosed",
+      "specs": {
+        "ip": "TBD",
+        "cpu": "TBD",
+        "ram": "TBD",
+        "storage": "TBD",
+        "network": "TBD"
+      },
+      "documentIds": ["repo-agents", "repo-readme"],
+      "tags": ["owned", "substrate"]
+    },
+    {
+      "id": "rentgpu-agentic",
+      "itemId": "a_rentgpu",
+      "name": "RentGPU agentic host",
+      "type": "vps",
+      "provider": "RentGPU",
+      "location": "Provider managed",
+      "specs": {
+        "ip": "TBD",
+        "cpu": "TBD",
+        "ram": "TBD",
+        "storage": "TBD",
+        "network": "Provider network"
+      },
+      "documentIds": ["repo-readme"],
+      "tags": ["rented", "gpu"]
+    },
+    {
+      "id": "exe-burst",
+      "itemId": "b_exedev",
+      "name": "exe.dev burst",
+      "type": "vm",
+      "provider": "exe.dev",
+      "location": "Provider managed",
+      "specs": {
+        "ip": "Ephemeral",
+        "cpu": "TBD",
+        "ram": "TBD",
+        "storage": "Ephemeral",
+        "network": "Provider network"
+      },
+      "documentIds": ["repo-agents"],
+      "tags": ["burst", "ephemeral"]
+    }
+  ],
+  "documents": [
+    {
+      "id": "repo-agents",
+      "title": "AutoRecruit agent contract",
+      "path": "AGENTS.md",
+      "description": "The real repository-level agent and governance contract."
+    },
+    {
+      "id": "repo-readme",
+      "title": "AutoRecruit overview",
+      "path": "README.md",
+      "description": "Repository overview, boundaries, and entry points."
+    },
+    {
+      "id": "matrix-readme",
+      "title": "matrix-os overview",
+      "path": "matrix-os/README.md",
+      "description": "Runtime and control-plane overview for matrix-os."
+    }
+  ],
+  "flows": [
+    {
+      "id": "operator-request",
+      "name": "Operator request → agent execution",
+      "description": "The primary control path from an operator through Hub and Matrix to Hermes workers.",
+      "color": "#2f9e65",
+      "steps": [
+        { "itemId": "a_operator", "name": "Operator", "description": "Initiates or approves work." },
+        { "itemId": "a_hub", "name": "Hub", "description": "Presents the command surface." },
+        { "itemId": "a_matrix", "name": "Matrix", "description": "Carries the durable conversation." },
+        { "itemId": "a_hermes", "name": "Hermes x4", "description": "Routes work to the worker pool." },
+        { "itemId": "a_workers", "name": "Workers", "description": "Execute bounded tasks." }
+      ]
+    },
+    {
+      "id": "llm-evaluation",
+      "name": "LLM route → evaluation",
+      "description": "Generation and evaluation path through the local router.",
+      "color": "#5c78d4",
+      "steps": [
+        { "itemId": "a_macbox", "name": "macbox eval-gen", "description": "Creates evaluation inputs." },
+        { "itemId": "a_router", "name": "LLM proxy", "description": "Routes model calls." },
+        { "itemId": "a_hermes", "name": "Hermes x4", "description": "Coordinates the run." },
+        { "itemId": "a_mlflow", "name": "MLflow eval", "description": "Records evaluation results." }
+      ]
+    }
+  ]
+}

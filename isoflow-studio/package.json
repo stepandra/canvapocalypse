@@ -1,0 +1,22 @@
+{
+  "name": "isoflow-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "compile": "node scripts/compile.mjs",
+    "dev": "vite --host 127.0.0.1 --port 4174",
+    "build": "npm run compile && vite build"
+  },
+  "dependencies": {
+    "@isoflow/isopacks": "^0.0.10",
+    "@vitejs/plugin-react": "latest",
+    "isoflow": "file:vendor/isoflow",
+    "marked": "^18.0.0",
+    "vite": "latest",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {}
+}

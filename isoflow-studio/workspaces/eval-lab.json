@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "projectId": "eval-lab",
+  "revision": 1,
+  "projectRoot": "../../autorecruit",
+  "nodes": [
+    {
+      "id": "eval-runner",
+      "itemId": "v1-runner",
+      "name": "Evaluation runner",
+      "type": "vm",
+      "provider": "Local / configurable",
+      "location": "Evaluation plane",
+      "specs": {
+        "ip": "TBD",
+        "cpu": "TBD",
+        "ram": "TBD",
+        "storage": "Artifacts volume",
+        "network": "LLM provider egress"
+      },
+      "documentIds": ["repo-agents", "repo-readme"],
+      "tags": ["evaluation", "runner"]
+    }
+  ],
+  "documents": [
+    {
+      "id": "repo-agents",
+      "title": "AutoRecruit agent contract",
+      "path": "AGENTS.md",
+      "description": "Repository-level agent contract."
+    },
+    {
+      "id": "repo-readme",
+      "title": "AutoRecruit overview",
+      "path": "README.md",
+      "description": "Repository overview and entry points."
+    }
+  ],
+  "flows": [
+    {
+      "id": "eval-current",
+      "name": "Current evaluation run",
+      "description": "The current export / execute / import path.",
+      "color": "#5c78d4",
+      "steps": [
+        { "itemId": "v1-hubadmin", "name": "EvalLabAdmin", "description": "Operator starts or reviews a run." },
+        { "itemId": "v1-adminapi", "name": "Admin API", "description": "Builds the run request." },
+        { "itemId": "v1-runner", "name": "promptfoo runner", "description": "Exports, executes, and imports." },
+        { "itemId": "v1-pfcli", "name": "promptfoo CLI", "description": "Executes provider cases." },
+        { "itemId": "v1-artifacts", "name": "Artifacts", "description": "Persists config and results." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "projectId": "autorecruit-contours",
+  "revision": 1,
+  "projectRoot": "../../autorecruit",
+  "nodes": [
+    {
+      "id": "contour-proxmox",
+      "itemId": "b_substrate",
+      "name": "Owned Proxmox substrate",
+      "type": "bare-metal",
+      "provider": "Self-hosted",
+      "location": "Private management contour",
+      "specs": {
+        "ip": "Redacted",
+        "cpu": "TBD",
+        "ram": "TBD",
+        "storage": "TBD",
+        "network": "Private"
+      },
+      "documentIds": ["repo-agents", "matrix-readme"],
+      "tags": ["owned", "private-management"]
+    },
+    {
+      "id": "contour-rentgpu",
+      "itemId": "a_rentgpu",
+      "name": "RentGPU host",
+      "type": "vps",
+      "provider": "RentGPU",
+      "location": "Semi-trusted provider contour",
+      "specs": {
+        "ip": "TBD",
+        "cpu": "GPU host / TBD",
+        "ram": "Host-visible VRAM",
+        "storage": "TBD",
+        "network": "Provider network"
+      },
+      "documentIds": ["repo-readme"],
+      "tags": ["rented", "semi-trusted"]
+    }
+  ],
+  "documents": [
+    {
+      "id": "repo-agents",
+      "title": "AutoRecruit agent contract",
+      "path": "AGENTS.md",
+      "description": "Repository-level governance and security boundaries."
+    },
+    {
+      "id": "repo-readme",
+      "title": "AutoRecruit overview",
+      "path": "README.md",
+      "description": "System overview and repository entry points."
+    },
+    {
+      "id": "matrix-readme",
+      "title": "matrix-os overview",
+      "path": "matrix-os/README.md",
+      "description": "Control-plane runtime boundary."
+    }
+  ],
+  "flows": [
+    {
+      "id": "trusted-control",
+      "name": "Owned control path",
+      "description": "Focuses the owned and policy-enforced control plane.",
+      "color": "#2f9e65",
+      "steps": [
+        { "itemId": "a_operator", "name": "Operator", "description": "Human authority boundary." },
+        { "itemId": "a_hub", "name": "Hub", "description": "Operator-facing control surface." },
+        { "itemId": "a_matrixos", "name": "matrix-os", "description": "Policy and persistence plane." },
+        { "itemId": "a_matrix", "name": "Matrix", "description": "Conversation substrate." },
+        { "itemId": "a_hermes", "name": "Hermes x4", "description": "Agent orchestration." }
+      ]
+    },
+    {
+      "id": "content-exposed-inference",
+      "name": "Content-exposed inference",
+      "description": "Shows the seam where prompts or model content cross a provider boundary.",
+      "color": "#d59b42",
+      "steps": [
+        { "itemId": "a_macbox", "name": "macbox eval-gen", "description": "Prepares content." },
+        { "itemId": "a_router", "name": "LLM proxy", "description": "Policy gate and router." },
+        { "itemId": "a_cloud", "name": "Cloud LLM", "description": "Content-visible provider." }
+      ]
+    }
+  ]
+}

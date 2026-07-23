@@ -24,6 +24,21 @@ Run the development server with `yarn dev` or `npm run dev`.
 
 Open `http://localhost:5173/` in your browser to see the app.
 
+### Repo-local Isoflow Studio
+
+The editable Isoflow runtime now lives in this repository under
+[`isoflow-studio`](./isoflow-studio). Start it on the fixed embed origin:
+
+```sh
+npm run isoflow:install
+npm run isoflow:dev
+```
+
+It serves Bridge v2 and the project sessions on `http://127.0.0.1:4174`.
+Canvapocalypse remains the tldraw host and consumes Isoflow through the embed
+provider; Isoflow Studio is not the home of tldraw agents, Decision Graph, or
+Change Radar.
+
 ### OpenRouter workflow testing
 
 Start the workflow bridge alongside the development server:
