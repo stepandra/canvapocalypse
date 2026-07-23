@@ -54,6 +54,35 @@ export interface ModelNamePart {
 	modelName: AgentModelName
 }
 
+export interface IsoflowContextPart {
+	type: 'isoflowContext'
+	embeds: Array<{
+		shapeId: string
+		projectId: string
+		revision: number
+		title: string
+		error?: string
+		activeViewId?: string
+		view: { id: string; name: string }
+		views: Array<{ id: string; name: string }>
+		legend: Array<{ id: string; label: string; colorId: string; value?: string }>
+		contours: Array<{
+			id: string
+			from?: { x: number; y: number }
+			to?: { x: number; y: number }
+			color?: string
+		}>
+		items: Array<{
+			id: string
+			name: string
+			icon?: string
+			tile: { x: number; y: number }
+		}>
+		connectors: Array<{ id: string; from?: string; to?: string }>
+		truncated: boolean
+	}>
+}
+
 export interface PeripheralShapesPart {
 	type: 'peripheralShapes'
 	clusters: PeripheralShapeCluster[]
@@ -402,6 +431,18 @@ export const ModelNamePartDefinition: PromptPartDefinition<ModelNamePart> = {
 	type: 'modelName',
 	getModelName: (part) => {
 		return part.modelName
+	},
+}
+
+export const IsoflowContextPartDefinition: PromptPartDefinition<IsoflowContextPart> = {
+	type: 'isoflowContext',
+	priority: -45,
+	buildContent: ({ embeds }) => {
+		if (embeds.length === 0) return []
+		return [
+			'Selected Isoflow embeds are available as compact Isoflow context. Use Isoflow actions for native nodes and links; do not recreate these diagrams as ordinary tldraw shapes. Writes are revision-guarded, and unfamiliar native icons must be searched before adding a node.',
+			JSON.stringify(embeds),
+		]
 	},
 }
 

@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
+	DEFAULT_EMBED_DEFINITIONS,
 	DefaultSizeStyle,
+	EmbedShapeUtil,
 	ErrorBoundary,
 	TLComponents,
 	Tldraw,
@@ -15,6 +17,8 @@ import {
 import { ChatPanel } from './components/ChatPanel'
 import { ChatPanelFallback } from './components/ChatPanelFallback'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
+import { IsoflowOverlay } from './isoflow/IsoflowOverlay'
+import { ISOFLOW_EMBED_DEFINITION } from './isoflow/isoflowProvider'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
@@ -28,7 +32,10 @@ DefaultSizeStyle.setDefaultValue('s')
 
 // Custom tools for picking context items
 const tools = [TargetShapeTool, TargetAreaTool, ...WORKFLOW_TOOLS]
-const shapeUtils = [WorkflowRichOutputShapeUtil]
+const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
+	embedDefinitions: [ISOFLOW_EMBED_DEFINITION, ...DEFAULT_EMBED_DEFINITIONS],
+})
+const shapeUtils = [WorkflowRichOutputShapeUtil, IsoflowEmbedShapeUtil]
 const overlayUtils = [AgentHighlightOverlayUtil]
 const overrides: TLUiOverrides = {
 	tools: (editor, tools) => {
@@ -72,7 +79,12 @@ function App() {
 	// Custom components that need the agent app's React context
 	const components: TLComponents = useMemo(() => {
 		return {
-			InFrontOfTheCanvas: WorkflowOverlay,
+			InFrontOfTheCanvas: () => (
+				<>
+					<WorkflowOverlay />
+					<IsoflowOverlay />
+				</>
+			),
 			HelperButtons: () =>
 				app && (
 					<TldrawAgentAppContextProvider app={app}>
