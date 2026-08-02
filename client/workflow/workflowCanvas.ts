@@ -9,6 +9,7 @@ import {
 import {
 	buildCurrentFlowSpec,
 	buildEditableLlmWorkflowSpec,
+	buildMlflowWorkflowSpec,
 	WorkflowEdgeSpec,
 	WorkflowNodeKind,
 	WorkflowNodeSpec,
@@ -18,14 +19,20 @@ import {
 	WORKFLOW_RICH_OUTPUT_SHAPE_TYPE,
 	WorkflowRichOutputShape,
 } from './RichOutputShape'
+import {
+	WORKFLOW_NODE_SHAPE_TYPE,
+	WorkflowCardShape,
+} from './WorkflowNodeShape'
 
-export type WorkflowNodeShape = TLGeoShape | WorkflowRichOutputShape
+export type WorkflowNodeShape = WorkflowCardShape | WorkflowRichOutputShape | TLGeoShape
 
 export interface WorkflowNodeMeta {
 	schema: 'ml-intern-workflow-node/v1'
 	workflowId: string
 	nodeId: string
 	kind: WorkflowNodeKind
+	title?: string
+	description?: string
 	mode: WorkflowSpec['mode']
 	readonly: boolean
 	ports: WorkflowNodeSpec['ports']
@@ -44,20 +51,27 @@ export interface WorkflowEdgeMeta {
 	toPort: string
 }
 
-const NODE_WIDTH = 260
-const NODE_HEIGHT = 150
-const NODE_GAP = 110
+const NODE_WIDTH = 300
+const NODE_HEIGHT = 220
+const NODE_GAP = 120
 
 const KIND_STYLE: Record<WorkflowNodeKind, { geo: TLGeoShape['props']['geo']; color: TLGeoShape['props']['color'] }> = {
 	input: { geo: 'rectangle', color: 'light-blue' },
 	trigger: { geo: 'ellipse', color: 'orange' },
+	context: { geo: 'rectangle', color: 'light-blue' },
 	action: { geo: 'rectangle', color: 'blue' },
+	'prompt-template': { geo: 'rectangle', color: 'violet' },
 	decision: { geo: 'diamond', color: 'yellow' },
 	llm: { geo: 'hexagon', color: 'violet' },
+	agent: { geo: 'hexagon', color: 'green' },
 	human: { geo: 'ellipse', color: 'green' },
 	data: { geo: 'cloud', color: 'grey' },
 	output: { geo: 'rectangle', color: 'light-green' },
 	'rich-output': { geo: 'rectangle', color: 'light-green' },
+	'mlflow-experiment': { geo: 'rectangle', color: 'light-blue' },
+	'mlflow-run': { geo: 'rectangle', color: 'violet' },
+	'mlflow-evaluation': { geo: 'rectangle', color: 'orange' },
+	'mlflow-model': { geo: 'rectangle', color: 'green' },
 }
 
 export function isWorkflowNode(shape: unknown): shape is WorkflowNodeShape {
@@ -83,13 +97,32 @@ export function installCurrentFlow(editor: Editor) {
 export function installEditableLlmFlow(editor: Editor) {
 	const bounds = editor.getViewportPageBounds()
 	const spec = buildEditableLlmWorkflowSpec(`candidate-${Date.now()}`)
+	const workflowWidth =
+		spec.nodes.reduce((width, node) => width + (node.kind === 'rich-output' ? 420 : NODE_WIDTH), 0) +
+		Math.max(0, spec.nodes.length - 1) * NODE_GAP
 	return createWorkflowOnCanvas(editor, spec, {
-		x: bounds.x + bounds.w / 2 - (NODE_WIDTH * 3 + NODE_GAP * 2) / 2,
+		x: bounds.x + bounds.w / 2 - workflowWidth / 2,
+		y: bounds.y + bounds.h / 2 - NODE_HEIGHT / 2,
+	})
+}
+
+export function installMlflowWorkflow(editor: Editor) {
+	const bounds = editor.getViewportPageBounds()
+	const spec = buildMlflowWorkflowSpec(`mlflow-${Date.now()}`)
+	const workflowWidth =
+		spec.nodes.reduce((width) => width + NODE_WIDTH, 0) +
+		Math.max(0, spec.nodes.length - 1) * NODE_GAP
+	return createWorkflowOnCanvas(editor, spec, {
+		x: bounds.x + bounds.w / 2 - workflowWidth / 2,
 		y: bounds.y + bounds.h / 2 - NODE_HEIGHT / 2,
 	})
 }
 
 export function bootstrapMlInternWorkflows(editor: Editor) {
+	upgradeLegacyWorkflowNodes(editor)
+	repairWorkflowNodeSemantics(editor)
+	ensurePromptTemplateInDraft(editor)
+	repairEscapedPromptTemplates(editor)
 	const shapes = editor.getCurrentPageShapes()
 	const hasCurrent = shapes.some(
 		(shape) => isWorkflowNode(shape) && getWorkflowNodeMeta(shape).workflowId === 'current-ml-intern-flow'
@@ -109,6 +142,78 @@ export function bootstrapMlInternWorkflows(editor: Editor) {
 	if (!hasDraft) {
 		createWorkflowOnCanvas(editor, buildEditableLlmWorkflowSpec('ml-intern-draft'), { x, y })
 	}
+}
+
+function repairEscapedPromptTemplates(editor: Editor) {
+	for (const shape of editor.getCurrentPageShapes().filter(isWorkflowNode)) {
+		const meta = getWorkflowNodeMeta(shape)
+		if (meta.kind !== 'prompt-template' || !meta.config.template?.includes('\\n')) continue
+		updateWorkflowNode(editor, shape, {
+			config: { ...meta.config, template: meta.config.template.replaceAll('\\n', '\n') },
+		})
+	}
+}
+
+function ensurePromptTemplateInDraft(editor: Editor) {
+	const workflowId = 'ml-intern-draft'
+	const nodes = editor
+		.getCurrentPageShapes()
+		.filter(isWorkflowNode)
+		.filter((shape) => getWorkflowNodeMeta(shape).workflowId === workflowId)
+	if (!nodes.length || nodes.some((shape) => getWorkflowNodeMeta(shape).kind === 'prompt-template')) {
+		return
+	}
+
+	const input = nodes.find((shape) => getWorkflowNodeMeta(shape).nodeId === 'input')
+	const llm = nodes.find((shape) => getWorkflowNodeMeta(shape).nodeId === 'llm')
+	if (!input || !llm) return
+
+	const promptNode = buildEditableLlmWorkflowSpec(workflowId).nodes.find(
+		(node) => node.kind === 'prompt-template'
+	)
+	if (!promptNode) return
+	const promptId = createShapeId(`${workflowId}-${promptNode.id}`)
+
+	for (const node of nodes.filter((candidate) => candidate.x >= llm.x)) {
+		editor.updateShape({ id: node.id, type: node.type as any, x: node.x + NODE_WIDTH + NODE_GAP } as any)
+	}
+
+	editor.createShape(
+		buildNodeShape(
+			{ ...buildEditableLlmWorkflowSpec(workflowId), nodes: [promptNode], edges: [] },
+			promptNode,
+			promptId,
+			input.x + NODE_WIDTH + NODE_GAP,
+			input.y
+		) as any
+	)
+
+	const staleEdge = editor
+		.getCurrentPageShapes()
+		.filter(isWorkflowEdge)
+		.find((shape) => {
+			const edge = getWorkflowEdgeMeta(shape)
+			return edge.workflowId === workflowId && edge.fromNodeId === 'input' && edge.toNodeId === 'llm'
+		})
+	if (staleEdge) editor.deleteShape(staleEdge.id)
+
+	const shapeIds = new Map<string, TLShapeId>()
+	for (const shape of editor.getCurrentPageShapes().filter(isWorkflowNode)) {
+		const meta = getWorkflowNodeMeta(shape)
+		if (meta.workflowId === workflowId) shapeIds.set(meta.nodeId, shape.id)
+	}
+	createWorkflowArrow(
+		editor,
+		workflowId,
+		{ id: 'input->prompt', from: 'input', fromPort: 'output', to: 'prompt', toPort: 'input' },
+		shapeIds
+	)
+	createWorkflowArrow(
+		editor,
+		workflowId,
+		{ id: 'prompt->llm', from: 'prompt', fromPort: 'output', to: 'llm', toPort: 'input' },
+		shapeIds
+	)
 }
 
 export function createWorkflowOnCanvas(
@@ -134,7 +239,10 @@ export function createWorkflowOnCanvas(
 
 	editor.createShapes(nodeShapes as any)
 	for (const edge of spec.edges) createWorkflowArrow(editor, spec.id, edge, shapeIds)
-	if (spec.mode === 'readonly') editor.toggleLock(nodeShapes.map((shape) => shape.id))
+	const readonlyShapeIds = nodeShapes
+		.filter((_, index) => spec.nodes[index]?.readonly)
+		.map((shape) => shape.id)
+	if (readonlyShapeIds.length) editor.toggleLock(readonlyShapeIds)
 	editor.select(...nodeShapes.map((shape) => shape.id))
 	editor.zoomToSelection({ animation: { duration: 200 } })
 	return { workflowId: spec.id, created: true, shapeIds: nodeShapes.map((shape) => shape.id) }
@@ -153,14 +261,7 @@ export function createStandaloneWorkflowNode(
 		title: nodeTitle(kind),
 		description: `Editable ${kind} workflow node.`,
 		readonly: false,
-		ports: [
-			...(kind === 'input' || kind === 'trigger'
-				? []
-				: [{ id: 'input', direction: 'input' as const, valueType: 'text' as const }]),
-			...(kind === 'output'
-				? []
-				: [{ id: 'output', direction: 'output' as const, valueType: 'text' as const }]),
-		],
+		ports: standaloneNodePorts(kind),
 		config: standaloneNodeConfig(kind, preset),
 	}
 	const spec: WorkflowSpec = { id: workflowId, title: 'Draft workflow', mode: 'editable', nodes: [node], edges: [] }
@@ -227,10 +328,12 @@ export function adoptDuplicatedLlmBranch(editor: Editor, shape: WorkflowNodeShap
 	}
 	editor.updateShape({
 		id: shape.id,
-		type: 'geo',
-		props: { richText: toRichText(formatNodeText(nextMeta)) },
+		type: shape.type as any,
+		...(shape.type === 'geo'
+			? { props: { richText: toRichText(formatNodeText(nextMeta)) } }
+			: {}),
 		meta: { ...shape.meta, workflow: nextMeta as any },
-	})
+	} as any)
 	const updated = editor.getShape(shape.id)
 	if (!updated || !isWorkflowNode(updated)) return null
 	const result = attachOutputBranch(editor, updated, meta.nodeId, suffix)
@@ -248,8 +351,8 @@ export function readWorkflowSpec(editor: Editor, workflowId: string): WorkflowSp
 			return {
 				id: meta.nodeId,
 				kind: meta.kind,
-				title: nodeTitle(meta.kind),
-				description: '',
+				title: meta.title || nodeTitle(meta.kind),
+				description: meta.description || '',
 				readonly: meta.readonly,
 				ports: meta.ports,
 				config: meta.config,
@@ -295,6 +398,12 @@ export function updateWorkflowNode(
 		editor.updateShape({
 			id: current.id,
 			type: WORKFLOW_RICH_OUTPUT_SHAPE_TYPE,
+			meta: { ...current.meta, workflow: next as any },
+		})
+	} else if (current.type === WORKFLOW_NODE_SHAPE_TYPE) {
+		editor.updateShape({
+			id: current.id,
+			type: WORKFLOW_NODE_SHAPE_TYPE,
 			meta: { ...current.meta, workflow: next as any },
 		})
 	} else {
@@ -398,12 +507,13 @@ function buildNodeShape(
 	x: number,
 	y: number
 ) {
-	const style = KIND_STYLE[node.kind]
 	const meta: WorkflowNodeMeta = {
 		schema: 'ml-intern-workflow-node/v1',
 		workflowId: spec.id,
 		nodeId: node.id,
 		kind: node.kind,
+		title: node.title,
+		description: node.description,
 		mode: spec.mode,
 		readonly: node.readonly,
 		ports: node.ports,
@@ -425,23 +535,91 @@ function buildNodeShape(
 	}
 	return {
 		id,
-		type: 'geo' as const,
+		type: WORKFLOW_NODE_SHAPE_TYPE,
 		x,
 		y,
 		props: {
-			geo: style.geo,
 			w: NODE_WIDTH,
 			h: NODE_HEIGHT,
-			color: style.color,
-			labelColor: 'black' as const,
-			fill: 'semi' as const,
-			dash: node.readonly ? ('dashed' as const) : ('solid' as const),
-			font: 'mono' as const,
-			align: 'middle' as const,
-			verticalAlign: 'middle' as const,
-			richText: toRichText(formatNodeText(meta, node.title, node.description)),
 		},
 		meta: { workflow: meta },
+	}
+}
+
+export function upgradeLegacyWorkflowNodes(editor: Editor) {
+	const replacements = editor
+		.getCurrentPageShapes()
+		.filter((shape): shape is TLGeoShape => shape.type === 'geo' && isWorkflowNode(shape))
+		.map((shape) => {
+			const meta = hydrateWorkflowNodeCopy(getWorkflowNodeMeta(shape))
+			return {
+				...shape,
+				type: WORKFLOW_NODE_SHAPE_TYPE,
+				props: { w: NODE_WIDTH, h: NODE_HEIGHT },
+				meta: { ...shape.meta, workflow: meta as any },
+			}
+		})
+	if (replacements.length) editor.store.put(replacements as any)
+	return replacements.length
+}
+
+function repairWorkflowNodeSemantics(editor: Editor) {
+	const currentDefinitions = new Map(buildCurrentFlowSpec().nodes.map((node) => [node.id, node]))
+	for (const shape of editor.getCurrentPageShapes().filter(isWorkflowNode)) {
+		const meta = getWorkflowNodeMeta(shape)
+		if (meta.workflowId === 'current-ml-intern-flow') {
+			const definition = currentDefinitions.get(meta.nodeId)
+			if (!definition) continue
+			const nextMeta: WorkflowNodeMeta = {
+				...meta,
+				kind: definition.kind,
+				title: definition.title,
+				description: definition.description,
+				readonly: definition.readonly,
+				ports: definition.ports,
+				config: { ...meta.config, ...definition.config },
+			}
+			if (nextMeta.error === undefined) delete nextMeta.error
+			editor.store.put([
+				{
+					...shape,
+					meta: { ...shape.meta, workflow: nextMeta as any },
+				} as any,
+			])
+			if (shape.isLocked !== definition.readonly) editor.toggleLock([shape.id])
+			continue
+		}
+
+		if (
+			meta.kind === 'llm' &&
+			meta.config.provider === 'amp' &&
+			meta.config.model === 'amp-medium'
+		) {
+			updateWorkflowNode(editor, shape, {
+				config: {
+					...meta.config,
+					provider: 'builtin',
+					model: 'claude-sonnet-4-5',
+				},
+			})
+		}
+	}
+}
+
+function hydrateWorkflowNodeCopy(meta: WorkflowNodeMeta): WorkflowNodeMeta {
+	if (meta.title && meta.description) return meta
+	const current = buildCurrentFlowSpec().nodes.find((node) => node.id === meta.nodeId)
+	const editable = buildEditableLlmWorkflowSpec(meta.workflowId).nodes.find(
+		(node) => node.id === meta.nodeId
+	)
+	const source = current ?? editable
+	return {
+		...meta,
+		title: meta.title || source?.title || nodeTitle(meta.kind),
+		description:
+			meta.description ||
+			source?.description ||
+			(meta.kind === 'llm' ? 'Server-side inference node with streamed output.' : `Workflow ${meta.kind} step.`),
 	}
 }
 
@@ -511,7 +689,15 @@ function createWorkflowArrow(
 
 function nodeTitle(kind: WorkflowNodeKind) {
 	if (kind === 'llm') return 'LLM'
+	if (kind === 'agent') return 'AGENT'
+	if (kind === 'context') return 'CONTEXT'
+	if (kind === 'input') return 'TEXT INPUT'
+	if (kind === 'prompt-template') return 'PROMPT TEMPLATE'
 	if (kind === 'rich-output') return 'RICH OUTPUT'
+	if (kind === 'mlflow-experiment') return 'MLFLOW EXPERIMENT'
+	if (kind === 'mlflow-run') return 'MLFLOW RUN'
+	if (kind === 'mlflow-evaluation') return 'MLFLOW EVALUATION'
+	if (kind === 'mlflow-model') return 'MLFLOW MODEL'
 	return kind.toUpperCase()
 }
 
@@ -536,6 +722,43 @@ function standaloneNodeConfig(
 	if (kind === 'rich-output') {
 		return { value: 'Connect an LLM and run the workflow to render Markdown or JSON.' }
 	}
+	if (kind === 'input') {
+		return { value: 'Type the text passed to the next node.' }
+	}
+	if (kind === 'context') {
+		return { selectionMode: 'explicit' }
+	}
+	if (kind === 'prompt-template') {
+		return {
+			template: 'Use the following input to produce a concise result:\n\n{input}',
+			inputVariable: 'input',
+		}
+	}
+	if (kind === 'agent') {
+		return {
+			agentProvider: 'amp',
+			model: 'amp-medium',
+			instructions: 'Use bounded canvas context and return a compact validated result.',
+		}
+	}
+	if (kind === 'mlflow-experiment') {
+		return {
+			experimentName: 'autorecruit-eval-lab',
+			trackingAlias: 'local-mlflow',
+		}
+	}
+	if (kind === 'mlflow-run') {
+		return { runName: 'candidate-run', runMode: 'create-or-resume' }
+	}
+	if (kind === 'mlflow-evaluation') {
+		return {
+			datasetRef: 'selected dataset artifact',
+			evaluator: 'default',
+		}
+	}
+	if (kind === 'mlflow-model') {
+		return { modelName: 'autorecruit-candidate', modelAlias: 'candidate' }
+	}
 	if (kind !== 'llm') return {}
 	if (preset === 'openrouter') {
 		return {
@@ -552,5 +775,39 @@ function standaloneNodeConfig(
 			baseUrl: 'http://127.0.0.1:11434/v1',
 		}
 	}
-	return { instructions: 'Transform the input.', model: 'amp-medium', provider: 'amp' }
+	return {
+		instructions: 'Transform the input.',
+		model: 'claude-sonnet-4-5',
+		provider: 'builtin',
+	}
+}
+
+function standaloneNodePorts(kind: WorkflowNodeKind): WorkflowNodeSpec['ports'] {
+	if (kind === 'mlflow-experiment') {
+		return [{ id: 'experiment', direction: 'output', valueType: 'artifact' }]
+	}
+	if (kind === 'mlflow-run') {
+		return [
+			{ id: 'experiment', direction: 'input', valueType: 'artifact' },
+			{ id: 'artifact', direction: 'output', valueType: 'artifact' },
+		]
+	}
+	if (kind === 'mlflow-evaluation') {
+		return [
+			{ id: 'candidate', direction: 'input', valueType: 'artifact' },
+			{ id: 'dataset', direction: 'input', valueType: 'artifact' },
+			{ id: 'artifact', direction: 'output', valueType: 'artifact' },
+		]
+	}
+	if (kind === 'mlflow-model') {
+		return [{ id: 'artifact', direction: 'input', valueType: 'artifact' }]
+	}
+	return [
+		...(kind === 'input' || kind === 'trigger' || kind === 'context'
+			? []
+			: [{ id: 'input', direction: 'input' as const, valueType: 'text' as const }]),
+		...(kind === 'output'
+			? []
+			: [{ id: 'output', direction: 'output' as const, valueType: 'text' as const }]),
+	]
 }

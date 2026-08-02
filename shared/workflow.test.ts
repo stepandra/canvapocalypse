@@ -2,25 +2,30 @@ import { describe, expect, it } from 'vitest'
 import {
 	buildCurrentFlowSpec,
 	buildEditableLlmWorkflowSpec,
+	buildMlflowWorkflowSpec,
+	extractTemplateVariables,
 	getExecutionLayers,
 	getExecutionOrder,
+	renderMlflowReference,
+	renderPromptTemplate,
 	validateWorkflowSpec,
 } from './workflow'
 import { parseWorkflowLlmRequest } from './workflowLlm'
 
 describe('buildCurrentFlowSpec', () => {
-	it('describes the current ml-intern flow as a connected read-only graph', () => {
+	it('describes the terminal-first ML-Intern flow with an interactive bounded context step', () => {
 		const workflow = buildCurrentFlowSpec()
 
 		expect(workflow.mode).toBe('readonly')
 		expect(workflow.nodes.map((node) => node.kind)).toEqual([
 			'input',
-			'action',
-			'llm',
+			'context',
+			'agent',
 			'action',
 			'output',
 		])
-		expect(workflow.nodes.every((node) => node.readonly)).toBe(true)
+		expect(workflow.nodes.find((node) => node.kind === 'context')?.readonly).toBe(false)
+		expect(workflow.nodes.find((node) => node.kind === 'agent')?.config.agentProvider).toBe('amp')
 		expect(workflow.edges).toHaveLength(workflow.nodes.length - 1)
 		expect(workflow.edges[0]).toMatchObject({ fromPort: 'output', toPort: 'input' })
 	})
@@ -31,11 +36,49 @@ describe('buildEditableLlmWorkflowSpec', () => {
 		const workflow = buildEditableLlmWorkflowSpec('candidate-flow')
 
 		expect(workflow.mode).toBe('editable')
-		expect(workflow.nodes.map((node) => node.kind)).toEqual(['input', 'llm', 'rich-output'])
+		expect(workflow.nodes.map((node) => node.kind)).toEqual([
+			'input',
+			'prompt-template',
+			'llm',
+			'rich-output',
+		])
 		expect(workflow.nodes.every((node) => !node.readonly)).toBe(true)
-		expect(workflow.nodes[1].config.instructions).toContain('ML workflow assistant')
+		expect(workflow.nodes.find((node) => node.kind === 'llm')?.config.instructions).toContain(
+			'ML workflow assistant'
+		)
+		expect(workflow.nodes.find((node) => node.kind === 'llm')?.config).toMatchObject({
+			provider: 'builtin',
+			model: 'claude-sonnet-4-5',
+		})
 		expect(validateWorkflowSpec(workflow)).toEqual([])
-		expect(getExecutionOrder(workflow)).toEqual(['input', 'llm', 'output'])
+		expect(getExecutionOrder(workflow)).toEqual(['input', 'prompt', 'llm', 'output'])
+	})
+})
+
+describe('buildMlflowWorkflowSpec', () => {
+	it('creates native MLflow cards with artifact ports and no direct infrastructure route', () => {
+		const workflow = buildMlflowWorkflowSpec('mlflow-native')
+
+		expect(workflow.nodes.map((node) => node.kind)).toEqual([
+			'mlflow-experiment',
+			'mlflow-run',
+			'mlflow-evaluation',
+			'mlflow-model',
+		])
+		expect(
+			workflow.nodes
+				.flatMap((node) => node.ports)
+				.every((port) => port.valueType === 'artifact')
+		).toBe(true)
+		expect(validateWorkflowSpec(workflow)).toEqual([])
+		expect(JSON.stringify(workflow)).not.toMatch(/isoflow/i)
+		expect(
+			renderMlflowReference(
+				'mlflow-evaluation',
+				{ datasetRef: 'dataset:eval-v3', evaluator: 'default' },
+				'run:123'
+			)
+		).toContain('"schema":"mlflow-workflow-reference/v1"')
 	})
 })
 
@@ -71,7 +114,7 @@ describe('validateWorkflowSpec', () => {
 	it('rejects dangling edges and cycles before execution', () => {
 		const dangling = buildEditableLlmWorkflowSpec('dangling')
 		dangling.edges[0].to = 'missing'
-		expect(validateWorkflowSpec(dangling)).toContain('Edge input->llm targets missing node missing')
+		expect(validateWorkflowSpec(dangling)).toContain('Edge input->prompt targets missing node missing')
 
 		const cyclic = buildEditableLlmWorkflowSpec('cyclic')
 		cyclic.edges.push({
@@ -82,6 +125,23 @@ describe('validateWorkflowSpec', () => {
 			toPort: 'input',
 		})
 		expect(() => getExecutionOrder(cyclic)).toThrow(/cycle/i)
+	})
+})
+
+describe('prompt template nodes', () => {
+	it('finds unique variables and renders upstream input without losing unresolved fields', () => {
+		const template = 'Role: {role}\\nInput: {candidate}\\nAgain: {role}'
+		expect(extractTemplateVariables(template)).toEqual(['role', 'candidate'])
+		expect(
+			renderPromptTemplate(
+				{
+					template,
+					inputVariable: 'candidate',
+					'var:role': 'ML Engineer',
+				},
+				'Senior Python developer'
+			)
+		).toBe('Role: ML Engineer\\nInput: Senior Python developer\\nAgain: ML Engineer')
 	})
 })
 

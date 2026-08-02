@@ -3,15 +3,22 @@ export type WorkflowIconName =
 	| 'new'
 	| 'input'
 	| 'trigger'
+	| 'context'
 	| 'action'
+	| 'prompt-template'
 	| 'decision'
 	| 'llm'
+	| 'agent'
 	| 'openrouter'
 	| 'base-url'
 	| 'human'
 	| 'data'
 	| 'output'
 	| 'rich-output'
+	| 'mlflow-experiment'
+	| 'mlflow-run'
+	| 'mlflow-evaluation'
+	| 'mlflow-model'
 	| 'link'
 	| 'play'
 	| 'stop'
@@ -49,10 +56,23 @@ export function WorkflowIcon({ name }: { name: WorkflowIconName }) {
 				</>
 			)}
 			{name === 'trigger' && <path d="M13.5 2.5 5.5 13H12l-1.5 8.5L18.5 11H12Z" />}
+			{name === 'context' && (
+				<>
+					<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
+					<rect x="8" y="8" width="8" height="8" rx="2" />
+				</>
+			)}
 			{name === 'action' && (
 				<>
 					<path d="M14.8 6.2a4 4 0 0 0-5 5L4 17l3 3 5.8-5.8a4 4 0 0 0 5-5l-2.7 2.7-3-3Z" />
 					<path d="m4 17 3 3" />
+				</>
+			)}
+			{name === 'prompt-template' && (
+				<>
+					<rect x="4" y="3" width="16" height="18" rx="2" />
+					<path d="M8 8h8M8 12h5" />
+					<path d="m9 15-2 2 2 2M15 15l2 2-2 2" />
 				</>
 			)}
 			{name === 'decision' && (
@@ -66,6 +86,13 @@ export function WorkflowIcon({ name }: { name: WorkflowIconName }) {
 					<rect x="4" y="4" width="16" height="16" rx="4" />
 					<path d="M9 9h6M9 12h4M9 15h2" />
 					<path d="m17.5 1 .5 1.5L19.5 3 18 3.5 17.5 5 17 3.5 15.5 3l1.5-.5Z" />
+				</>
+			)}
+			{name === 'agent' && (
+				<>
+					<circle cx="12" cy="8" r="3" />
+					<path d="M6 20v-2a6 6 0 0 1 12 0v2" />
+					<path d="M4 5h3M17 5h3M3 8h3M18 8h3" opacity=".55" />
 				</>
 			)}
 			{name === 'openrouter' && (
@@ -107,6 +134,33 @@ export function WorkflowIcon({ name }: { name: WorkflowIconName }) {
 					<rect x="3" y="4" width="18" height="16" rx="2" />
 					<path d="M7 8h6M7 11h10M7 14h4" />
 					<path d="m14.5 15.5 2 2 3-4" />
+				</>
+			)}
+			{name === 'mlflow-experiment' && (
+				<>
+					<ellipse cx="12" cy="6" rx="7" ry="3" />
+					<path d="M5 6v8c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+					<path d="M8 20h8M12 17v3" />
+				</>
+			)}
+			{name === 'mlflow-run' && (
+				<>
+					<rect x="4" y="4" width="16" height="16" rx="3" />
+					<path d="m9 8 7 4-7 4Z" fill="currentColor" stroke="none" />
+					<path d="M7 2v3M17 2v3" />
+				</>
+			)}
+			{name === 'mlflow-evaluation' && (
+				<>
+					<path d="M4 18V9M9 18V5M14 18v-7M19 18V3" />
+					<path d="M3 21h18" />
+					<path d="m15 7 2 2 4-5" />
+				</>
+			)}
+			{name === 'mlflow-model' && (
+				<>
+					<path d="m12 3 8 4.5-8 4.5-8-4.5Z" />
+					<path d="m4 12 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5" />
 				</>
 			)}
 			{name === 'link' && (

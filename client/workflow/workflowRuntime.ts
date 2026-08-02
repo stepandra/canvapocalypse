@@ -1,7 +1,14 @@
 import { Editor } from 'tldraw'
-import { getExecutionLayers, validateWorkflowSpec, WorkflowSpec } from '../../shared/workflow'
+import {
+	getExecutionLayers,
+	renderMlflowReference,
+	renderPromptTemplate,
+	validateWorkflowSpec,
+	WorkflowSpec,
+} from '../../shared/workflow'
 import { getCompatibleApiKey } from './compatibleProvider'
 import { getOpenRouterApiKey } from './openRouter'
+import { AgentAppAgentsManager } from '../agent/managers/AgentAppAgentsManager'
 import {
 	appendWorkflowRun,
 	WorkflowRunNodeResult,
@@ -73,12 +80,44 @@ export async function runWorkflow(editor: Editor, workflowId: string) {
 								runId,
 								controller.signal
 							)
+						} else if (node.kind === 'agent') {
+							output = await streamLlmNode(
+								editor,
+								workflow,
+								shape,
+								input,
+								node.config.instructions,
+								node.config.model || 'amp-medium',
+								'amp',
+								undefined,
+								runId,
+								controller.signal
+							)
+						} else if (node.kind === 'context') {
+							const contextItems =
+								AgentAppAgentsManager.getAgent(editor)?.context.getItems() ?? []
+							output = [
+								input,
+								contextItems.length
+									? `[bounded canvas context: ${contextItems.length} item${contextItems.length === 1 ? '' : 's'}]`
+									: '[bounded canvas context: empty]',
+							]
+								.filter(Boolean)
+								.join('\n\n')
 						} else if (node.kind === 'output' || node.kind === 'rich-output') {
 							updateWorkflowNode(editor, shape, {
 								config: { ...getWorkflowNodeMeta(shape).config, value: input },
 							})
 						} else if (node.kind === 'input') {
 							output = node.config.value ?? ''
+						} else if (node.kind === 'prompt-template') {
+							output = renderPromptTemplate(node.config, input)
+						} else if (node.kind.startsWith('mlflow-')) {
+							output = renderMlflowReference(
+								node.kind as Extract<typeof node.kind, `mlflow-${string}`>,
+								node.config,
+								input
+							)
 						}
 						values.set(nodeId, output)
 						updateWorkflowNode(editor, shape, { status: 'succeeded' })

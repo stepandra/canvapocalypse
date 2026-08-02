@@ -35,13 +35,25 @@ class WorkflowTriggerTool extends WorkflowPlacementTool {
 	static override id = 'workflow-trigger'
 	readonly kind = 'trigger' as const
 }
+class WorkflowContextTool extends WorkflowPlacementTool {
+	static override id = 'workflow-context'
+	readonly kind = 'context' as const
+}
 class WorkflowActionTool extends WorkflowPlacementTool {
 	static override id = 'workflow-action'
 	readonly kind = 'action' as const
 }
+class WorkflowPromptTemplateTool extends WorkflowPlacementTool {
+	static override id = 'workflow-prompt-template'
+	readonly kind = 'prompt-template' as const
+}
 class WorkflowDecisionTool extends WorkflowPlacementTool {
 	static override id = 'workflow-decision'
 	readonly kind = 'decision' as const
+}
+class WorkflowBuiltinLlmTool extends WorkflowPlacementTool {
+	static override id = 'workflow-llm'
+	readonly kind = 'llm' as const
 }
 class WorkflowOpenRouterLlmTool extends WorkflowPlacementTool {
 	static override id = 'workflow-openrouter-llm'
@@ -52,6 +64,10 @@ class WorkflowCompatibleLlmTool extends WorkflowPlacementTool {
 	static override id = 'workflow-compatible-llm'
 	readonly kind = 'llm' as const
 	override readonly preset = 'compatible' as const
+}
+class WorkflowAgentTool extends WorkflowPlacementTool {
+	static override id = 'workflow-agent'
+	readonly kind = 'agent' as const
 }
 class WorkflowHumanTool extends WorkflowPlacementTool {
 	static override id = 'workflow-human'
@@ -69,16 +85,40 @@ class WorkflowRichOutputTool extends WorkflowPlacementTool {
 	static override id = 'workflow-rich-output'
 	readonly kind = 'rich-output' as const
 }
+class WorkflowMlflowExperimentTool extends WorkflowPlacementTool {
+	static override id = 'workflow-mlflow-experiment'
+	readonly kind = 'mlflow-experiment' as const
+}
+class WorkflowMlflowRunTool extends WorkflowPlacementTool {
+	static override id = 'workflow-mlflow-run'
+	readonly kind = 'mlflow-run' as const
+}
+class WorkflowMlflowEvaluationTool extends WorkflowPlacementTool {
+	static override id = 'workflow-mlflow-evaluation'
+	readonly kind = 'mlflow-evaluation' as const
+}
+class WorkflowMlflowModelTool extends WorkflowPlacementTool {
+	static override id = 'workflow-mlflow-model'
+	readonly kind = 'mlflow-model' as const
+}
 
 export const WORKFLOW_TOOLS = [
 	WorkflowInputTool,
 	WorkflowTriggerTool,
+	WorkflowContextTool,
 	WorkflowActionTool,
+	WorkflowPromptTemplateTool,
 	WorkflowDecisionTool,
+	WorkflowBuiltinLlmTool,
 	WorkflowOpenRouterLlmTool,
 	WorkflowCompatibleLlmTool,
+	WorkflowAgentTool,
 	WorkflowHumanTool,
 	WorkflowDataTool,
 	WorkflowOutputTool,
 	WorkflowRichOutputTool,
+	WorkflowMlflowExperimentTool,
+	WorkflowMlflowRunTool,
+	WorkflowMlflowEvaluationTool,
+	WorkflowMlflowModelTool,
 ]

@@ -240,13 +240,13 @@ export const IsoflowPatchAction = z
 		_type: z.literal('isoflowPatch'),
 		intent: z.string(),
 		projectId: z.string().optional(),
-		dryRun: z.boolean(),
+		dryRun: z.literal(true),
 		operations: z.array(IsoflowPatchOperationSchema).min(1).max(100),
 	})
 	.meta({
 		title: 'Patch Isoflow',
 		description:
-			'Applies an atomic revision-guarded Isoflow Bridge v2 transaction to the selected embed, including views, items, connectors, contours, labels, and legend colors. Prefer dryRun true first for multi-operation or destructive changes, then apply the same operations with dryRun false.',
+			'Proposes an atomic revision-guarded Isoflow Bridge v2 transaction for the selected embed. The host always dry-runs the proposal and requires explicit confirmation before applying the exact same operations at the same revision.',
 		_systemPromptCategory: 'edit',
 	})
 
@@ -284,11 +284,62 @@ export const IsoflowCreateViewAction = z
 	.meta({
 		title: 'Create Isoflow View',
 		description:
-			'Creates a new native Isoflow diagram view in the selected project using native icon names and stable node IDs. It fails closed if the view already exists or an icon query is ambiguous.',
+			'Proposes a new native Isoflow diagram view using native icon names and stable node IDs. The host converts it to a dry-run transaction and requires explicit confirmation before creation.',
 		_systemPromptCategory: 'edit',
 	})
 
 export type IsoflowCreateViewAction = z.infer<typeof IsoflowCreateViewAction>
+
+const HtmlMockupRefSchema = z
+	.string()
+	.min(1)
+	.max(256)
+	.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, 'Expected an opaque Local HTML Mockup reference')
+
+const HtmlMockupRevisionSchema = z
+	.string()
+	.regex(/^sha256:[a-f0-9]{64}$/i, 'Expected a sha256 Local HTML Mockup revision')
+
+export const HtmlMockupInspectAction = z
+	.object({
+		_type: z.literal('htmlMockupInspect'),
+		documentRef: HtmlMockupRefSchema,
+		targetRef: HtmlMockupRefSchema.optional(),
+	})
+	.meta({
+		title: 'Inspect HTML Mockup',
+		description:
+			'Retrieves one bounded semantic snapshot for the selected Local HTML Mockup or one opaque target ref. It never returns source HTML, paths, selectors, URLs, or credentials.',
+	})
+
+export type HtmlMockupInspectAction = z.infer<typeof HtmlMockupInspectAction>
+
+export const HtmlMockupCreateVariantAction = z
+	.object({
+		_type: z.literal('htmlMockupCreateVariant'),
+		documentRef: HtmlMockupRefSchema,
+		targetRef: HtmlMockupRefSchema,
+		contextRef: HtmlMockupRefSchema,
+		expectedRevision: HtmlMockupRevisionSchema,
+		idempotencyKey: z
+			.string()
+			.min(1)
+			.max(128)
+			.regex(
+				/^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
+				'Expected an opaque Local HTML Mockup idempotency key',
+			),
+		replacementHtml: z.string().min(1).max(32_768),
+		intent: z.string().min(1).max(512),
+	})
+	.meta({
+		title: 'Create HTML Mockup Variant',
+		description:
+			'Creates a new Local HTML Mockup variant for one previously inspected opaque target ref using its contextRef, exact expected revision, and a stable per-operation idempotency key. Reuse the same key only when retrying the exact same logical mutation.',
+		_systemPromptCategory: 'edit',
+	})
+
+export type HtmlMockupCreateVariantAction = z.infer<typeof HtmlMockupCreateVariantAction>
 
 // Create Action
 export const CreateAction = z

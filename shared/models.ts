@@ -1,10 +1,14 @@
 export type AgentModelName = keyof typeof AGENT_MODEL_DEFINITIONS
 export type AgentModelProvider = 'openai' | 'anthropic' | 'google'
 
+export const ML_INTERN_EVAL_LAB_MODEL_NAME = 'ml-intern-eval-lab' as const
+
 export interface AgentModelDefinition {
 	name: AgentModelName
 	id: string
 	provider: AgentModelProvider
+	label?: string
+	transport?: 'cloud' | 'ml-intern'
 
 	// Overrides the default thinking behavior for that provider
 	thinking?: boolean
@@ -45,6 +49,15 @@ export const AGENT_MODEL_DEFINITIONS = {
 		name: 'gpt-5.2-2025-12-11',
 		id: 'gpt-5.2-2025-12-11',
 		provider: 'openai',
+	},
+
+	// Local companion runtimes
+	[ML_INTERN_EVAL_LAB_MODEL_NAME]: {
+		name: ML_INTERN_EVAL_LAB_MODEL_NAME,
+		id: ML_INTERN_EVAL_LAB_MODEL_NAME,
+		provider: 'openai',
+		label: 'ML-Intern · Eval Lab',
+		transport: 'ml-intern',
 	},
 } as const
 

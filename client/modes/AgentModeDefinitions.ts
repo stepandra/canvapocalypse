@@ -10,6 +10,8 @@ import { CountShapesActionUtil } from '../actions/CountShapesActionUtil'
 import { CreateActionUtil } from '../actions/CreateActionUtil'
 import { DeleteActionUtil } from '../actions/DeleteActionUtil'
 import { DistributeActionUtil } from '../actions/DistributeActionUtil'
+import '../actions/HtmlMockupInspectActionUtil'
+import '../actions/HtmlMockupVariantActionUtil'
 import { LabelActionUtil } from '../actions/LabelActionUtil'
 import { IsoflowCreateViewActionUtil } from '../actions/IsoflowCreateViewActionUtil'
 import { IsoflowPatchActionUtil } from '../actions/IsoflowPatchActionUtil'
@@ -35,7 +37,9 @@ import { CanvasLintsPartUtil } from '../parts/CanvasLintsPartUtil'
 import { ChatHistoryPartUtil } from '../parts/ChatHistoryPartUtil'
 import { ContextItemsPartUtil } from '../parts/ContextItemsPartUtil'
 import { DataPartUtil } from '../parts/DataPartUtil'
+import '../parts/DesignSystemContextPartUtil'
 import { DebugPartUtil } from '../parts/DebugPartUtil'
+import '../parts/HtmlMockupContextPartUtil'
 import { MessagesPartUtil } from '../parts/MessagesPartUtil'
 import { IsoflowContextPartUtil } from '../parts/IsoflowContextPartUtil'
 import { ModelNamePartUtil } from '../parts/ModelNamePartUtil'
@@ -47,6 +51,7 @@ import { TimePartUtil } from '../parts/TimePartUtil'
 import { TodoListPartUtil } from '../parts/TodoListPartUtil'
 import { UserActionHistoryPartUtil } from '../parts/UserActionHistoryPartUtil'
 import { UserViewportBoundsPartUtil } from '../parts/UserViewportBoundsPartUtil'
+import { WorkbenchArtifactsPartUtil } from '../parts/WorkbenchArtifactsPartUtil'
 
 /**
  * What an agent can see and do when in a given mode.
@@ -119,6 +124,7 @@ export const AGENT_MODE_DEFINITIONS = [
 			BlurryShapesPartUtil.type,
 			PeripheralShapesPartUtil.type,
 			SelectedShapesPartUtil.type,
+			WorkbenchArtifactsPartUtil.type,
 
 			// History
 			ChatHistoryPartUtil.type,

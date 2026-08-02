@@ -3,7 +3,6 @@ import {
 	DEFAULT_EMBED_DEFINITIONS,
 	DefaultSizeStyle,
 	EmbedShapeUtil,
-	ErrorBoundary,
 	TLComponents,
 	Tldraw,
 	TldrawUiToastsProvider,
@@ -14,18 +13,19 @@ import {
 	TldrawAgentAppContextProvider,
 	TldrawAgentAppProvider,
 } from './agent/TldrawAgentAppProvider'
-import { ChatPanel } from './components/ChatPanel'
-import { ChatPanelFallback } from './components/ChatPanelFallback'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
-import { IsoflowOverlay } from './isoflow/IsoflowOverlay'
+import { DesignSystemShapeUtil } from './design-system/DesignSystemShape'
+import { LocalHtmlMockupShapeUtil } from './html-mockup/LocalHtmlMockupShape'
 import { ISOFLOW_EMBED_DEFINITION } from './isoflow/isoflowProvider'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
-import { WorkflowOverlay } from './workflow/WorkflowOverlay'
+import { WorkflowNodeShapeUtil } from './workflow/WorkflowNodeShape'
 import { WorkflowRichOutputShapeUtil } from './workflow/RichOutputShape'
 import { WORKFLOW_TOOLS } from './workflow/WorkflowTools'
 import { bootstrapMlInternWorkflows } from './workflow/workflowCanvas'
+import { WorkbenchShell } from './workbench/WorkbenchShell'
+import { resolveCanvasPersistenceKey } from './workbench/workbenchPersistence'
 
 // Customize tldraw's styles to play to the agent's strengths
 DefaultSizeStyle.setDefaultValue('s')
@@ -35,7 +35,13 @@ const tools = [TargetShapeTool, TargetAreaTool, ...WORKFLOW_TOOLS]
 const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
 	embedDefinitions: [ISOFLOW_EMBED_DEFINITION, ...DEFAULT_EMBED_DEFINITIONS],
 })
-const shapeUtils = [WorkflowRichOutputShapeUtil, IsoflowEmbedShapeUtil]
+const shapeUtils = [
+	WorkflowNodeShapeUtil,
+	WorkflowRichOutputShapeUtil,
+	DesignSystemShapeUtil,
+	LocalHtmlMockupShapeUtil,
+	IsoflowEmbedShapeUtil,
+]
 const overlayUtils = [AgentHighlightOverlayUtil]
 const overrides: TLUiOverrides = {
 	tools: (editor, tools) => {
@@ -65,13 +71,15 @@ const overrides: TLUiOverrides = {
 
 function App() {
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
+	const persistenceKey = resolveCanvasPersistenceKey(window.location.search)
 
 	const handleUnmount = useCallback(() => {
 		setApp(null)
 	}, [])
 	const handleMount = useCallback((nextApp: TldrawAgentApp) => {
 		setApp(nextApp)
-		if (new URLSearchParams(window.location.search).get('workflow') === 'ml-intern') {
+		const search = new URLSearchParams(window.location.search)
+		if (search.get('workflow') === 'ml-intern') {
 			bootstrapMlInternWorkflows(nextApp.editor)
 		}
 	}, [])
@@ -80,10 +88,7 @@ function App() {
 	const components: TLComponents = useMemo(() => {
 		return {
 			InFrontOfTheCanvas: () => (
-				<>
-					<WorkflowOverlay />
-					<IsoflowOverlay />
-				</>
+				<WorkbenchShell app={app} />
 			),
 			HelperButtons: () =>
 				app && (
@@ -99,7 +104,7 @@ function App() {
 			<div className="tldraw-agent-container">
 				<div className="tldraw-canvas">
 					<Tldraw
-						persistenceKey="tldraw-agent-demo"
+						persistenceKey={persistenceKey}
 						tools={tools}
 						shapeUtils={shapeUtils}
 						overlayUtils={overlayUtils}
@@ -109,13 +114,6 @@ function App() {
 						<TldrawAgentAppProvider onMount={handleMount} onUnmount={handleUnmount} />
 					</Tldraw>
 				</div>
-				<ErrorBoundary fallback={ChatPanelFallback}>
-					{app && (
-						<TldrawAgentAppContextProvider app={app}>
-							<ChatPanel />
-						</TldrawAgentAppContextProvider>
-					)}
-				</ErrorBoundary>
 			</div>
 		</TldrawUiToastsProvider>
 	)

@@ -1,4 +1,5 @@
 import { FormEventHandler, useCallback, useRef } from 'react'
+import { ML_INTERN_EVAL_LAB_MODEL_NAME } from '../../shared/models'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { ChatHistory } from './chat-history/ChatHistory'
 import { ChatInput } from './ChatInput'
@@ -25,12 +26,24 @@ export function ChatPanel() {
 			inputRef.current.value = ''
 
 			// Sending a new message to the agent should interrupt the current request
+			const isMlInternEvalLab =
+				agent.modelName.getModelName() === ML_INTERN_EVAL_LAB_MODEL_NAME
 			agent.interrupt({
 				input: {
 					agentMessages: [value],
 					bounds: agent.editor.getViewportPageBounds(),
 					source: 'user',
 					contextItems: agent.context.getItems(),
+					...(isMlInternEvalLab
+						? {
+								routing: {
+									enabled: true as const,
+									route: 'canvas-edit' as const,
+									capabilityTier: 'extended' as const,
+									maxHistoryItems: 4,
+								},
+							}
+						: {}),
 				},
 			})
 		},

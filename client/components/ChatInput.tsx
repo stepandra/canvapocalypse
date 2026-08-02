@@ -104,11 +104,13 @@ export function ChatInput({
 								value={modelName}
 								onChange={(e) => agent.modelName.setModelName(e.target.value as AgentModelName)}
 							>
-								{Object.values(AGENT_MODEL_DEFINITIONS).map((model) => (
-									<option key={model.name} value={model.name}>
-										{model.name}
-									</option>
-								))}
+								{Object.values(AGENT_MODEL_DEFINITIONS)
+									.filter((model) => !('transport' in model) || model.transport !== 'ml-intern')
+									.map((model) => (
+										<option key={model.name} value={model.name}>
+											{'label' in model ? model.label : model.name}
+										</option>
+									))}
 							</select>
 							<ChevronDownIcon />
 						</div>
