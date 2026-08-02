@@ -225,6 +225,7 @@ function convertTextShapeToTldrawShape(
 			font,
 		},
 		meta: {
+			...defaultTextShape.meta,
 			note: focusedShape.note ?? defaultTextShape.meta?.note ?? '',
 		},
 	}
@@ -341,6 +342,7 @@ function convertLineShapeToTldrawShape(
 				spline: defaultLineShape.props?.spline ?? 'line',
 			},
 			meta: {
+				...defaultLineShape.meta,
 				note: focusedShape.note ?? defaultLineShape.meta?.note ?? '',
 			},
 		},
@@ -402,6 +404,7 @@ function convertArrowShapeToTldrawShape(
 			start: { x: x1 - minX, y: y1 - minY },
 		},
 		meta: {
+			...defaultArrowShape.meta,
 			note: focusedShape.note ?? defaultArrowShape.meta?.note ?? '',
 		},
 	}
@@ -518,6 +521,7 @@ function convertGeoShapeToTldrawShape(
 				w: focusedShape.w ?? defaultGeoShape.props?.w ?? 100,
 			},
 			meta: {
+				...defaultGeoShape.meta,
 				note: focusedShape.note ?? defaultGeoShape.meta?.note ?? '',
 			},
 		},
@@ -570,6 +574,7 @@ function convertNoteShapeToTldrawShape(
 				textLastEditedBy: defaultNoteShape.props?.textLastEditedBy ?? null,
 			},
 			meta: {
+				...defaultNoteShape.meta,
 				note: focusedShape.note ?? defaultNoteShape.meta?.note ?? '',
 			},
 		},
@@ -612,6 +617,7 @@ function convertDrawShapeToTldrawShape(
 				fill,
 			},
 			meta: {
+				...defaultDrawShape.meta,
 				note: focusedShape.note ?? defaultDrawShape.meta?.note ?? '',
 			},
 		},
@@ -639,6 +645,7 @@ function convertUnknownShapeToTldrawShape(
 			opacity: defaultShape.opacity ?? 1,
 			props: defaultShape.props ?? ({} as any),
 			meta: {
+				...defaultShape.meta,
 				note: focusedShape.note ?? defaultShape.meta?.note ?? '',
 			},
 		},

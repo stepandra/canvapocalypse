@@ -1,0 +1,285 @@
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { once } from 'node:events'
+import { mkdtemp, stat, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import test from 'node:test'
+
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+const BRIDGE_PATH = fileURLToPath(new URL('./workflow-llm-bridge.mjs', import.meta.url))
+
+test('the retired Isoflow agent route is a no-subprocess 410 tombstone', { timeout: 15_000 }, async (t) => {
+	const port = await reserveLoopbackPort()
+	const child = spawn(process.execPath, [BRIDGE_PATH], {
+		cwd: REPO_ROOT,
+		env: {
+			...process.env,
+			WORKFLOW_LLM_PORT: String(port),
+			AMP_BIN: '/definitely-missing-amp-binary',
+		},
+		stdio: ['ignore', 'pipe', 'pipe'],
+	})
+	let output = ''
+	child.stdout.on('data', (chunk) => {
+		output += String(chunk)
+	})
+	child.stderr.on('data', (chunk) => {
+		output += String(chunk)
+	})
+	t.after(async () => {
+		if (child.exitCode !== null) return
+		child.kill('SIGTERM')
+		await Promise.race([once(child, 'exit'), delay(1_000)])
+	})
+
+	await waitForBridge(port, child, () => output)
+
+	const legacyPayload = JSON.stringify({
+		projectId: 'autorecruit-contours',
+		mode: 'amp-high',
+		instructions: 'Return JSON.',
+		input: 'Inspect the selected view.',
+	})
+	const requests = [
+		{ method: 'GET' },
+		{ method: 'PUT', body: legacyPayload },
+		{ method: 'OPTIONS' },
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: '{not-json',
+		},
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: legacyPayload,
+		},
+		{
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				origin: 'https://example.invalid',
+			},
+			body: legacyPayload,
+		},
+	]
+	for (const init of requests) {
+		const response = await fetch(
+			`http://127.0.0.1:${port}/isoflow/agent`,
+			init
+		)
+		assert.equal(response.status, 410, `${init.method} should be retired`)
+		assert.equal(response.headers.get('cache-control'), 'no-store')
+		assert.deepEqual(await response.json(), {
+			error: 'legacy_isoflow_agent_removed',
+			message:
+				'Use the existing Architect thread with the explicitly selected Isoflow project and view.',
+		})
+	}
+
+	const unknown = await fetch(`http://127.0.0.1:${port}/not-a-route`)
+	assert.equal(unknown.status, 404)
+})
+
+test('the workflow bridge exposes only registered local HTML mockups', { timeout: 15_000 }, async (t) => {
+	const root = await mkdtemp(join(tmpdir(), 'canvapocalypse-bridge-html-'))
+	await writeFile(join(root, 'screen.html'), '<main><h1>Bridge screen</h1></main>')
+	const port = await reserveLoopbackPort()
+	const capabilityFile = join(root, '.resident', 'html-mockup-capability')
+	const child = spawn(process.execPath, [BRIDGE_PATH], {
+		cwd: root,
+		env: {
+			...process.env,
+			WORKFLOW_LLM_PORT: String(port),
+			TLDRAW_HTML_MOCKUP_ROOTS: root,
+			TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY_FILE: capabilityFile,
+			AMP_BIN: '/definitely-missing-amp-binary',
+		},
+		stdio: ['ignore', 'pipe', 'pipe'],
+	})
+	let restartChild
+	let output = ''
+	child.stdout.on('data', (chunk) => {
+		output += String(chunk)
+	})
+	child.stderr.on('data', (chunk) => {
+		output += String(chunk)
+	})
+	t.after(async () => {
+		if (child.exitCode !== null) return
+		child.kill('SIGTERM')
+		await Promise.race([once(child, 'exit'), delay(1_000)])
+	})
+	t.after(async () => {
+		if (!restartChild || restartChild.exitCode !== null) return
+		restartChild.kill('SIGTERM')
+		await Promise.race([once(restartChild, 'exit'), delay(1_000)])
+	})
+
+	await waitForBridge(port, child, () => output)
+	const origin = 'http://127.0.0.1:5173'
+	const bootstrapResponse = await fetch(
+		`http://127.0.0.1:${port}/html-mockups/session`,
+		{
+			method: 'POST',
+			headers: { origin },
+		}
+	)
+	assert.equal(bootstrapResponse.status, 200)
+	const bootstrap = await bootstrapResponse.json()
+	assert.equal(
+		/^hr_[A-Za-z0-9_-]{43,128}$/.test(bootstrap.capability),
+		true
+	)
+	assert.equal((await stat(capabilityFile)).mode & 0o777, 0o600)
+	const residentHeaders = {
+		origin,
+		'x-tldraw-html-capability': bootstrap.capability,
+	}
+	const listResponse = await fetch(`http://127.0.0.1:${port}/html-mockups`, {
+		headers: residentHeaders,
+	})
+	assert.equal(listResponse.status, 200)
+	assert.equal(listResponse.headers.get('access-control-allow-origin'), origin)
+	const listing = await listResponse.json()
+	assert.equal(listing.documents.length, 1)
+	assert.equal(listing.documents[0].name, 'screen.html')
+
+	const snapshotResponse = await fetch(
+		`http://127.0.0.1:${port}/html-mockups/${listing.documents[0].documentRef}/snapshot`,
+		{ headers: residentHeaders }
+	)
+	assert.equal(snapshotResponse.status, 200)
+	const snapshot = await snapshotResponse.json()
+	assert.match(snapshot.revision, /^sha256:[a-f0-9]{64}$/)
+	assert.equal(snapshot.title, 'screen.html')
+	assert.equal(snapshot.bytes, Buffer.byteLength('<main><h1>Bridge screen</h1></main>'))
+	assert(snapshot.nodes.some((node) => node.role === 'heading'))
+
+	const offlineListResponse = await fetch(
+		`http://127.0.0.1:${port}/html-mockups`,
+		{ headers: { origin: 'null' } }
+	)
+	assert.equal(offlineListResponse.status, 401)
+	assert.equal(
+		offlineListResponse.headers.get('access-control-allow-origin'),
+		'null'
+	)
+	assert.equal(
+		(await offlineListResponse.json()).error,
+		'resident_capability_required'
+	)
+
+	const offlineBootstrapResponse = await fetch(
+		`http://127.0.0.1:${port}/html-mockups/session`,
+		{ method: 'POST', headers: { origin: 'null' } }
+	)
+	assert.equal(offlineBootstrapResponse.status, 403)
+
+	const provisionedOfflineList = await fetch(
+		`http://127.0.0.1:${port}/html-mockups`,
+		{
+			headers: {
+				origin: 'null',
+				'x-tldraw-html-capability': bootstrap.capability,
+			},
+		}
+	)
+	assert.equal(provisionedOfflineList.status, 200)
+
+	const denied = await fetch(`http://127.0.0.1:${port}/html-mockups`, {
+		headers: {
+			origin: 'https://example.invalid',
+			'x-tldraw-html-capability': bootstrap.capability,
+		},
+	})
+	assert.equal(denied.status, 403)
+
+	const preflight = await fetch(`http://127.0.0.1:${port}/html-mockups`, {
+		method: 'OPTIONS',
+		headers: {
+			origin,
+			'access-control-request-method': 'GET',
+			'access-control-request-headers': 'x-tldraw-html-capability',
+		},
+	})
+	assert.equal(preflight.status, 204)
+	assert.match(
+		preflight.headers.get('access-control-allow-headers') ?? '',
+		/x-tldraw-html-capability/
+	)
+
+	child.kill('SIGTERM')
+	await once(child, 'exit')
+	const restartPort = await reserveLoopbackPort()
+	let restartOutput = ''
+	restartChild = spawn(process.execPath, [BRIDGE_PATH], {
+		cwd: root,
+		env: {
+			...process.env,
+			WORKFLOW_LLM_PORT: String(restartPort),
+			TLDRAW_HTML_MOCKUP_ROOTS: root,
+			TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY_FILE: capabilityFile,
+			AMP_BIN: '/definitely-missing-amp-binary',
+		},
+		stdio: ['ignore', 'pipe', 'pipe'],
+	})
+	restartChild.stdout.on('data', (chunk) => {
+		restartOutput += String(chunk)
+	})
+	restartChild.stderr.on('data', (chunk) => {
+		restartOutput += String(chunk)
+	})
+	await waitForBridge(restartPort, restartChild, () => restartOutput)
+	const restartBootstrapResponse = await fetch(
+		`http://127.0.0.1:${restartPort}/html-mockups/session`,
+		{ method: 'POST', headers: { origin } }
+	)
+	assert.equal(restartBootstrapResponse.status, 200)
+	const restartBootstrap = await restartBootstrapResponse.json()
+	assert.equal(
+		createHash('sha256').update(restartBootstrap.capability).digest('hex') ===
+			createHash('sha256').update(bootstrap.capability).digest('hex'),
+		true
+	)
+})
+
+async function reserveLoopbackPort() {
+	const probe = createServer()
+	probe.listen(0, '127.0.0.1')
+	await once(probe, 'listening')
+	const address = probe.address()
+	assert(address && typeof address === 'object')
+	const port = address.port
+	probe.close()
+	await once(probe, 'close')
+	return port
+}
+
+async function waitForBridge(port, child, getOutput) {
+	const deadline = Date.now() + 8_000
+	while (Date.now() < deadline) {
+		if (child.exitCode !== null) {
+			throw new Error(`workflow bridge exited before startup:\n${getOutput()}`)
+		}
+		try {
+			const response = await fetch(`http://127.0.0.1:${port}/health`)
+			if (response.ok) return
+		} catch {
+			// The loopback listener is still starting.
+		}
+		await delay(50)
+	}
+	throw new Error(`workflow bridge did not start:\n${getOutput()}`)
+}
+
+function delay(milliseconds) {
+	return new Promise((resolve) => {
+		const timer = setTimeout(resolve, milliseconds)
+		timer.unref()
+	})
+}

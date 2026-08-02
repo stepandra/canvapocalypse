@@ -3,6 +3,7 @@ import { convertTldrawShapeToBlurryShape } from '../../shared/format/convertTldr
 import { BlurryShapesPart } from '../../shared/schema/PromptPartDefinitions'
 import { AgentRequest } from '../../shared/types/AgentRequest'
 import { AgentHelpers } from '../AgentHelpers'
+import { COMPANION_CONTEXT_BUDGET } from '../agent/companionRouting'
 import { PromptPartUtil, registerPromptPartUtil } from './PromptPartUtil'
 
 export const BlurryShapesPartUtil = registerPromptPartUtil(
@@ -21,9 +22,12 @@ export const BlurryShapesPartUtil = registerPromptPartUtil(
 				if (!bounds) return false
 				return contextBoundsBox.includes(bounds)
 			})
+			const boundedShapes = request.routing?.enabled
+				? shapesInBounds.slice(0, COMPANION_CONTEXT_BUDGET.maxViewportShapes)
+				: shapesInBounds
 
 			// Convert the shapes to the blurry shape format
-			const blurryShapes = shapesInBounds
+			const blurryShapes = boundedShapes
 				.map((shape) => convertTldrawShapeToBlurryShape(editor, shape))
 				.filter((s) => s !== null)
 

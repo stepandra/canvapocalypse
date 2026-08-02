@@ -53,9 +53,11 @@ export function registerActionUtil<T extends AgentActionUtilConstructor<BaseAgen
 			modeMap.set(mode, util)
 		}
 	} else {
-		// Default registration (existing behavior)
+		// Replace the previous module instance during Vite Fast Refresh.
+		// Action types remain unique in the resolved registry.
 		if (defaultRegistry.has(util.type)) {
-			throw new Error(`Agent action util already registered: ${util.type}`)
+			defaultRegistry.set(util.type, util)
+			return util
 		}
 		defaultRegistry.set(util.type, util)
 	}

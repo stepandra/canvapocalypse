@@ -97,6 +97,250 @@ export const CountryInfoAction = z
 
 export type CountryInfoAction = z.infer<typeof CountryInfoAction>
 
+const IsoflowTileSchema = z.object({
+	x: z.number(),
+	y: z.number(),
+})
+
+const IsoflowConnectorStyleSchema = z.object({
+	color: z.string().optional(),
+	width: z.number().optional(),
+	style: z.enum(['SOLID', 'DASHED', 'DOTTED']).optional(),
+	direction: z.enum(['FORWARD', 'REVERSE', 'BOTH', 'NONE']).optional(),
+})
+
+const IsoflowLegendEntrySchema = z.object({
+	id: z.string(),
+	label: z.string(),
+	colorId: z.string(),
+})
+
+const IsoflowJsonObjectSchema = z.record(z.string(), z.json())
+
+const IsoflowPatchOperationSchema = z.discriminatedUnion('op', [
+	z.object({ op: z.literal('set_view'), viewId: z.string() }),
+	z.object({
+		op: z.literal('create_view'),
+		view: z.object({
+			id: z.string(),
+			name: z.string(),
+			items: z.array(z.json()).optional(),
+			connectors: z.array(z.json()).optional(),
+			rectangles: z.array(z.json()).optional(),
+			textBoxes: z.array(z.json()).optional(),
+		}),
+		activate: z.boolean().optional(),
+	}),
+	z.object({
+		op: z.literal('update_view'),
+		viewId: z.string(),
+		patch: z.object({ name: z.string().optional() }),
+	}),
+	z.object({
+		op: z.literal('duplicate_view'),
+		viewId: z.string(),
+		newViewId: z.string(),
+		name: z.string().optional(),
+		activate: z.boolean().optional(),
+	}),
+	z.object({ op: z.literal('remove_view'), viewId: z.string() }),
+	z.object({
+		op: z.literal('move_item'),
+		viewId: z.string(),
+		itemId: z.string(),
+		tile: IsoflowTileSchema,
+	}),
+	z.object({ op: z.literal('rename_item'), itemId: z.string(), name: z.string() }),
+	z.object({
+		op: z.literal('update_item'),
+		itemId: z.string(),
+		patch: z.object({
+			name: z.string().optional(),
+			description: z.string().nullable().optional(),
+			icon: z.string().nullable().optional(),
+		}),
+	}),
+	z.object({
+		op: z.literal('add_item'),
+		viewId: z.string(),
+		item: z.object({
+			id: z.string(),
+			name: z.string(),
+			icon: z.string().optional(),
+			tile: IsoflowTileSchema,
+			labelHeight: z.number().optional(),
+		}),
+	}),
+	z.object({ op: z.literal('remove_item'), itemId: z.string() }),
+	z.object({
+		op: z.literal('connect'),
+		viewId: z.string(),
+		connectorId: z.string(),
+		from: z.string(),
+		to: z.string(),
+		connector: IsoflowConnectorStyleSchema.optional(),
+	}),
+	z.object({
+		op: z.literal('update_connector'),
+		viewId: z.string(),
+		connectorId: z.string(),
+		patch: IsoflowConnectorStyleSchema,
+	}),
+	z.object({
+		op: z.literal('disconnect'),
+		viewId: z.string(),
+		connectorId: z.string(),
+	}),
+	z.object({
+		op: z.literal('add_rectangle'),
+		viewId: z.string(),
+		rectangle: IsoflowJsonObjectSchema,
+	}),
+	z.object({
+		op: z.literal('update_rectangle'),
+		viewId: z.string(),
+		rectangleId: z.string(),
+		patch: IsoflowJsonObjectSchema,
+	}),
+	z.object({ op: z.literal('remove_rectangle'), viewId: z.string(), rectangleId: z.string() }),
+	z.object({
+		op: z.literal('add_text_box'),
+		viewId: z.string(),
+		textBox: IsoflowJsonObjectSchema,
+	}),
+	z.object({
+		op: z.literal('update_text_box'),
+		viewId: z.string(),
+		textBoxId: z.string(),
+		patch: IsoflowJsonObjectSchema,
+	}),
+	z.object({ op: z.literal('remove_text_box'), viewId: z.string(), textBoxId: z.string() }),
+	z.object({ op: z.literal('update_color'), colorId: z.string(), value: z.string() }),
+	z.object({ op: z.literal('replace_legend'), legend: z.array(IsoflowLegendEntrySchema) }),
+])
+
+export const IsoflowSearchAction = z
+	.object({
+		_type: z.literal('isoflowSearch'),
+		query: z.string(),
+		kind: z.enum(['all', 'items', 'icons']),
+		projectId: z.string().optional(),
+		viewId: z.string().optional(),
+	})
+	.meta({
+		title: 'Search Isoflow',
+		description:
+			'Searches native Isoflow nodes or icons in the selected embed. Use this before adding a node when the icon ID is not already present in compact context.',
+	})
+
+export type IsoflowSearchAction = z.infer<typeof IsoflowSearchAction>
+
+export const IsoflowPatchAction = z
+	.object({
+		_type: z.literal('isoflowPatch'),
+		intent: z.string(),
+		projectId: z.string().optional(),
+		dryRun: z.literal(true),
+		operations: z.array(IsoflowPatchOperationSchema).min(1).max(100),
+	})
+	.meta({
+		title: 'Patch Isoflow',
+		description:
+			'Proposes an atomic revision-guarded Isoflow Bridge v2 transaction for the selected embed. The host always dry-runs the proposal and requires explicit confirmation before applying the exact same operations at the same revision.',
+		_systemPromptCategory: 'edit',
+	})
+
+export type IsoflowPatchAction = z.infer<typeof IsoflowPatchAction>
+
+export const IsoflowCreateViewAction = z
+	.object({
+		_type: z.literal('isoflowCreateView'),
+		intent: z.string(),
+		projectId: z.string().optional(),
+		viewId: z.string(),
+		name: z.string(),
+		nodes: z
+			.array(
+				z.object({
+					id: z.string(),
+					name: z.string(),
+					iconQuery: z.string().optional(),
+					x: z.number(),
+					y: z.number(),
+				})
+			)
+			.min(1)
+			.max(32),
+		connectors: z
+			.array(
+				z.object({
+					id: z.string(),
+					from: z.string(),
+					to: z.string(),
+				})
+			)
+			.max(48),
+	})
+	.meta({
+		title: 'Create Isoflow View',
+		description:
+			'Proposes a new native Isoflow diagram view using native icon names and stable node IDs. The host converts it to a dry-run transaction and requires explicit confirmation before creation.',
+		_systemPromptCategory: 'edit',
+	})
+
+export type IsoflowCreateViewAction = z.infer<typeof IsoflowCreateViewAction>
+
+const HtmlMockupRefSchema = z
+	.string()
+	.min(1)
+	.max(256)
+	.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/, 'Expected an opaque Local HTML Mockup reference')
+
+const HtmlMockupRevisionSchema = z
+	.string()
+	.regex(/^sha256:[a-f0-9]{64}$/i, 'Expected a sha256 Local HTML Mockup revision')
+
+export const HtmlMockupInspectAction = z
+	.object({
+		_type: z.literal('htmlMockupInspect'),
+		documentRef: HtmlMockupRefSchema,
+		targetRef: HtmlMockupRefSchema.optional(),
+	})
+	.meta({
+		title: 'Inspect HTML Mockup',
+		description:
+			'Retrieves one bounded semantic snapshot for the selected Local HTML Mockup or one opaque target ref. It never returns source HTML, paths, selectors, URLs, or credentials.',
+	})
+
+export type HtmlMockupInspectAction = z.infer<typeof HtmlMockupInspectAction>
+
+export const HtmlMockupCreateVariantAction = z
+	.object({
+		_type: z.literal('htmlMockupCreateVariant'),
+		documentRef: HtmlMockupRefSchema,
+		targetRef: HtmlMockupRefSchema,
+		contextRef: HtmlMockupRefSchema,
+		expectedRevision: HtmlMockupRevisionSchema,
+		idempotencyKey: z
+			.string()
+			.min(1)
+			.max(128)
+			.regex(
+				/^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
+				'Expected an opaque Local HTML Mockup idempotency key',
+			),
+		replacementHtml: z.string().min(1).max(32_768),
+		intent: z.string().min(1).max(512),
+	})
+	.meta({
+		title: 'Create HTML Mockup Variant',
+		description:
+			'Creates a new Local HTML Mockup variant for one previously inspected opaque target ref using its contextRef, exact expected revision, and a stable per-operation idempotency key. Reuse the same key only when retrying the exact same logical mutation.',
+		_systemPromptCategory: 'edit',
+	})
+
+export type HtmlMockupCreateVariantAction = z.infer<typeof HtmlMockupCreateVariantAction>
+
 // Create Action
 export const CreateAction = z
 	.object({

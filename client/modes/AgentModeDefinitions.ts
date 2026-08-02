@@ -10,7 +10,12 @@ import { CountShapesActionUtil } from '../actions/CountShapesActionUtil'
 import { CreateActionUtil } from '../actions/CreateActionUtil'
 import { DeleteActionUtil } from '../actions/DeleteActionUtil'
 import { DistributeActionUtil } from '../actions/DistributeActionUtil'
+import '../actions/HtmlMockupInspectActionUtil'
+import '../actions/HtmlMockupVariantActionUtil'
 import { LabelActionUtil } from '../actions/LabelActionUtil'
+import { IsoflowCreateViewActionUtil } from '../actions/IsoflowCreateViewActionUtil'
+import { IsoflowPatchActionUtil } from '../actions/IsoflowPatchActionUtil'
+import { IsoflowSearchActionUtil } from '../actions/IsoflowSearchActionUtil'
 import { MessageActionUtil } from '../actions/MessageActionUtil'
 import { MoveActionUtil } from '../actions/MoveActionUtil'
 import { PenActionUtil } from '../actions/PenActionUtil'
@@ -32,8 +37,11 @@ import { CanvasLintsPartUtil } from '../parts/CanvasLintsPartUtil'
 import { ChatHistoryPartUtil } from '../parts/ChatHistoryPartUtil'
 import { ContextItemsPartUtil } from '../parts/ContextItemsPartUtil'
 import { DataPartUtil } from '../parts/DataPartUtil'
+import '../parts/DesignSystemContextPartUtil'
 import { DebugPartUtil } from '../parts/DebugPartUtil'
+import '../parts/HtmlMockupContextPartUtil'
 import { MessagesPartUtil } from '../parts/MessagesPartUtil'
+import { IsoflowContextPartUtil } from '../parts/IsoflowContextPartUtil'
 import { ModelNamePartUtil } from '../parts/ModelNamePartUtil'
 import { ModePartUtil } from '../parts/ModePartUtil'
 import { PeripheralShapesPartUtil } from '../parts/PeripheralShapesPartUtil'
@@ -43,6 +51,7 @@ import { TimePartUtil } from '../parts/TimePartUtil'
 import { TodoListPartUtil } from '../parts/TodoListPartUtil'
 import { UserActionHistoryPartUtil } from '../parts/UserActionHistoryPartUtil'
 import { UserViewportBoundsPartUtil } from '../parts/UserViewportBoundsPartUtil'
+import { WorkbenchArtifactsPartUtil } from '../parts/WorkbenchArtifactsPartUtil'
 
 /**
  * What an agent can see and do when in a given mode.
@@ -104,6 +113,7 @@ export const AGENT_MODE_DEFINITIONS = [
 			MessagesPartUtil.type,
 			DataPartUtil.type,
 			ContextItemsPartUtil.type,
+			IsoflowContextPartUtil.type,
 
 			// Viewport
 			ScreenshotPartUtil.type,
@@ -114,6 +124,7 @@ export const AGENT_MODE_DEFINITIONS = [
 			BlurryShapesPartUtil.type,
 			PeripheralShapesPartUtil.type,
 			SelectedShapesPartUtil.type,
+			WorkbenchArtifactsPartUtil.type,
 
 			// History
 			ChatHistoryPartUtil.type,
@@ -165,6 +176,9 @@ export const AGENT_MODE_DEFINITIONS = [
 			// External APIs
 			CountryInfoActionUtil.type,
 			CountShapesActionUtil.type,
+			IsoflowSearchActionUtil.type,
+			IsoflowPatchActionUtil.type,
+			IsoflowCreateViewActionUtil.type,
 
 			// Internal (required)
 			UnknownActionUtil.type,

@@ -1,8 +1,27 @@
-# tldraw agent
+# Canvapocalypse
 
-This starter kit demonstrates how to build an agent that can manipulate the [tldraw](https://github.com/tldraw/tldraw) canvas.
+Canvapocalypse is a local-first AI workbench built on
+[tldraw](https://github.com/tldraw/tldraw). People and agents work on the same
+editable canvas through bounded context and validated native actions.
 
-A chat panel on the right side of the screen lets users communicate with the agent, add context, and see chat history.
+## Universal AI Workbench
+
+The pack switcher selects one of four canonical workbench packs:
+`architecture`, `ml`, `uiux`, or `product`. A pack changes the compact palette
+and visible helpers; it does not hide existing shapes or select an external
+provider.
+
+Each pack inserts editable native tldraw templates:
+
+- **Architecture:** System Context, Decision Graph, Change Radar.
+- **ML / LLM:** Experiment Loop, Evaluation Pipeline, Model Delivery Map.
+- **UI / UX:** User Flow, Wireframe Screen Set, Component Anatomy.
+- **Product / PM:** Product Roadmap, Delivery Timeline, Opportunity Decision.
+
+Native tldraw is the default surface for every pack. Isoflow is used only for an
+explicit DevOps, DevSecOps, deployment, or infrastructure-contour request that
+targets a selected native Isoflow embed. ML/MLOps, UI/UX, product work, and
+general diagrams never route through Isoflow.
 
 ## Environment setup
 
@@ -24,6 +43,119 @@ Run the development server with `yarn dev` or `npm run dev`.
 
 Open `http://localhost:5173/` in your browser to see the app.
 
+### Repo-local Isoflow Studio
+
+The editable Isoflow runtime now lives in this repository under
+[`isoflow-studio`](./isoflow-studio). Start it on the fixed embed origin:
+
+```sh
+npm run isoflow:install
+npm run isoflow:dev
+```
+
+It serves Bridge v2 and the project sessions on `http://127.0.0.1:4174`.
+Canvapocalypse remains the tldraw host and consumes Isoflow through the embed
+provider; Isoflow Studio is not the home of tldraw agents, Decision Graph, or
+Change Radar.
+
+### Existing Ampcode Architect thread
+
+The Architecture pack does not start a second Architect. The existing Ampcode
+thread uses the repo-owned plugin at
+[`amp/plugins/tldraw-offline-workbench.ts`](./amp/plugins/tldraw-offline-workbench.ts)
+and exactly three tools: `tldraw_capabilities`,
+`tldraw_describe_capability`, and `tldraw_execute`.
+
+Unqualified discovery targets exactly one active tldraw Offline desktop and
+never falls back to a Vite/web preview. Context is limited to the explicit
+selection or a user-approved bounded area. Native mutations are validated,
+atomic, one-step undoable, and closed by a canvas-bound one-time lease receipt.
+Amp receives no document path, canvas binding, lease token, raw whole-canvas
+state, credential, or terminal transcript. Installation and the ready-to-paste
+instruction live in
+[`references/activation.md`](./.agents/skills/tldraw-offline-workbench/references/activation.md).
+Browser Origins are restricted to bound resident polling/receipt routes and
+cannot produce capability requests against the Offline canvas.
+
+### OpenRouter workflow testing
+
+Start the workflow bridge alongside the development server:
+
+```sh
+npm run workflow:bridge
+```
+
+The Architecture and ML packs can also show passive Zellij health for exact,
+existing sessions. Map each role on the bridge process; an unmapped role stays
+fail-closed as `TARGET NOT CONFIGURED` and never adopts an arbitrary sole
+session:
+
+```sh
+TLDRAW_ZELLIJ_ARCHITECT_SESSION='exact-architect-session-name' \
+TLDRAW_ZELLIJ_ML_SESSION='exact-ml-intern-session-name' \
+npm run workflow:bridge
+```
+
+Session names remain server-side. The canvas receives only health plus an
+opaque reference; it receives no transcript, command, path, token, or terminal
+control.
+
+Open `http://localhost:5173/?workflow=ml-intern`, select an LLM node, choose
+OpenRouter, paste an API key, and click **Connect + load models**. The key is
+kept in `sessionStorage` for the current tab and is not written into the canvas
+or repository.
+
+Use **Duplicate as parallel model** to create another LLM branch with its own
+output node, choose a different model on each branch, and press **Run
+workflow**. Independent branches execute concurrently.
+
+### ML-Intern Eval Lab canvas
+
+ML-Intern remains the primary terminal process: it owns planning, history,
+tools, and approvals. The canvas widget only advertises bridge state, leases a
+bounded request, applies validated native tldraw actions, and returns a compact
+receipt.
+
+```sh
+cd /Users/jerryjohnson/dev/canvapocalypse
+npm run workflow:bridge
+```
+
+Open `http://127.0.0.1:5173/?workflow=ml-intern` and keep the terminal bridge
+widget visible. ML-Intern discovers and uses the canvas in this public sequence:
+
+1. `tldraw_capabilities` returns compact capability IDs and a short-lived
+   binding.
+2. `tldraw_describe_capability` hydrates one selected capability contract.
+3. `tldraw_execute` applies one manifest-bound operation to an explicit
+   selection or bounded area and waits for its receipt.
+
+The repo-local adapter is
+[`scripts/ml_intern_tldraw_tool.py`](./scripts/ml_intern_tldraw_tool.py).
+Installing it into the ML-Intern checkout remains an external step: copy the
+module into that checkout's `agent/tools/`, then import
+`create_tldraw_canvas_tools` in `agent/core/tools.py` and extend
+`create_builtin_tools()` with `create_tldraw_canvas_tools(ToolSpec)`.
+Canvapocalypse does not modify the external checkout automatically.
+
+`POST /ml-intern/canvas-tool/invoke` remains compatibility-only for older local
+clients and is not advertised to ML-Intern. It never broadens the surface
+beyond native tldraw.
+
+The toolbar also includes a separate **OpenAI-compatible Base URL** node. It
+targets `{baseUrl}/models` and `{baseUrl}/chat/completions`, supports optional
+Bearer authentication, and still allows manual model ids when model discovery
+is unavailable. Arbitrary Base URLs are handled only by the loopback workflow
+bridge.
+
+New workflows use a resizable **Rich Output** node. JSON responses—including
+JSON wrapped in a string or fenced code block—render as a recursive disclosure
+tree. Other responses render as Markdown with raw HTML disabled.
+
+Every Play action is appended as a distinct IndexedDB run record. The Rich
+Output run selector can revisit earlier results without changing the graph or
+overwriting another run.
+
 ## Agent overview
 
 With its default configuration, the agent can perform the following actions:
@@ -38,17 +170,15 @@ With its default configuration, the agent can perform the following actions:
 - Schedule further work and reviews to be carried out in follow-up requests.
 - Call example external APIs: Looking up country information.
 
-To make decisions on what to do, we send the agent information from various sources:
+The following context sources are available, but they are not all sent on every
+request. Routing selects a bounded subset for the current intent and surface:
 
 - The user's message.
 - The user's current selection of shapes.
-- What the user can currently see on their screen.
-- Any additional context that the user has provided, such as specific shapes or a particular position or area on the canvas.
+- An explicitly requested bounded position or area.
 - Actions the user has recently taken.
-- A screenshot of the agent's current view of the canvas.
-- A simplified format of all shapes within the agent's viewport.
-- Information on clusters of shapes outside the agent's viewport.
-- The history of the current session, including the user's messages and all the agent's actions.
+- Optional visual context when the selected route requires it.
+- Compact history references instead of unbounded chat replay.
 - Lints identifying potential issues with shapes on the canvas.
 
 ## Use the agent programmatically

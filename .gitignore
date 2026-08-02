@@ -3,3 +3,9 @@ node_modules
 .yarn/
 .dev.vars
 *.dev.vars
+.tldraw-html-mockups/
+.DS_Store
+.tsbuild/
+.wrangler/
+dist/
+**/__pycache__/

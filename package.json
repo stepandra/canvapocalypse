@@ -12,7 +12,14 @@
 	"scripts": {
 		"build": "vite build",
 		"dev": "vite --host",
-		"preview": "vite preview"
+		"isoflow:build": "npm --prefix isoflow-studio run build",
+		"isoflow:dev": "npm --prefix isoflow-studio run dev",
+		"isoflow:install": "npm --prefix isoflow-studio install",
+		"isoflow:test": "npm --prefix isoflow-studio test",
+		"offline:build-config": "node scripts/build-tldraw-desktop-eval-lab.mjs",
+		"preview": "vite preview",
+		"test": "node --test scripts/isoflow-project-context.test.mjs scripts/workflow-llm-bridge.test.mjs scripts/local-html-mockup-service.test.mjs scripts/design-system-service.test.mjs scripts/tldraw-offline-config-target.test.mjs scripts/ml-intern-eval-lab.test.mjs scripts/ml-intern-canvas-tool.test.mjs scripts/amp-tldraw-companion-runtime.test.mjs scripts/terminal-session-monitor.test.mjs scripts/kanban-tracks-service.test.mjs && vitest run --config vitest.config.ts",
+		"workflow:bridge": "node scripts/workflow-llm-bridge.mjs"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^2.0.2",
@@ -25,6 +32,7 @@
 		"ai": "^5.0.63",
 		"best-effort-json-parser": "^1.1.3",
 		"itty-router": "^5.0.18",
+		"parse5": "^8.0.1",
 		"react": "^19.2.1",
 		"react-dom": "^19.2.1",
 		"react-markdown": "^10.1.0",
@@ -37,7 +45,9 @@
 		"@types/react": "^19.2.7",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.1",
+		"esbuild": "^0.28.1",
 		"typescript": "^5.8.3",
-		"vite": "^8.0.16"
+		"vite": "^8.0.16",
+		"vitest": "^4.1.10"
 	}
 }

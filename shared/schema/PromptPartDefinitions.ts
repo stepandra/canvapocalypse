@@ -9,6 +9,11 @@ import { AgentMessage, AgentMessageContent } from '../types/AgentMessage'
 import { AgentRequest } from '../types/AgentRequest'
 import { ChatHistoryItem } from '../types/ChatHistoryItem'
 import { ContextItem } from '../types/ContextItem'
+import type { CompanionRoutingMetadata } from '../types/CompanionRouting'
+import type {
+	DesignSystemProjection,
+	DesignSystemStatus,
+} from '../types/DesignSystem'
 import { SimpleShapeId } from '../types/ids-schema'
 import type { PromptPart, PromptPartDefinition } from '../types/PromptPart'
 import { TodoItem } from '../types/TodoItem'
@@ -30,6 +35,8 @@ export interface CanvasLintsPart {
 export interface ChatHistoryPart {
 	type: 'chatHistory'
 	history: ChatHistoryItem[]
+	omittedCount?: number
+	historyRef?: string
 }
 
 export interface ContextItemsPart {
@@ -52,6 +59,79 @@ export interface MessagesPart {
 export interface ModelNamePart {
 	type: 'modelName'
 	modelName: AgentModelName
+}
+
+export interface IsoflowContextPart {
+	type: 'isoflowContext'
+	embeds: Array<{
+		shapeId: string
+		projectId: string
+		revision: number
+		title: string
+		error?: string
+		activeViewId?: string
+		view: { id: string; name: string }
+		views: Array<{ id: string; name: string }>
+		legend: Array<{ id: string; label: string; colorId: string; value?: string }>
+		contours: Array<{
+			id: string
+			from?: { x: number; y: number }
+			to?: { x: number; y: number }
+			color?: string
+		}>
+		items: Array<{
+			id: string
+			name: string
+			icon?: string
+			tile: { x: number; y: number }
+		}>
+		connectors: Array<{ id: string; from?: string; to?: string }>
+		truncated: boolean
+	}>
+}
+
+export interface HtmlMockupNodeSummary {
+	ref: string
+	parentRef?: string
+	tag: string
+	role?: string
+	name?: string
+	text?: string
+	depth: number
+	childCount: number
+}
+
+export interface HtmlMockupContextPart {
+	type: 'htmlMockupContext'
+	mockups: Array<{
+		shapeId: string
+		documentRef: string
+		revision: string
+		title: string
+		bytes: number
+		selectedTarget?: {
+			ref: string
+			label?: string
+			contextRef: string
+		}
+		snapshot: {
+			nodes: HtmlMockupNodeSummary[]
+			target?: HtmlMockupNodeSummary
+			truncated: boolean
+		}
+	}>
+}
+
+export interface DesignSystemContextPart {
+	type: 'designSystemContext'
+	systems: Array<{
+		shapeId: string
+		documentRef: string
+		revision: string
+		title: string
+		status: DesignSystemStatus
+		projection: DesignSystemProjection
+	}>
 }
 
 export interface PeripheralShapesPart {
@@ -102,6 +182,58 @@ export interface UserViewportBoundsPart {
 	userBounds: BoxModel | null
 }
 
+export interface WorkbenchArtifactSummary {
+	schema?: string
+	artifactId?: string
+	pack?: string
+	kind?: string
+	title?: string
+	summary?: string
+	status?: string
+	owner?: {
+		id?: string
+		type?: string
+		label?: string
+	}
+	startAt?: string
+	dueAt?: string
+	completedAt?: string
+	tags?: string[]
+	templateId?: string
+	artifactType?: string
+	role?: string
+	relation?: string
+}
+
+export interface WorkbenchRelationSummary {
+	schema?: string
+	relationId?: string
+	pack?: string
+	type?: string
+	start?: {
+		artifactId?: string
+		shapeId?: string
+	}
+	end?: {
+		artifactId?: string
+		shapeId?: string
+	}
+	label?: string
+}
+
+export interface WorkbenchArtifactsPart {
+	type: 'workbenchArtifacts'
+	boundary: 'selection' | 'bounds'
+	records: Array<{
+		shapeId: string
+		shapeType: string
+		bounds: BoxModel
+		artifact?: WorkbenchArtifactSummary
+		relation?: WorkbenchRelationSummary
+	}>
+	truncated: boolean
+}
+
 export interface AgentViewportBoundsPart {
 	type: 'agentViewportBounds'
 	agentBounds: BoxModel | null
@@ -112,6 +244,7 @@ export interface ModePart {
 	modeType: string
 	partTypes: PromptPart['type'][]
 	actionTypes: AgentAction['_type'][]
+	routing?: CompanionRoutingMetadata
 }
 
 export interface DebugPart {
@@ -190,10 +323,22 @@ const CHAT_HISTORY_PRIORITY = -Infinity // history should appear first in the pr
 export const ChatHistoryPartDefinition: PromptPartDefinition<ChatHistoryPart> = {
 	type: 'chatHistory',
 	priority: CHAT_HISTORY_PRIORITY,
-	buildMessages: ({ history }) => {
-		if (history.length === 0) return []
+	buildMessages: ({ history, omittedCount = 0, historyRef }) => {
+		if (history.length === 0 && omittedCount === 0) return []
 
 		const messages: AgentMessage[] = []
+		if (omittedCount > 0) {
+			messages.push({
+				role: 'user',
+				content: [
+					{
+						type: 'text',
+						text: `[HISTORY COMPACTED]: ${omittedCount} earlier events omitted; local reference ${historyRef ?? 'unavailable'}.`,
+					},
+				],
+				priority: CHAT_HISTORY_PRIORITY,
+			})
+		}
 
 		// If the last message is from the user, skip it
 		const lastIndex = history.length - 1
@@ -405,6 +550,42 @@ export const ModelNamePartDefinition: PromptPartDefinition<ModelNamePart> = {
 	},
 }
 
+export const IsoflowContextPartDefinition: PromptPartDefinition<IsoflowContextPart> = {
+	type: 'isoflowContext',
+	priority: -45,
+	buildContent: ({ embeds }) => {
+		if (embeds.length === 0) return []
+		return [
+			'Selected Isoflow embeds are available as compact Isoflow context. Use Isoflow actions for native nodes and links; do not recreate these diagrams as ordinary tldraw shapes. Writes are revision-guarded, and unfamiliar native icons must be searched before adding a node.',
+			JSON.stringify(embeds),
+		]
+	},
+}
+
+export const HtmlMockupContextPartDefinition: PromptPartDefinition<HtmlMockupContextPart> = {
+	type: 'htmlMockupContext',
+	priority: -44,
+	buildContent: ({ mockups }) => {
+		if (mockups.length === 0) return []
+		return [
+			'The selected Local HTML Mockup is available only through this compact, revision-scoped semantic snapshot. documentRef, revision, node refs, and contextRef are opaque provider references. Never infer a filesystem path, CSS selector, source HTML, URL, credential, or unlisted node. Use the selected component only when selectedTarget and its contextRef are present. Inspect again if that short-lived context expires, and create changes only as a new revision-guarded variant.',
+			JSON.stringify(mockups),
+		]
+	},
+}
+
+export const DesignSystemContextPartDefinition: PromptPartDefinition<DesignSystemContextPart> = {
+	type: 'designSystemContext',
+	priority: -43,
+	buildContent: ({ systems }) => {
+		if (systems.length === 0) return []
+		return [
+			'The selected native Design System node exposes one bounded, revision-scoped semantic projection of DESIGN.md. Treat documentRef and revision as opaque provider references. The source Markdown, filesystem path, URLs, credentials, and unlisted sections remain host-side. Use this projection as the design-system constraint for UI/UX work on the explicit tldraw selection or area; inspect again after revision drift.',
+			JSON.stringify(systems),
+		]
+	},
+}
+
 // PeripheralShapes
 export const PeripheralShapesPartDefinition: PromptPartDefinition<PeripheralShapesPart> = {
 	type: 'peripheralShapes',
@@ -448,6 +629,18 @@ export const SelectedShapesPartDefinition: PromptPartDefinition<SelectedShapesPa
 		}
 
 		return [`The user has these shapes selected: ${shapeIds.join(', ')}`]
+	},
+}
+
+export const WorkbenchArtifactsPartDefinition: PromptPartDefinition<WorkbenchArtifactsPart> = {
+	type: 'workbenchArtifacts',
+	priority: -54,
+	buildContent: ({ boundary, records, truncated }) => {
+		if (records.length === 0) return []
+		return [
+			`These are compact semantic records for native tldraw workbench shapes in the explicit ${boundary} boundary. Treat them as editable canvas artifacts; only inspect or mutate shapes inside this boundary. Linked document bodies, credentials, arbitrary metadata, and Isoflow embed data are deliberately omitted.`,
+			JSON.stringify({ boundary, records, truncated }),
+		]
 	},
 }
 
