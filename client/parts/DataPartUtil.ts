@@ -10,7 +10,7 @@ export const DataPartUtil = registerPromptPartUtil(
 		static override type = 'data' as const
 
 		override async getPart(request: AgentRequest): Promise<DataPart> {
-			const { data } = request
+			const data = request.routing?.enabled ? request.data.slice(0, 8) : request.data
 
 			const values = await Promise.all(
 				data.map(async (item) => {

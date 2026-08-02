@@ -12,7 +12,10 @@ export const IsoflowContextPartUtil = registerPromptPartUtil(
 		static override type = 'isoflowContext' as const
 
 		override async getPart(_request: AgentRequest): Promise<IsoflowContextPart> {
-			const selected = this.editor.getSelectedShapes().filter(isIsoflowEmbedShape).slice(0, 2)
+			const selected = this.editor
+				.getSelectedShapes()
+				.filter(isIsoflowEmbedShape)
+				.slice(0, _request.routing?.enabled ? 1 : 2)
 			const embeds = await Promise.all(
 				selected.map(async (shape) => {
 					const meta = readIsoflowEmbedMeta(shape)!

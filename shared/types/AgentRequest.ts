@@ -1,5 +1,6 @@
 import { BoxModel, JsonValue } from 'tldraw'
 import { ContextItem } from './ContextItem'
+import { CompanionRoutingRequest } from './CompanionRouting'
 
 /**
  * A request that we send to the agent.
@@ -44,6 +45,12 @@ export interface AgentRequest {
 	 * This is a snapshot of the context at request creation time.
 	 */
 	contextItems: ContextItem[]
+
+	/**
+	 * Optional context-efficient companion routing. Omitted requests retain the
+	 * legacy working-mode prompt and capability inventory.
+	 */
+	routing?: CompanionRoutingRequest
 }
 
 export type AgentRequestSource = AgentRequest['source']

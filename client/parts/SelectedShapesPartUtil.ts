@@ -12,10 +12,13 @@ export const SelectedShapesPartUtil = registerPromptPartUtil(
 			const { editor } = this
 
 			const userSelectedShapes = editor.getSelectedShapes().map((v) => structuredClone(v)) ?? []
+			const boundedShapes = _request.routing?.enabled
+				? userSelectedShapes.slice(0, 24)
+				: userSelectedShapes
 
 			return {
 				type: 'selectedShapes',
-				shapeIds: userSelectedShapes.map((shape) => convertTldrawIdToSimpleId(shape.id)),
+				shapeIds: boundedShapes.map((shape) => convertTldrawIdToSimpleId(shape.id)),
 			}
 		}
 	}

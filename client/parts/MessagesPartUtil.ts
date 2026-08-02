@@ -7,7 +7,10 @@ export const MessagesPartUtil = registerPromptPartUtil(
 		static override type = 'messages' as const
 
 		override getPart(request: AgentRequest): MessagesPart {
-			const { agentMessages, source } = request
+			const { source } = request
+			const agentMessages = request.routing?.enabled
+				? request.agentMessages.slice(-4).map((message) => message.slice(0, 8_000))
+				: request.agentMessages
 			return {
 				type: 'messages',
 				agentMessages,

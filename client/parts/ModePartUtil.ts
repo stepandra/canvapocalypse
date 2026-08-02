@@ -1,6 +1,10 @@
 import { ModePart } from '../../shared/schema/PromptPartDefinitions'
 import { AgentRequest } from '../../shared/types/AgentRequest'
 import { PromptPartUtil, registerPromptPartUtil } from './PromptPartUtil'
+import {
+	buildCompanionRoutePlan,
+	getCompanionRouteSignals,
+} from '../agent/companionRouting'
 
 export const ModePartUtil = registerPromptPartUtil(
 	class ModePartUtil extends PromptPartUtil<ModePart> {
@@ -12,12 +16,18 @@ export const ModePartUtil = registerPromptPartUtil(
 			if (!modeDefinition.active) {
 				throw new Error(`Cannot get mode part for inactive mode: ${modeDefinition.type}`)
 			}
+			const routePlan = buildCompanionRoutePlan(
+				_request,
+				getCompanionRouteSignals(this.agent),
+				modeDefinition
+			)
 
 			return {
 				type: 'mode',
 				modeType: modeDefinition.type,
-				partTypes: modeDefinition.parts,
-				actionTypes: modeDefinition.actions,
+				partTypes: routePlan.partTypes,
+				actionTypes: routePlan.actionTypes,
+				...(routePlan.metadata ? { routing: routePlan.metadata } : {}),
 			}
 		}
 	}

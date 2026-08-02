@@ -25,6 +25,13 @@ import { AgentModeManager } from './managers/AgentModeManager'
 import { AgentRequestManager } from './managers/AgentRequestManager'
 import { AgentTodoManager } from './managers/AgentTodoManager'
 import { AgentUserActionTracker } from './managers/AgentUserActionTracker'
+import { buildCompanionRoutePlan, getCompanionRouteSignals } from './companionRouting'
+import {
+	buildMlInternEvalLabRequest,
+	isMlInternEvalLabPrompt,
+	ML_INTERN_EVAL_LAB_ENDPOINT,
+	parseMlInternEvalLabAction,
+} from './mlInternEvalLab'
 
 /**
  * The persisted state of an agent.
@@ -264,7 +271,12 @@ export class TldrawAgent {
 			)
 		}
 
-		const availablePromptPartTypes = modeDefinition.parts
+		const routePlan = buildCompanionRoutePlan(
+			request,
+			getCompanionRouteSignals(this),
+			modeDefinition
+		)
+		const availablePromptPartTypes = routePlan.partTypes
 
 		for (const promptPartType of availablePromptPartTypes) {
 			const util = promptPartUtils[promptPartType]
@@ -445,6 +457,7 @@ export class TldrawAgent {
 			// Override specific properties
 			bounds: newRequest.bounds ?? scheduledRequest.bounds,
 			contextItems: [...scheduledRequest.contextItems, ...(newRequest.contextItems ?? [])],
+			routing: newRequest.routing ?? scheduledRequest.routing,
 			source: newRequest.source ?? scheduledRequest.source ?? 'self',
 		})
 	}
@@ -586,7 +599,12 @@ export class TldrawAgent {
 			)
 		}
 
-		const availableActions = modeDefinition.actions
+		const routePlan = buildCompanionRoutePlan(
+			request,
+			getCompanionRouteSignals(this),
+			modeDefinition
+		)
+		const availableActions = routePlan.actionTypes
 
 		const requestPromise = (async () => {
 			const prompt = await this.preparePrompt(request, helpers)
@@ -683,14 +701,20 @@ export class TldrawAgent {
 		prompt: BaseAgentPrompt
 		signal: AbortSignal
 	}): AsyncGenerator<Streaming<AgentAction>> {
-		const res = await fetch('/stream', {
+		const isMlInternEvalLab = isMlInternEvalLabPrompt(prompt)
+		const res = await fetch(isMlInternEvalLab ? ML_INTERN_EVAL_LAB_ENDPOINT : '/stream', {
 			method: 'POST',
-			body: JSON.stringify(prompt),
+			body: JSON.stringify(
+				isMlInternEvalLab ? buildMlInternEvalLabRequest(prompt) : prompt
+			),
 			headers: {
 				'Content-Type': 'application/json',
 			},
 			signal,
 		})
+		if (!res.ok) {
+			throw new Error((await res.text()) || `Agent request failed with status ${res.status}`)
+		}
 
 		if (!res.body) {
 			throw Error('No body in response')
@@ -720,7 +744,9 @@ export class TldrawAgent {
 								throw new Error(data.error)
 							}
 
-							const agentAction: Streaming<AgentAction> = data
+							const agentAction: Streaming<AgentAction> = isMlInternEvalLab
+								? parseMlInternEvalLabAction(data, prompt)
+								: data
 							yield agentAction
 						} catch (err: any) {
 							throw new Error(err.message)

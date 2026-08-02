@@ -9,10 +9,21 @@ export const ChatHistoryPartUtil = registerPromptPartUtil(
 		static override type = 'chatHistory' as const
 
 		override async getPart(_request: AgentRequest, helpers: AgentHelpers) {
-			const history = structuredClone(this.agent.chat.getHistory())
+			const fullHistory = structuredClone(this.agent.chat.getHistory())
+			const maxHistoryItems = _request.routing?.enabled
+				? Math.min(8, Math.max(1, Math.floor(_request.routing.maxHistoryItems ?? 8)))
+				: fullHistory.length
+			const omittedCount = Math.max(0, fullHistory.length - maxHistoryItems)
+			const history = fullHistory.slice(-maxHistoryItems)
 
 			for (const historyItem of history) {
 				if (historyItem.type !== 'prompt') continue
+				if (_request.routing?.enabled) {
+					// Older attachments remain locally inspectable but are not resent.
+					historyItem.contextItems = []
+					historyItem.selectedShapes = []
+					continue
+				}
 
 				// Offset and round the context items of each history item
 				const contextItems = historyItem.contextItems.map((contextItem) => {
@@ -26,6 +37,12 @@ export const ChatHistoryPartUtil = registerPromptPartUtil(
 			return {
 				type: 'chatHistory' as const,
 				history,
+				...(omittedCount > 0
+					? {
+							omittedCount,
+							historyRef: `agent-history:${fullHistory.length}:${maxHistoryItems}`,
+						}
+					: {}),
 			}
 		}
 	}
