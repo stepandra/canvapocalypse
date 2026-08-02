@@ -1,3 +1,5 @@
+import { includeAutorecruitIcons } from './autorecruit-icons.mjs';
+
 const DEFAULT_COLORS = [{ id: 'blue', value: '#a5b8f3' }];
 const MIN_LABEL_HEIGHT = 120;
 const ISOFLOW_PUBLIC_ICON_PREFIX =
@@ -11,6 +13,8 @@ export function convertProExport(source) {
   }
 
   const components = new Map(topology.components.map((component) => [component.id, component]));
+  const colors = (topology.colors?.length ? topology.colors : DEFAULT_COLORS).map(clone);
+  const defaultRectangleColor = colors[0].id;
   const modelItems = new Map();
   const views = topology.views
     .filter((view) => view.items?.length > 0)
@@ -24,7 +28,8 @@ export function convertProExport(source) {
         const modelItem = {
           id: viewItem.id,
           name: component.name,
-          ...(component.icon ? { icon: component.icon } : {})
+          ...(component.icon ? { icon: component.icon } : {}),
+          ...(component.description ? { description: component.description } : {})
         };
         const existing = modelItems.get(modelItem.id);
         if (existing && JSON.stringify(existing) !== JSON.stringify(modelItem)) {
@@ -48,7 +53,10 @@ export function convertProExport(source) {
         name: view.name,
         items,
         connectors,
-        rectangles: (view.rectangles ?? []).map(clone),
+        rectangles: (view.rectangles ?? []).map((rectangle) => ({
+          ...clone(rectangle),
+          color: rectangle.color || defaultRectangleColor,
+        })),
         textBoxes: (view.textBoxes ?? []).map((textBox) => ({
           ...clone(textBox),
           fontSize: Math.min(textBox.fontSize ?? 0.16, 0.2),
@@ -63,8 +71,8 @@ export function convertProExport(source) {
     version: '1.1',
     title: source.project?.title ?? 'Imported Isoflow project',
     description: 'Editable local session adapted from an Isoflow Pro 3.3 export.',
-    icons: (source.icons ?? []).map(localizeIcon),
-    colors: (topology.colors?.length ? topology.colors : DEFAULT_COLORS).map(clone),
+    icons: includeAutorecruitIcons((source.icons ?? []).map(localizeIcon)),
+    colors,
     legend: Array.isArray(topology.legend) ? topology.legend.map(clone) : [],
     items: [...modelItems.values()],
     views,

@@ -32,9 +32,9 @@ read `references/bridge-v2.md`.
 - `isoflow-studio/vendor/isoflow/`: patched Isoflow CE source and distribution.
 - `client/isoflow/`: tldraw provider, compact inspection, agent actions, and
   overlay UI.
-- `scripts/workflow-llm-bridge.mjs`: loopback model bridge. Isoflow Amp requests
-  resolve the selected workspace's allowlisted `projectRoot` and run from that
-  owning source repository; ordinary workflow LLM nodes remain isolated.
+- `scripts/workflow-llm-bridge.mjs`: loopback model bridge for ordinary workflow
+  nodes. The retired browser-owned `/isoflow/agent` route returns HTTP 410;
+  existing-thread Isoflow work uses the explicitly selected project and view.
 
 ## Run the stack
 

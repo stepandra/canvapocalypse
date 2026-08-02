@@ -1,6 +1,9 @@
 import { IsoflowCreateViewAction } from '../../shared/schema/AgentActionSchemas'
 import { Streaming } from '../../shared/types/Streaming'
-import { applyIsoflowCreateViewAction } from '../isoflow/isoflowAgentActions'
+import {
+	previewIsoflowAgentActions,
+	publishIsoflowMutationProposal,
+} from '../isoflow/isoflowAgentActions'
 import { findIsoflowEmbed } from '../isoflow/isoflowProvider'
 import { AgentActionUtil, registerActionUtil } from './AgentActionUtil'
 
@@ -10,10 +13,10 @@ export const IsoflowCreateViewActionUtil = registerActionUtil(
 
 		override getInfo(action: Streaming<IsoflowCreateViewAction>) {
 			return {
-				icon: 'pencil' as const,
+				icon: 'eye' as const,
 				description: action.complete
-					? `Created Isoflow view ${action.name}`
-					: `Creating Isoflow view ${action.name}`,
+					? `Previewed Isoflow view ${action.name}`
+					: `Previewing Isoflow view ${action.name}`,
 			}
 		}
 
@@ -21,21 +24,27 @@ export const IsoflowCreateViewActionUtil = registerActionUtil(
 			if (!action.complete) return
 			const target = findIsoflowEmbed(this.editor, action.projectId)
 			if (!target) throw new Error('Select an Isoflow embed before creating a view')
-			const result = await applyIsoflowCreateViewAction(
-				this.editor,
+			const preview = await previewIsoflowAgentActions(
 				target.shape,
-				action,
+				[action],
 				`canvapocalypse-agent:${this.agent.id}`
 			)
+			publishIsoflowMutationProposal({
+				shapeId: target.shape.id,
+				message: action.intent,
+				preview,
+			})
 			this.agent.schedule({
 				data: [
 					{
 						projectId: target.meta.projectId,
 						viewId: action.viewId,
-						revision: result.revision,
+						baseRevision: preview.baseRevision,
+						expectedRevision: preview.expectedRevision,
+						digest: preview.digest,
 						nodes: action.nodes.length,
 						connectors: action.connectors.length,
-						message: 'Native Isoflow view created and selected.',
+						message: 'Preview succeeded. Confirm the exact proposal in the Isoflow inspector.',
 					},
 				],
 			})

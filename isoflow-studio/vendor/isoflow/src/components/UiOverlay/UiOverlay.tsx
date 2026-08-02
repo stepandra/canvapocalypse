@@ -1,6 +1,12 @@
 import React, { useCallback, useMemo, useRef } from 'react';
-import { Box, useTheme, Typography, Stack } from '@mui/material';
-import { ChevronRight } from '@mui/icons-material';
+import {
+  Box,
+  IconButton,
+  Stack,
+  Typography,
+  useTheme
+} from '@mui/material';
+import { ChevronRight, Close } from '@mui/icons-material';
 import { EditorModeEnum } from 'src/types';
 import { UiElement } from 'components/UiElement/UiElement';
 import { SceneLayer } from 'src/components/SceneLayer/SceneLayer';
@@ -105,18 +111,53 @@ export const UiOverlay = () => {
           <UiElement
             sx={{
               position: 'absolute',
-              width: '360px',
-              overflowY: 'scroll',
+              width: '272px',
+              maxWidth: 'calc(100vw - 32px)',
+              overflowY: 'auto',
+              transform: 'translateX(-100%)',
               '&::-webkit-scrollbar': {
                 display: 'none'
               }
             }}
             style={{
-              left: appPadding.x,
+              left: rendererSize.width - appPadding.x,
               top: appPadding.y * 2 + spacing(2),
               maxHeight: rendererSize.height - appPadding.y * 6
             }}
           >
+            <Box
+              sx={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                minHeight: 38,
+                px: 1.5,
+                borderBottom: 1,
+                borderColor: 'grey.200',
+                bgcolor: 'background.paper'
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                fontWeight={700}
+                letterSpacing=".08em"
+              >
+                ITEM INSPECTOR
+              </Typography>
+              <IconButton
+                size="small"
+                aria-label="Close item inspector"
+                onClick={() => {
+                  uiStateActions.setItemControls(null);
+                }}
+              >
+                <Close />
+              </IconButton>
+            </Box>
             <ItemControlsManager />
           </UiElement>
         )}

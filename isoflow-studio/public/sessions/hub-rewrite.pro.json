@@ -1,0 +1,1221 @@
+{
+  "version": "3.3.0",
+  "project": {
+    "title": "Hub rewrite — Rust workspace"
+  },
+  "icons": [
+    {
+      "id": "ic-desktop",
+      "name": "Desktop",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/desktop.svg"
+    },
+    {
+      "id": "ic-image",
+      "name": "Image",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/image.svg"
+    },
+    {
+      "id": "ic-laptop",
+      "name": "Laptop",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/laptop.svg"
+    },
+    {
+      "id": "ic-block",
+      "name": "Block",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/block.svg"
+    },
+    {
+      "id": "ic-cube",
+      "name": "Cube",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/cube.svg"
+    },
+    {
+      "id": "ic-function-module",
+      "name": "Function module",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/function-module.svg"
+    },
+    {
+      "id": "ic-speech",
+      "name": "Speech",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/speech.svg"
+    },
+    {
+      "id": "ic-diamond",
+      "name": "Diamond",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/diamond.svg"
+    },
+    {
+      "id": "ic-switch-module",
+      "name": "Switch module",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/switch-module.svg"
+    },
+    {
+      "id": "ic-router",
+      "name": "Router",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/router.svg"
+    },
+    {
+      "id": "ic-cloud",
+      "name": "Cloud",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/cloud.svg"
+    },
+    {
+      "id": "ic-server",
+      "name": "Server",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/server.svg"
+    },
+    {
+      "id": "ic-mailmultiple",
+      "name": "Mail multiple",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/mailmultiple.svg"
+    },
+    {
+      "id": "ic-storage",
+      "name": "Storage",
+      "url": "https://isoflow-public.s3.eu-west-2.amazonaws.com/icons/storage.svg"
+    }
+  ],
+  "physicalTopology": {
+    "components": [
+      {
+        "id": "c_hub_app",
+        "name": "hub-app",
+        "icon": "ic-desktop",
+        "description": "GPUI 0.2.2 operator workstation (macOS-first); release binaries only"
+      },
+      {
+        "id": "c_hub_storybook",
+        "name": "hub-storybook",
+        "icon": "ic-image"
+      },
+      {
+        "id": "c_browser_viewer",
+        "name": "browser-viewer",
+        "icon": "ic-laptop",
+        "description": "Trusted BV boundary — operator takeover lives ONLY here, never in Hub chrome"
+      },
+      {
+        "id": "c_hub_ui",
+        "name": "hub-ui",
+        "icon": "ic-block"
+      },
+      {
+        "id": "c_hub_surfaces",
+        "name": "hub-surfaces",
+        "icon": "ic-cube"
+      },
+      {
+        "id": "c_hub_commands",
+        "name": "hub-commands",
+        "icon": "ic-function-module"
+      },
+      {
+        "id": "c_hub_matrix",
+        "name": "hub-matrix",
+        "icon": "ic-speech"
+      },
+      {
+        "id": "c_hub_domain",
+        "name": "hub-domain",
+        "icon": "ic-diamond",
+        "description": "Pure models, fixtures, invariants — no GPUI dep. Canonical V1: evals, blind A/B, labels"
+      },
+      {
+        "id": "c_hub_projection",
+        "name": "hub-projection",
+        "icon": "ic-switch-module",
+        "description": "Fail-closed command/read boundary: eval API first, matrix-os legacy overlay; live-API error → unavailable"
+      },
+      {
+        "id": "c_hub_edge",
+        "name": "hub-edge",
+        "icon": "ic-router",
+        "description": "iroh endhost: ALPNs hubcc/1, matrix-cs/1, bvvnc/1 + docs/gossip; allowlist fail-closed"
+      },
+      {
+        "id": "c_iroh_relay",
+        "name": "iroh relay",
+        "icon": "ic-cloud"
+      },
+      {
+        "id": "c_matrix_os_api",
+        "name": "matrix-os API",
+        "icon": "ic-server",
+        "description": "Legacy quarantine — compatibility source only, never new-system protocol truth"
+      },
+      {
+        "id": "c_matrix_homeserver",
+        "name": "Matrix homeserver",
+        "icon": "ic-mailmultiple"
+      },
+      {
+        "id": "c_mlflow",
+        "name": "MLflow",
+        "icon": "ic-storage",
+        "description": "Observed eval workbench — downstream projection/inspection, not activation authority"
+      }
+    ],
+    "views": [
+      {
+        "id": "vi_layers",
+        "name": "1 - Workspace layers",
+        "items": [
+          {
+            "id": "a_hub_app",
+            "component": "c_hub_app",
+            "tile": {
+              "x": 1,
+              "y": 0
+            }
+          },
+          {
+            "id": "a_hub_storybook",
+            "component": "c_hub_storybook",
+            "tile": {
+              "x": 5,
+              "y": 0
+            }
+          },
+          {
+            "id": "a_browser_viewer",
+            "component": "c_browser_viewer",
+            "tile": {
+              "x": 9,
+              "y": 0
+            }
+          },
+          {
+            "id": "a_hub_ui",
+            "component": "c_hub_ui",
+            "tile": {
+              "x": 1,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_surfaces",
+            "component": "c_hub_surfaces",
+            "tile": {
+              "x": 5,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_commands",
+            "component": "c_hub_commands",
+            "tile": {
+              "x": 9,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_matrix",
+            "component": "c_hub_matrix",
+            "tile": {
+              "x": 13,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_domain",
+            "component": "c_hub_domain",
+            "tile": {
+              "x": 1,
+              "y": 10
+            }
+          },
+          {
+            "id": "a_hub_projection",
+            "component": "c_hub_projection",
+            "tile": {
+              "x": 5,
+              "y": 10
+            }
+          },
+          {
+            "id": "a_hub_edge",
+            "component": "c_hub_edge",
+            "tile": {
+              "x": 9,
+              "y": 10
+            }
+          },
+          {
+            "id": "a_mlflow",
+            "component": "c_mlflow",
+            "tile": {
+              "x": 1,
+              "y": 15
+            }
+          },
+          {
+            "id": "a_iroh_relay",
+            "component": "c_iroh_relay",
+            "tile": {
+              "x": 5,
+              "y": 15
+            }
+          },
+          {
+            "id": "a_matrix_os_api",
+            "component": "c_matrix_os_api",
+            "tile": {
+              "x": 9,
+              "y": 15
+            }
+          },
+          {
+            "id": "a_matrix_homeserver",
+            "component": "c_matrix_homeserver",
+            "tile": {
+              "x": 13,
+              "y": 15
+            }
+          }
+        ],
+        "rectangles": [
+          {
+            "id": "rc_workspace",
+            "from": {
+              "x": -2,
+              "y": -2
+            },
+            "to": {
+              "x": 16,
+              "y": 13
+            },
+            "color": "blue"
+          },
+          {
+            "id": "rc_external",
+            "from": {
+              "x": -2,
+              "y": 14
+            },
+            "to": {
+              "x": 16,
+              "y": 18
+            },
+            "color": "peach"
+          }
+        ],
+        "connectors": [
+          {
+            "id": "cn-app-surfaces",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-app-surfaces:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cn-app-surfaces:dst",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-app-ui",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-app-ui:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cn-app-ui:dst",
+                "ref": {
+                  "item": "a_hub_ui"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-app-commands",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-app-commands:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cn-app-commands:dst",
+                "ref": {
+                  "item": "a_hub_commands"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-app-matrix",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-app-matrix:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cn-app-matrix:dst",
+                "ref": {
+                  "item": "a_hub_matrix"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-app-domain",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-app-domain:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cn-app-domain:dst",
+                "ref": {
+                  "item": "a_hub_domain"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-app-bv",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-app-bv:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cn-app-bv:dst",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-story-app",
+            "color": "purple",
+            "style": "DOTTED",
+            "anchors": [
+              {
+                "id": "cn-story-app:src",
+                "ref": {
+                  "item": "a_hub_storybook"
+                }
+              },
+              {
+                "id": "cn-story-app:dst",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-story-domain",
+            "color": "purple",
+            "style": "DOTTED",
+            "anchors": [
+              {
+                "id": "cn-story-domain:src",
+                "ref": {
+                  "item": "a_hub_storybook"
+                }
+              },
+              {
+                "id": "cn-story-domain:dst",
+                "ref": {
+                  "item": "a_hub_domain"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-bv-ui",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-bv-ui:src",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              },
+              {
+                "id": "cn-bv-ui:dst",
+                "ref": {
+                  "item": "a_hub_ui"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-bv-domain",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-bv-domain:src",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              },
+              {
+                "id": "cn-bv-domain:dst",
+                "ref": {
+                  "item": "a_hub_domain"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-bv-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cn-bv-edge:src",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              },
+              {
+                "id": "cn-bv-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-surfaces-domain",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-surfaces-domain:src",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              },
+              {
+                "id": "cn-surfaces-domain:dst",
+                "ref": {
+                  "item": "a_hub_domain"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-surfaces-projection",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-surfaces-projection:src",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              },
+              {
+                "id": "cn-surfaces-projection:dst",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-commands-domain",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-commands-domain:src",
+                "ref": {
+                  "item": "a_hub_commands"
+                }
+              },
+              {
+                "id": "cn-commands-domain:dst",
+                "ref": {
+                  "item": "a_hub_domain"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-commands-projection",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-commands-projection:src",
+                "ref": {
+                  "item": "a_hub_commands"
+                }
+              },
+              {
+                "id": "cn-commands-projection:dst",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-matrix-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cn-matrix-edge:src",
+                "ref": {
+                  "item": "a_hub_matrix"
+                }
+              },
+              {
+                "id": "cn-matrix-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-projection-domain",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cn-projection-domain:src",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              },
+              {
+                "id": "cn-projection-domain:dst",
+                "ref": {
+                  "item": "a_hub_domain"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-projection-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cn-projection-edge:src",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              },
+              {
+                "id": "cn-projection-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-edge-relay",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cn-edge-relay:src",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              },
+              {
+                "id": "cn-edge-relay:dst",
+                "ref": {
+                  "item": "a_iroh_relay"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-edge-matrixos",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cn-edge-matrixos:src",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              },
+              {
+                "id": "cn-edge-matrixos:dst",
+                "ref": {
+                  "item": "a_matrix_os_api"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-edge-hs",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cn-edge-hs:src",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              },
+              {
+                "id": "cn-edge-hs:dst",
+                "ref": {
+                  "item": "a_matrix_homeserver"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-legacy-projection",
+            "color": "orange",
+            "style": "DASHED",
+            "anchors": [
+              {
+                "id": "cn-legacy-projection:src",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              },
+              {
+                "id": "cn-legacy-projection:dst",
+                "ref": {
+                  "item": "a_matrix_os_api"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-legacy-bv",
+            "color": "orange",
+            "style": "DASHED",
+            "anchors": [
+              {
+                "id": "cn-legacy-bv:src",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              },
+              {
+                "id": "cn-legacy-bv:dst",
+                "ref": {
+                  "item": "a_matrix_os_api"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-legacy-matrix",
+            "color": "orange",
+            "style": "DASHED",
+            "anchors": [
+              {
+                "id": "cn-legacy-matrix:src",
+                "ref": {
+                  "item": "a_hub_matrix"
+                }
+              },
+              {
+                "id": "cn-legacy-matrix:dst",
+                "ref": {
+                  "item": "a_matrix_homeserver"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cn-links-mlflow",
+            "color": "purple",
+            "style": "DOTTED",
+            "anchors": [
+              {
+                "id": "cn-links-mlflow:src",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              },
+              {
+                "id": "cn-links-mlflow:dst",
+                "ref": {
+                  "item": "a_mlflow"
+                }
+              }
+            ]
+          }
+        ],
+        "textBoxes": [
+          {
+            "id": "tc_ws",
+            "tile": {
+              "x": -2,
+              "y": -2
+            },
+            "content": "HUB WORKSPACE (RUST)",
+            "orientation": "X",
+            "fontSize": 0.16
+          },
+          {
+            "id": "tc_ext",
+            "tile": {
+              "x": -2,
+              "y": 14
+            },
+            "content": "EXTERNAL (BLACK BOX)",
+            "orientation": "X",
+            "fontSize": 0.16
+          }
+        ]
+      },
+      {
+        "id": "vi_paths",
+        "name": "2 - Live data paths",
+        "items": [
+          {
+            "id": "a_hub_app",
+            "component": "c_hub_app",
+            "tile": {
+              "x": 1,
+              "y": 0
+            }
+          },
+          {
+            "id": "a_browser_viewer",
+            "component": "c_browser_viewer",
+            "tile": {
+              "x": 9,
+              "y": 0
+            }
+          },
+          {
+            "id": "a_hub_surfaces",
+            "component": "c_hub_surfaces",
+            "tile": {
+              "x": 5,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_commands",
+            "component": "c_hub_commands",
+            "tile": {
+              "x": 9,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_matrix",
+            "component": "c_hub_matrix",
+            "tile": {
+              "x": 13,
+              "y": 5
+            }
+          },
+          {
+            "id": "a_hub_projection",
+            "component": "c_hub_projection",
+            "tile": {
+              "x": 5,
+              "y": 10
+            }
+          },
+          {
+            "id": "a_hub_edge",
+            "component": "c_hub_edge",
+            "tile": {
+              "x": 9,
+              "y": 10
+            }
+          },
+          {
+            "id": "a_mlflow",
+            "component": "c_mlflow",
+            "tile": {
+              "x": 1,
+              "y": 15
+            }
+          },
+          {
+            "id": "a_iroh_relay",
+            "component": "c_iroh_relay",
+            "tile": {
+              "x": 5,
+              "y": 15
+            }
+          },
+          {
+            "id": "a_matrix_os_api",
+            "component": "c_matrix_os_api",
+            "tile": {
+              "x": 9,
+              "y": 15
+            }
+          },
+          {
+            "id": "a_matrix_homeserver",
+            "component": "c_matrix_homeserver",
+            "tile": {
+              "x": 13,
+              "y": 15
+            }
+          }
+        ],
+        "rectangles": [
+          {
+            "id": "rc_workspace_p",
+            "from": {
+              "x": -1,
+              "y": -1
+            },
+            "to": {
+              "x": 15,
+              "y": 13
+            },
+            "color": "blue"
+          },
+          {
+            "id": "rc_external_p",
+            "from": {
+              "x": -1,
+              "y": 14
+            },
+            "to": {
+              "x": 15,
+              "y": 18
+            },
+            "color": "peach"
+          }
+        ],
+        "connectors": [
+          {
+            "id": "cp-app-surfaces",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cp-app-surfaces:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cp-app-surfaces:dst",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-app-commands",
+            "color": "blue",
+            "anchors": [
+              {
+                "id": "cp-app-commands:src",
+                "ref": {
+                  "item": "a_hub_app"
+                }
+              },
+              {
+                "id": "cp-app-commands:dst",
+                "ref": {
+                  "item": "a_hub_commands"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-surfaces-projection",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-surfaces-projection:src",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              },
+              {
+                "id": "cp-surfaces-projection:dst",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-commands-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-commands-edge:src",
+                "ref": {
+                  "item": "a_hub_commands"
+                }
+              },
+              {
+                "id": "cp-commands-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-projection-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-projection-edge:src",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              },
+              {
+                "id": "cp-projection-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-matrix-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-matrix-edge:src",
+                "ref": {
+                  "item": "a_hub_matrix"
+                }
+              },
+              {
+                "id": "cp-matrix-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-bv-edge",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-bv-edge:src",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              },
+              {
+                "id": "cp-bv-edge:dst",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-edge-relay",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-edge-relay:src",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              },
+              {
+                "id": "cp-edge-relay:dst",
+                "ref": {
+                  "item": "a_iroh_relay"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-edge-matrixos",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-edge-matrixos:src",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              },
+              {
+                "id": "cp-edge-matrixos:dst",
+                "ref": {
+                  "item": "a_matrix_os_api"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-edge-hs",
+            "color": "green",
+            "anchors": [
+              {
+                "id": "cp-edge-hs:src",
+                "ref": {
+                  "item": "a_hub_edge"
+                }
+              },
+              {
+                "id": "cp-edge-hs:dst",
+                "ref": {
+                  "item": "a_matrix_homeserver"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-legacy-projection",
+            "color": "orange",
+            "style": "DASHED",
+            "anchors": [
+              {
+                "id": "cp-legacy-projection:src",
+                "ref": {
+                  "item": "a_hub_projection"
+                }
+              },
+              {
+                "id": "cp-legacy-projection:dst",
+                "ref": {
+                  "item": "a_matrix_os_api"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-legacy-bv",
+            "color": "orange",
+            "style": "DASHED",
+            "anchors": [
+              {
+                "id": "cp-legacy-bv:src",
+                "ref": {
+                  "item": "a_browser_viewer"
+                }
+              },
+              {
+                "id": "cp-legacy-bv:dst",
+                "ref": {
+                  "item": "a_matrix_os_api"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-legacy-matrix",
+            "color": "orange",
+            "style": "DASHED",
+            "anchors": [
+              {
+                "id": "cp-legacy-matrix:src",
+                "ref": {
+                  "item": "a_hub_matrix"
+                }
+              },
+              {
+                "id": "cp-legacy-matrix:dst",
+                "ref": {
+                  "item": "a_matrix_homeserver"
+                }
+              }
+            ]
+          },
+          {
+            "id": "cp-links-mlflow",
+            "color": "purple",
+            "style": "DOTTED",
+            "anchors": [
+              {
+                "id": "cp-links-mlflow:src",
+                "ref": {
+                  "item": "a_hub_surfaces"
+                }
+              },
+              {
+                "id": "cp-links-mlflow:dst",
+                "ref": {
+                  "item": "a_mlflow"
+                }
+              }
+            ]
+          }
+        ],
+        "textBoxes": []
+      }
+    ],
+    "colors": [
+      {
+        "id": "blue",
+        "value": "#a5b8f3"
+      },
+      {
+        "id": "purple",
+        "value": "#bbadfb"
+      },
+      {
+        "id": "yellow",
+        "value": "#f4eb8e"
+      },
+      {
+        "id": "orange",
+        "value": "#f0aca9"
+      },
+      {
+        "id": "peach",
+        "value": "#fad6ac"
+      },
+      {
+        "id": "green",
+        "value": "#a8dc9d"
+      },
+      {
+        "id": "turquoise",
+        "value": "#b3e5e3"
+      }
+    ],
+    "legend": [
+      {
+        "id": "lg_ws",
+        "label": "Hub workspace (Rust crates)",
+        "colorId": "blue"
+      },
+      {
+        "id": "lg_ext",
+        "label": "External (black box)",
+        "colorId": "peach"
+      },
+      {
+        "id": "lg_edge",
+        "label": "iroh edge — primary transport",
+        "colorId": "green"
+      },
+      {
+        "id": "lg_legacy",
+        "label": "legacy HTTP being strangled",
+        "colorId": "orange"
+      },
+      {
+        "id": "lg_obs",
+        "label": "observed / inspection plane",
+        "colorId": "purple"
+      }
+    ]
+  }
+}

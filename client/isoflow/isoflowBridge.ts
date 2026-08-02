@@ -185,10 +185,11 @@ export function getIsoflowCapabilities(baseUrl: string) {
 	return bridgeRequest<IsoflowBridgeCapabilities>(baseUrl, '/api/isoflow/capabilities')
 }
 
-export function getIsoflowState(baseUrl: string, projectId: string) {
+export function getIsoflowState(baseUrl: string, projectId: string, signal?: AbortSignal) {
 	return bridgeRequest<IsoflowState>(
 		baseUrl,
-		`/api/isoflow/projects/${encodeURIComponent(projectId)}/state`
+		`/api/isoflow/projects/${encodeURIComponent(projectId)}/state`,
+		{ signal }
 	)
 }
 
@@ -232,12 +233,14 @@ export function patchIsoflow(
 		actor,
 		dryRun = false,
 		idempotencyKey,
+		signal,
 	}: {
 		baseRevision: number
 		operations: IsoflowPatchOperation[]
 		actor: string
 		dryRun?: boolean
 		idempotencyKey?: string
+		signal?: AbortSignal
 	}
 ) {
 	return bridgeRequest<IsoflowState>(
@@ -246,6 +249,7 @@ export function patchIsoflow(
 		{
 			method: 'POST',
 			body: JSON.stringify({ baseRevision, operations, actor, dryRun, idempotencyKey }),
+			signal,
 		}
 	)
 }

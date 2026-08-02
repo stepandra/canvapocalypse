@@ -12,6 +12,7 @@ interface Props {
   stroke?: {
     width: number;
     color: string;
+    dashArray?: string;
   };
 }
 
@@ -32,7 +33,9 @@ export const IsoTileArea = ({
 
     return {
       stroke: stroke.color,
-      strokeWidth: stroke.width
+      strokeWidth: stroke.width,
+      strokeDasharray: stroke.dashArray,
+      vectorEffect: 'non-scaling-stroke'
     };
   }, [stroke]);
 

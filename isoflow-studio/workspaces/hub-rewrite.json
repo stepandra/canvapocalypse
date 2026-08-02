@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "projectId": "hub-rewrite",
+  "revision": 1,
+  "projectRoot": "../../kimi_autorecruit_gpui",
+  "nodes": [],
+  "documents": [
+    {
+      "id": "repo-agents",
+      "title": "Hub workspace contract",
+      "path": "AGENTS.md",
+      "description": "Build/test commands, crate boundaries, UX contracts, and platform notes."
+    },
+    {
+      "id": "repo-registry",
+      "title": "Screen registry",
+      "path": "SCREEN_REGISTRY.md",
+      "description": "Wireframe ↔ module map; do not invent alternative IA."
+    },
+    {
+      "id": "repo-decisions",
+      "title": "Accepted decisions",
+      "path": "docs/DECISIONS.md",
+      "description": "Product/design decisions: EL framing, trace-domain split, nav model, quarantine rules."
+    },
+    {
+      "id": "repo-handoff",
+      "title": "Current handoff",
+      "path": "docs/HANDOFF.md",
+      "description": "Current state, parallel tracks, environment access notes."
+    }
+  ],
+  "flows": [
+    {
+      "id": "eval-label-live",
+      "name": "Eval label submit (live)",
+      "description": "Operator two-stage label path from the Hub FSM to the fail-closed backend write.",
+      "color": "#a8dc9d",
+      "steps": [
+        { "itemId": "a_hub_app", "name": "hub-app", "description": "EvalScreen FSM phase (independent → reveal → final) drives the form." },
+        { "itemId": "a_hub_commands", "name": "hub-commands", "description": "EvalLabelExecutor port; X-Idempotency-Key {assignment_id}:{verdict}." },
+        { "itemId": "a_hub_edge", "name": "hub-edge", "description": "hubcc/1 transport, or legacy HTTP fallback." },
+        { "itemId": "a_matrix_os_api", "name": "matrix-os API", "description": "POST /internal/eval-lab/outputs/:id/labels → receipt label_id." }
+      ]
+    },
+    {
+      "id": "matrix-rooms-live",
+      "name": "Matrix rooms read/send (live)",
+      "description": "Rooms and thread traffic to the homeserver, direct in dev or via edge in staging.",
+      "color": "#a5b8f3",
+      "steps": [
+        { "itemId": "a_hub_matrix", "name": "hub-matrix", "description": "matrix-sdk rooms, threads, composer." },
+        { "itemId": "a_hub_edge", "name": "hub-edge", "description": "matrix-cs/1 ALPN (staging); dev may go direct." },
+        { "itemId": "a_matrix_homeserver", "name": "Matrix homeserver", "description": "tuwunel CS API :8008." }
+      ]
+    },
+    {
+      "id": "bv-takeover-live",
+      "name": "BV live takeover",
+      "description": "Operator browser takeover — the only place interactive control exists.",
+      "color": "#b3e5e3",
+      "steps": [
+        { "itemId": "a_browser_viewer", "name": "browser-viewer", "description": "Native RFB/VNC viewer; operator takeover + input." },
+        { "itemId": "a_hub_edge", "name": "hub-edge", "description": "bvvnc/1 ALPN, allowlisted endpoints only." },
+        { "itemId": "a_matrix_os_api", "name": "matrix-os API", "description": "Control plane + VNC input gate (fail-closed without active owner)." }
+      ]
+    }
+  ]
+}

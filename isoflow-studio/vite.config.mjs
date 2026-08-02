@@ -11,7 +11,8 @@ export default defineConfig({
       projectSources: {
         'autorecruit-ideal': 'public/sessions/autorecruit-ideal.pro.json',
         'eval-lab': 'public/sessions/eval-lab.pro.json',
-        'autorecruit-contours': 'public/sessions/autorecruit-contours.pro.json'
+        'autorecruit-contours': 'public/sessions/autorecruit-contours.pro.json',
+        'hub-rewrite': 'public/sessions/hub-rewrite.pro.json'
       }
     })
   ],

@@ -1,6 +1,9 @@
 import { IsoflowPatchAction } from '../../shared/schema/AgentActionSchemas'
 import { Streaming } from '../../shared/types/Streaming'
-import { applyIsoflowPatchAction } from '../isoflow/isoflowAgentActions'
+import {
+	previewIsoflowAgentActions,
+	publishIsoflowMutationProposal,
+} from '../isoflow/isoflowAgentActions'
 import { findIsoflowEmbed } from '../isoflow/isoflowProvider'
 import { AgentActionUtil, registerActionUtil } from './AgentActionUtil'
 
@@ -10,10 +13,10 @@ export const IsoflowPatchActionUtil = registerActionUtil(
 
 		override getInfo(action: Streaming<IsoflowPatchAction>) {
 			return {
-				icon: action.dryRun ? ('eye' as const) : ('pencil' as const),
+				icon: 'eye' as const,
 				description: action.complete
-					? `${action.dryRun ? 'Previewed' : 'Applied'} Isoflow changes: ${action.intent}`
-					: `${action.dryRun ? 'Previewing' : 'Applying'} Isoflow changes`,
+					? `Previewed Isoflow changes: ${action.intent}`
+					: 'Previewing Isoflow changes',
 			}
 		}
 
@@ -21,21 +24,25 @@ export const IsoflowPatchActionUtil = registerActionUtil(
 			if (!action.complete) return
 			const target = findIsoflowEmbed(this.editor, action.projectId)
 			if (!target) throw new Error('Select an Isoflow embed before changing it')
-			const result = await applyIsoflowPatchAction(
+			const preview = await previewIsoflowAgentActions(
 				target.shape,
-				action,
+				[action],
 				`canvapocalypse-agent:${this.agent.id}`
 			)
+			publishIsoflowMutationProposal({
+				shapeId: target.shape.id,
+				message: action.intent,
+				preview,
+			})
 			this.agent.schedule({
 				data: [
 					{
 						projectId: target.meta.projectId,
-						revision: result.revision,
-						dryRun: action.dryRun,
-						summary: result.summary,
-						message: action.dryRun
-							? 'Preview succeeded. Apply the same operations with dryRun false if they match the intent.'
-							: 'Isoflow patch applied.',
+						baseRevision: preview.baseRevision,
+						expectedRevision: preview.expectedRevision,
+						dryRun: true,
+						digest: preview.digest,
+						message: 'Preview succeeded. Confirm the exact proposal in the Isoflow inspector.',
 					},
 				],
 			})

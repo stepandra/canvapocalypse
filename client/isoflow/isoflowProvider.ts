@@ -185,17 +185,12 @@ export function findIsoflowEmbed(
 	editor: Editor,
 	projectId?: string
 ): { shape: TLEmbedShape; meta: IsoflowEmbedMeta } | null {
-	const selected = editor.getSelectedShapes().find(isIsoflowEmbedShape)
-	if (selected) {
-		const meta = readIsoflowEmbedMeta(selected)!
-		if (!projectId || meta.projectId === projectId) return { shape: selected, meta }
-	}
-	for (const shape of editor.getCurrentPageShapes()) {
-		if (!isIsoflowEmbedShape(shape)) continue
-		const meta = readIsoflowEmbedMeta(shape)!
-		if (!projectId || meta.projectId === projectId) return { shape, meta }
-	}
-	return null
+	const selected = editor.getSelectedShapes().filter(isIsoflowEmbedShape)
+	if (selected.length !== 1) return null
+	const shape = selected[0]
+	const meta = readIsoflowEmbedMeta(shape)!
+	if (projectId && meta.projectId !== projectId) return null
+	return { shape, meta }
 }
 
 function parseAllowedUrl(input: string) {

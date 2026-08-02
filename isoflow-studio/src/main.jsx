@@ -19,6 +19,10 @@ const SESSION_PROJECTS = {
   'autorecruit-contours': {
     label: 'CONTOURS / MUST',
     source: '/sessions/autorecruit-contours.pro.json'
+  },
+  'hub-rewrite': {
+    label: 'HUB / REWRITE (RUST)',
+    source: '/sessions/hub-rewrite.pro.json'
   }
 };
 const SESSION_MAIN_MENU_OPTIONS = ['EXPORT.JSON', 'EXPORT.PNG'];
@@ -42,6 +46,7 @@ function ProjectSession({ projectId, config }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [selectedFlowId, setSelectedFlowId] = useState(null);
   const [focusItemIds, setFocusItemIds] = useState([]);
+  const [isItemInspectorOpen, setItemInspectorOpen] = useState(false);
   const [documentState, setDocumentState] = useState({
     id: null,
     loading: false,
@@ -421,7 +426,10 @@ function ProjectSession({ projectId, config }) {
             onOpenDocument={openDocument}
           />
         )}
-        <main ref={canvasElement} className="session-canvas">
+        <main
+          ref={canvasElement}
+          className={`session-canvas${isItemInspectorOpen ? ' item-inspector-open' : ''}`}
+        >
           <label className="session-view-picker">
             <span>VIEW</span>
             <select value={activeViewId ?? model.view} onChange={(event) => selectView(event.target.value)}>
@@ -443,6 +451,7 @@ function ProjectSession({ projectId, config }) {
             onModelUpdated={handleModelUpdated}
             focusItemIds={focusItemIds}
             onItemSelected={(item) => {
+              setItemInspectorOpen(Boolean(item));
               const itemId = item?.type === 'ITEM' ? item.id : null;
               setSelectedItemId(itemId);
               if (!itemId) return;

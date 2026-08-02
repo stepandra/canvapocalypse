@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {
+  AUTORECRUIT_ICON_COLLECTION,
+  AUTORECRUIT_ICONS,
+} from '../scripts/lib/autorecruit-icons.mjs';
 import { convertProExport } from '../scripts/lib/pro-export.mjs';
 
 const exports = [
@@ -32,9 +36,24 @@ for (const fixture of exports) {
       model.icons.every((icon) => icon.url.startsWith('/isoflow-icons/')),
       'exportable models must use same-origin icon URLs'
     );
+    const customIcons = model.icons.filter(
+      (icon) => icon.collection === AUTORECRUIT_ICON_COLLECTION
+    );
+    assert.equal(customIcons.length, 12);
+    assert.deepEqual(
+      customIcons.map(({ id }) => id),
+      AUTORECRUIT_ICONS.map(({ id }) => id)
+    );
+    assert.ok(
+      customIcons.every(
+        (icon) => icon.isIsometric && icon.url.startsWith('/isoflow-icons/autorecruit/')
+      ),
+      'AutoRecruit icons must remain same-origin native isometric assets'
+    );
 
     const modelItemIds = new Set(model.items.map((item) => item.id));
     assert.equal(modelItemIds.size, model.items.length);
+    const colorIds = new Set(model.colors.map(({ id }) => id));
 
     for (const view of model.views) {
       const viewItemIds = new Set(view.items.map((item) => item.id));
@@ -46,6 +65,12 @@ for (const fixture of exports) {
       for (const textBox of view.textBoxes) {
         assert.ok(textBox.fontSize <= 0.2, `${view.id}/${textBox.id} text is too large`);
         assert.ok(['X', 'Y'].includes(textBox.orientation));
+      }
+      for (const rectangle of view.rectangles) {
+        assert.ok(
+          colorIds.has(rectangle.color),
+          `${view.id}/${rectangle.id} must use a declared contour color`
+        );
       }
       for (const connector of view.connectors) {
         for (const anchor of connector.anchors) {

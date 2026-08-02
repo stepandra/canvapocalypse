@@ -17,8 +17,8 @@ icons and geometry remain authoritative inside the embed.
 3. Inspector: bridge health, project, view, revision, and compact node count.
 4. Agent context: selected Isoflow view, bounded node summaries, connectors,
    and available views.
-5. Agent actions: search native icons/nodes, revision-guarded patching, and
-   creating a new view from a compact template.
+5. Agent actions: selected-view inspection plus revision-guarded, explicitly
+   confirmed patch proposals.
 
 ## Interaction thesis
 
@@ -26,8 +26,10 @@ icons and geometry remain authoritative inside the embed.
   provider inspector.
 - Switching a view updates both the iframe URL and the compact context supplied
   to the agent.
-- Agent mutations run only after an action has fully streamed. Every write uses
-  the bridge revision; conflicts fail visibly instead of overwriting newer work.
+- Mutation proposals are dry-run only after an action has fully streamed.
+  Applying the normalized exact operations requires explicit confirmation at the
+  captured bridge revision; conflicts fail visibly instead of overwriting newer
+  work.
 - Isoflow stays limited to Isoflow projects, views, nodes, contours, and flows.
   Companion memory such as Decision Graph and Change Radar belongs to a separate
   provider and does not get bootstrapped into an Isoflow project.
@@ -42,21 +44,31 @@ in embed metadata. Full Isoflow models and icon catalogs stay in the repo-local
 
 ### Context is selected and bounded
 
-Only selected Isoflow embeds are sent to the agent. The prompt part includes a
-maximum of 32 nodes and 48 connectors plus view names and the current revision.
-The full model and icon catalog are fetched only for an explicit search or
-mutation action.
+Only selected Isoflow embeds are eligible for agent context, and only for an
+explicit DevOps, DevSecOps, deployment, or infrastructure-contour request. The
+prompt part includes a maximum of 32 nodes and 48 connectors plus view names and
+the current revision. The full model and icon catalog are fetched only for an
+explicit search or mutation action. General architecture, ML/MLOps, UI/UX,
+product work, widgets, and ordinary diagrams remain native tldraw work even
+when an Isoflow embed exists elsewhere on the canvas.
 
 ### Bridge transactions remain the mutation primitive
 
 View lifecycle, item, connector, rectangle, text box, color, and legend changes
 use revision-guarded Bridge v2 transactions. Full-model replacement remains
 available for imports and recovery, not as the default for ordinary agent edits.
+The embedded agent handoff is narrower than the full Bridge: it accepts only
+operations whose `viewId` equals the uniquely selected embed view. View
+lifecycle and project-global item, color, or legend operations fail closed
+because they cannot be guaranteed to affect only that view.
 
-### New Isoflow views use native icons
+### Cross-view writes are never inferred
 
-Agents creating an Isoflow view reuse icon IDs already present in the target
-project and search the native icon catalog before adding unfamiliar node kinds.
+An embed elsewhere on the current page is not mutation authority. No selected
+embed means no target, multiple selected Isoflow embeds are ambiguous, and a
+project or view mismatch is rejected before any bridge request. Creating,
+duplicating, activating, or removing views requires a separate explicit
+cross-view workflow.
 
 ### Provider endpoints are local and allowlisted
 
@@ -67,19 +79,16 @@ while still supporting the local lab.
 ### Provider-independent agent contract
 
 Isoflow context and actions are part of the canvas agent mode, not coupled to a
-specific model vendor. The selected embed inspector exposes a narrow Amp/Grok
-control surface. Amp uses the current Low/Medium/High/Ultra dial and runs from
-the selected workspace's allowlisted `projectRoot`, reads that source
-repository's applicable `AGENTS.md`, code, specs, ADRs, and linked documents,
-and explicitly loads the Canvapocalypse Isoflow skill. Grok reuses the
-session-only OpenRouter connection and model catalog. Both receive the same
-bounded view contract and return the same validated revision-guarded action
-types; no provider-specific Isoflow mutation format is maintained. Ordinary
-workflow LLM nodes remain isolated and do not gain repository authority.
+specific model vendor. The selected embed inspector is a passive handoff to the
+existing Architect thread; it never launches a model or creates a new thread.
+The selected embed's `projectId`, `viewId`, and revision define the complete
+mutation target. Proposals are normalized, size-bounded, dry-run, digest-bound,
+and shown with their exact operation parameters before confirmation.
 
-The browser sends only `projectId`. It cannot supply an arbitrary filesystem
-path: the loopback bridge validates the ID and resolves `projectRoot` from the
-repo-owned workspace JSON before starting Amp in that directory.
+The retired loopback `POST /isoflow/agent` endpoint returns HTTP 410. It does
+not parse a browser prompt, resolve a workspace, or spawn `amp -x`. Ordinary
+workflow LLM nodes remain a separate execution surface and do not gain Isoflow
+repository or mutation authority.
 
 ### Offline bridge failure is context, not a chat failure
 

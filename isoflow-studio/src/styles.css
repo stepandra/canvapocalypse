@@ -97,7 +97,9 @@ h1 { font-size: 14px; line-height: 1.2; margin: 5px 0 0; font-weight: 650; }
   display: grid; gap: 6px; padding: 10px; border: 1px solid #c8ced6; border-radius: 2px;
   background: rgba(255,255,255,.94); color: #3e4750;
   font: 8px/1.2 "JetBrains Mono", monospace; letter-spacing: .04em;
+  transition: right 140ms ease;
 }
+.session-canvas.item-inspector-open .trust-legend { right: 328px; }
 .trust-legend header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
 .trust-legend strong { color: #20252b; font-size: 9px; }
 .trust-legend button {
