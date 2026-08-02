@@ -37,6 +37,15 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
+	it('registers the native Agents / Models workflow cards', () => {
+		expect(desktopConfigSource).toContain(
+			"import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'"
+		)
+		expect(desktopConfigSource).toMatch(
+			/shapeUtils:\s*mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*AgentsModelsShapeUtil,[\s\S]*\],\s*'type'/
+		)
+	})
+
 	it('requires the Offline bundle to install its resident HTML capability', () => {
 		expect(desktopConfigSource).toContain(
 			'installHtmlMockupResidentCapability(\n\t__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__\n)'

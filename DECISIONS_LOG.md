@@ -727,3 +727,48 @@ in the leased request. ML/MLOps and MLflow requests stay on the native tldraw
 surface; Isoflow Bridge v2 remains reserved for explicit infrastructure and
 deployment diagrams. An already running interactive ML-Intern process must be
 restarted before Python can load newly registered built-ins.
+
+## 2026-08-02 — Agents / Models domain canvas document script
+
+### D-046 — Agents/Models document script auth, click, and Play policy
+
+**Decision:**
+
+1. **Token handling.** The Agents/Models tldraw offline document script
+   (`scripts/agents-models-canvas-script.mjs`) uses a script-level constant
+   `GROK_CONFIG_TOKEN` placeholder (`REPLACE_WITH_GROK_CONFIG_TOKEN`) for the
+   loopback `grok-config-service` bearer on `127.0.0.1:5188`. Runtime override
+   is `globalThis.__AM_GROK_CONFIG_TOKEN__` when set. Document scripts cannot
+   read the filesystem, so operators paste/sync the token printed by the
+   service stderr / `GROK_CONFIG_TOKEN` env (optional well-known file such as
+   `~/.grok/config-service.token` is a documented human-side source only).
+
+2. **Native interaction and visual grammar.** Toolbar, catalog, stage, and
+   subagent surfaces use the registered `agents-models-node` custom shape, not
+   stacked stock geos. The shape renders flat tldraw-native cards with real
+   HTML controls; preset / APPLY / PLAY buttons write one bounded
+   `meta.am.actionRequest` record to the toolbar shape. The document script
+   consumes each request id once and writes the compact receipt back to that
+   same shape. Stage and subagent selects update only their own bounded
+   `meta.am` configuration and mark the graph modified. This supersedes the
+   selection-change click heuristic.
+
+3. **PLAY disabled in v1.** APPLY compiles the lane graph to Rhai, POSTs
+   `/api/grok/workflows/save`, and renders a receipt node. PLAY does not launch
+   a run; after a successful save (or an explicit PLAY click) the script only
+   places a note: `play: launch via /workflow <name> in Grok`. Real in-canvas
+   launch needs a Grok headless invocation path that is not yet wired through
+   the loopback service.
+
+**Why:** Matches the existing loopback bridge pattern, keeps pure layout /
+catalog / preset / compile logic testable without a tldraw runtime, and avoids
+pretending the canvas can start Grok runs before a headless launch API exists.
+
+**Boundary:** The script creates or reuses a dedicated `Agents/Models` page
+before reading or writing shapes. Furniture and native nodes use namespaced ids
+(`am-…`); workflow nodes carry `meta.am.presetId` + stage type for compile.
+Catalog rows are compacted into a bounded, scrollable native catalog payload;
+fetch failures render one error section and never throw. Mesh remains
+budget-expensive and is not a default. Unmodified preset graphs reuse the
+service preset script with `meta.name` filled; modified graphs recompile a
+best-effort skeleton. Credentials remain outside shape metadata and receipts.

@@ -254,6 +254,386 @@
 
 /* Custom workflow nodes registered by the desktop workbench config. */
 
+.agents-models-card {
+  --agents-models-accent: #69d8c1;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: visible;
+  box-sizing: border-box;
+  border: 1px solid #34414a;
+  border-radius: 2px;
+  background: #11181d;
+  color: #edf2f4;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+.agents-models-card * {
+  box-sizing: border-box;
+}
+
+.agents-models-card-header {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 8px;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #2a353d;
+  background: #151f25;
+}
+
+.agents-models-card-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #34414a;
+  border-radius: 2px;
+  color: var(--agents-models-accent);
+}
+
+.agents-models-card-icon .workflow-tool-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.agents-models-card-header > div {
+  min-width: 0;
+}
+
+.agents-models-card-header strong,
+.agents-models-card-header > div > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-models-card-header strong {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.agents-models-card-header > div > span,
+.agents-models-kicker,
+.agents-models-node-fields label > span,
+.agents-models-receipt > span,
+.agents-models-card-footer,
+.agents-models-catalog-body section > header {
+  color: #81919c;
+  font:
+    700 9px/1.2 "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.agents-models-card-header > div > span {
+  margin-top: 3px;
+}
+
+.agents-models-status-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #697780;
+}
+
+.agents-models-status-dot.is-green {
+  background: #4ed18f;
+}
+
+.agents-models-status-dot.is-orange {
+  background: #e6a34a;
+}
+
+.agents-models-status-dot.is-red {
+  background: #ed6666;
+}
+
+.agents-models-status-dot.is-grey {
+  background: #697780;
+}
+
+.agents-models-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 27px;
+  padding: 0 10px;
+  border-top: 1px solid #2a353d;
+  color: #72818b;
+  font-size: 8px;
+}
+
+.agents-models-toolbar {
+  --agents-models-accent: #66d7c2;
+}
+
+.agents-models-toolbar-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  padding: 10px;
+  pointer-events: all;
+}
+
+.agents-models-toolbar-body section {
+  display: grid;
+  gap: 7px;
+}
+
+.agents-models-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.agents-models-preset-grid button,
+.agents-models-toolbar-actions button {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 45px;
+  padding: 7px 8px;
+  border: 1px solid #34414a;
+  border-radius: 2px;
+  background: #182229;
+  color: #edf2f4;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agents-models-preset-grid button:hover,
+.agents-models-toolbar-actions button:hover {
+  border-color: #5a6c77;
+  background: #1d2930;
+}
+
+.agents-models-preset-grid button:disabled,
+.agents-models-toolbar-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.agents-models-preset-grid button span {
+  font:
+    700 10px/1.2 "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  text-transform: uppercase;
+}
+
+.agents-models-preset-grid button small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: #81919c;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-models-toolbar-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.agents-models-toolbar-actions button {
+  min-height: 34px;
+  place-items: center;
+  color: #aab5bc;
+  font:
+    750 10px/1 "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  text-align: center;
+}
+
+.agents-models-toolbar-actions button.is-primary {
+  border-color: #3c786c;
+  color: #74e0cb;
+}
+
+.agents-models-receipt {
+  display: grid;
+  gap: 4px;
+  min-height: 47px;
+  padding: 8px;
+  border-left: 2px solid #4d5b64;
+  background: #151f25;
+}
+
+.agents-models-receipt[data-state="succeeded"] {
+  border-left-color: #4ed18f;
+}
+
+.agents-models-receipt[data-state="failed"] {
+  border-left-color: #ed6666;
+}
+
+.agents-models-receipt[data-state="running"] {
+  border-left-color: #e6a34a;
+}
+
+.agents-models-receipt strong {
+  overflow: hidden;
+  color: #bdc7cd;
+  font:
+    550 9px/1.35 "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  text-overflow: ellipsis;
+}
+
+.agents-models-catalog {
+  --agents-models-accent: #68bde7;
+}
+
+.agents-models-catalog-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+  pointer-events: all;
+  scrollbar-width: thin;
+}
+
+.agents-models-catalog-body section + section {
+  margin-top: 12px;
+}
+
+.agents-models-catalog-body section > header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #2a353d;
+}
+
+.agents-models-catalog-body section > header small {
+  font: inherit;
+}
+
+.agents-models-catalog-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 25px;
+  border-bottom: 1px solid #202a30;
+}
+
+.agents-models-catalog-row strong,
+.agents-models-catalog-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-models-catalog-row strong {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.agents-models-catalog-row small,
+.agents-models-catalog-more,
+.agents-models-catalog-empty {
+  color: #81919c;
+  font:
+    500 9px/1.3 "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.agents-models-catalog-more {
+  padding: 6px 15px 2px;
+}
+
+.agents-models-catalog-empty {
+  padding: 14px 0;
+}
+
+.agents-models-stage {
+  --agents-models-accent: #b18bf1;
+}
+
+.agents-models-subagent {
+  --agents-models-accent: #66d7c2;
+}
+
+.agents-models-subagent.is-variable {
+  border-style: dashed;
+}
+
+.agents-models-node-fields {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+  padding: 9px 10px;
+  pointer-events: all;
+}
+
+.agents-models-node-fields label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.agents-models-node-fields :is(select, input) {
+  width: 100%;
+  height: 27px;
+  padding: 0 6px;
+  border: 1px solid #34414a;
+  border-radius: 2px;
+  outline: none;
+  background: #182229;
+  color: #edf2f4;
+  font:
+    550 10px/1.2 "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.agents-models-node-fields :is(select, input):focus {
+  border-color: var(--agents-models-accent);
+}
+
+.agents-models-port {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #11181d;
+  border-radius: 50%;
+  background: var(--agents-models-accent);
+  transform: translateY(-50%);
+}
+
+.agents-models-port.is-input {
+  left: -4px;
+}
+
+.agents-models-port.is-output {
+  right: -4px;
+}
+
 .workflow-node-card {
   --workflow-node-accent: var(--tl-color-text-3);
   position: relative;

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { DEFAULT_EMBED_DEFINITIONS, EmbedShapeUtil, useEditor } from 'tldraw'
 import { TldrawAgentApp } from '../client/agent/TldrawAgentApp'
+import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'
 import { DesignSystemShapeUtil } from '../client/design-system/DesignSystemShape'
 import { installHtmlMockupResidentCapability } from '../client/html-mockup/htmlMockupBridge'
 import { LocalHtmlMockupShapeUtil } from '../client/html-mockup/LocalHtmlMockupShape'
@@ -79,6 +80,7 @@ export default function ({ config }: { config: any }) {
 		shapeUtils: mergeUniqueRegistrations(
 			config.shapeUtils,
 			[
+				AgentsModelsShapeUtil,
 				WorkflowNodeShapeUtil,
 				WorkflowRichOutputShapeUtil,
 				DesignSystemShapeUtil,

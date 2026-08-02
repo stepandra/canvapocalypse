@@ -17,8 +17,9 @@
 		"isoflow:install": "npm --prefix isoflow-studio install",
 		"isoflow:test": "npm --prefix isoflow-studio test",
 		"offline:build-config": "node scripts/build-tldraw-desktop-eval-lab.mjs",
+		"template:build": "node scripts/build-tldraw-document-template.mjs",
 		"preview": "vite preview",
-		"test": "node --test scripts/isoflow-project-context.test.mjs scripts/workflow-llm-bridge.test.mjs scripts/local-html-mockup-service.test.mjs scripts/design-system-service.test.mjs scripts/tldraw-offline-config-target.test.mjs scripts/ml-intern-eval-lab.test.mjs scripts/ml-intern-canvas-tool.test.mjs scripts/amp-tldraw-companion-runtime.test.mjs scripts/terminal-session-monitor.test.mjs scripts/kanban-tracks-service.test.mjs && vitest run --config vitest.config.ts",
+		"test": "node --test scripts/isoflow-project-context.test.mjs scripts/workflow-llm-bridge.test.mjs scripts/local-html-mockup-service.test.mjs scripts/design-system-service.test.mjs scripts/tldraw-offline-config-target.test.mjs scripts/ml-intern-eval-lab.test.mjs scripts/ml-intern-canvas-tool.test.mjs scripts/amp-tldraw-companion-runtime.test.mjs scripts/terminal-session-monitor.test.mjs scripts/kanban-tracks-service.test.mjs scripts/grok-config-service.test.mjs scripts/agents-models-canvas-script.test.mjs scripts/build-tldraw-document-template.test.mjs && vitest run --config vitest.config.ts",
 		"workflow:bridge": "node scripts/workflow-llm-bridge.mjs"
 	},
 	"dependencies": {
