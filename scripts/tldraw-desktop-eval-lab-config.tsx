@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { DEFAULT_EMBED_DEFINITIONS, EmbedShapeUtil, useEditor } from 'tldraw'
 import { TldrawAgentApp } from '../client/agent/TldrawAgentApp'
 import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'
+import { installBridgeSupervisorResidentCapability } from '../client/bridges/bridgeSupervisorClient'
 import { DesignSystemShapeUtil } from '../client/design-system/DesignSystemShape'
+import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'
 import { installHtmlMockupResidentCapability } from '../client/html-mockup/htmlMockupBridge'
 import { LocalHtmlMockupShapeUtil } from '../client/html-mockup/LocalHtmlMockupShape'
 import { ISOFLOW_EMBED_DEFINITION } from '../client/isoflow/isoflowProvider'
@@ -14,10 +16,15 @@ import { WorkflowNodeShapeUtil } from '../client/workflow/WorkflowNodeShape'
 import { WORKFLOW_TOOLS } from '../client/workflow/WorkflowTools'
 import { WorkbenchShell } from '../client/workbench/WorkbenchShell'
 import designSystemStylesheet from '../client/design-system/design-system.css'
+import experimentCardStylesheet from '../client/experiments/experimentCard.css'
 import terminalSessionMonitorStylesheet from '../client/terminal/terminalSessionMonitor.css'
 import workbenchStylesheet from '../client/workbench/workbench.css'
 import workbenchAgentDockStylesheet from '../client/workbench/workbenchAgentDock.css'
 import { mergeUniqueRegistrations } from './tldraw-desktop-config-dedupe'
+import {
+	markWorkbenchDesktopLayer,
+	unwrapWorkbenchDesktopLayer,
+} from './tldraw-desktop-config-layer'
 import stylesheet from './tldraw-desktop-eval-lab.css'
 
 declare const __TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__: string
@@ -29,12 +36,16 @@ declare const __TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__: string
 installHtmlMockupResidentCapability(
 	__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__
 )
+installBridgeSupervisorResidentCapability(
+	__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__
+)
 
 const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
 	embedDefinitions: [ISOFLOW_EMBED_DEFINITION, ...DEFAULT_EMBED_DEFINITIONS],
 })
 const desktopStylesheet = [
 	designSystemStylesheet as unknown as string,
+	experimentCardStylesheet as unknown as string,
 	terminalSessionMonitorStylesheet as unknown as string,
 	workbenchStylesheet as unknown as string,
 	workbenchAgentDockStylesheet as unknown as string,
@@ -64,7 +75,9 @@ function WorkbenchDesktopLayer() {
 
 /** @param {import('../.script-workspace/script-context').ConfigScriptContext} ctx */
 export default function ({ config }: { config: any }) {
-	const PreviousInFrontOfTheCanvas = config.components.InFrontOfTheCanvas
+	const PreviousInFrontOfTheCanvas = unwrapWorkbenchDesktopLayer(
+		config.components.InFrontOfTheCanvas
+	)
 
 	function InFrontOfTheCanvas() {
 		return (
@@ -74,6 +87,10 @@ export default function ({ config }: { config: any }) {
 			</>
 		)
 	}
+	markWorkbenchDesktopLayer(
+		InFrontOfTheCanvas,
+		PreviousInFrontOfTheCanvas
+	)
 
 	return {
 		...config,
@@ -81,6 +98,7 @@ export default function ({ config }: { config: any }) {
 			config.shapeUtils,
 			[
 				AgentsModelsShapeUtil,
+				ExperimentCardShapeUtil,
 				WorkflowNodeShapeUtil,
 				WorkflowRichOutputShapeUtil,
 				DesignSystemShapeUtil,

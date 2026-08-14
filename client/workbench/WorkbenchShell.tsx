@@ -3,24 +3,19 @@ import {
 	TldrawUiButton,
 	TldrawUiButtonIcon,
 	TldrawUiButtonLabel,
-	TldrawUiDropdownMenuContent,
-	TldrawUiDropdownMenuGroup,
-	TldrawUiDropdownMenuItem,
-	TldrawUiDropdownMenuRoot,
-	TldrawUiDropdownMenuTrigger,
 	TldrawUiIcon,
+	TldrawUiPopover,
+	TldrawUiPopoverContent,
+	TldrawUiPopoverTrigger,
 	TldrawUiToolbar,
 	TldrawUiToolbarButton,
-	TldrawUiToolbarToggleGroup,
-	TldrawUiToolbarToggleItem,
 	useEditor,
 } from 'tldraw'
 import { TldrawAgentApp } from '../agent/TldrawAgentApp'
 import { TldrawAgentAppContextProvider } from '../agent/TldrawAgentAppProvider'
+import { BridgeCenter } from '../bridges/BridgeCenter'
 import { MlInternEvalLabLauncher } from '../components/MlInternEvalLabLauncher'
 import { CompanionCanvasBridgeController } from '../components/CompanionCanvasBridgeController'
-import { DesignSystemOverlay } from '../design-system/DesignSystemOverlay'
-import { HtmlMockupOverlay } from '../html-mockup/HtmlMockupOverlay'
 import { IsoflowOverlay } from '../isoflow/IsoflowOverlay'
 import { KanbanTracksControl } from '../kanban/KanbanTracksControl'
 import { TerminalSessionMonitor } from '../terminal/TerminalSessionMonitor'
@@ -37,7 +32,9 @@ import {
 } from './workbenchState'
 import { WorkbenchAgentDock } from './WorkbenchAgentDock'
 import { insertWorkbenchTemplate } from './workbenchCanvas'
+import { WorkbenchDomainIcon } from './WorkbenchDomainIcon'
 import { WorkbenchEmojiPalette } from './WorkbenchEmojiPalette'
+import { UiuxProviderDock } from './UiuxProviderDock'
 import { resolveWorkbenchToolProfile } from './workbenchToolProfiles'
 import './workbench.css'
 
@@ -54,6 +51,7 @@ export function WorkbenchShell({ app }: WorkbenchShellProps) {
 		label: string
 		title: string
 	} | null>(null)
+	const [domainMenuOpen, setDomainMenuOpen] = useState(false)
 	const activePack = resolveWorkbenchDomainPack(activeDomain)
 	const toolProfile = activePack.toolProfile
 		? resolveWorkbenchToolProfile(activePack.toolProfile)
@@ -95,88 +93,116 @@ export function WorkbenchShell({ app }: WorkbenchShellProps) {
 	return (
 		<>
 			<TldrawUiToolbar
-				className="workbench-pack-switcher"
-				label="AI workbench domain"
-				orientation="horizontal"
+				className="workbench-aux-rail workbench-pack-switcher"
+				label="AI Workbench"
+				orientation="vertical"
 				onPointerDown={(event) => event.stopPropagation()}
 				onClick={(event) => event.stopPropagation()}
 			>
-				<div className="workbench-pack-identity">
-					<span className="workbench-pack-kicker">AI Workbench</span>
-					<strong className="workbench-pack-name">{activePack.label}</strong>
-				</div>
-				<TldrawUiToolbarToggleGroup
-					className="workbench-pack-options"
-					type="single"
-					value={activeDomain}
-					aria-label="Domain pack"
+				<TldrawUiPopover
+					id="workbench-domain-center"
+					open={domainMenuOpen}
+					onOpenChange={setDomainMenuOpen}
+					className="workbench-domain-popover"
 				>
-					{WORKBENCH_DOMAINS.map((domain) => {
-						const pack = WORKBENCH_DOMAIN_PACKS[domain]
-						const active = domain === activeDomain
-						return (
-							<TldrawUiToolbarToggleItem
-								key={domain}
-								className="workbench-pack-option"
-								type="icon"
-								value={domain}
-								aria-label={`${pack.label}: ${pack.description}`}
-								aria-pressed={active}
-								title={pack.description}
-								onClick={() => selectDomain(domain)}
-							>
-								<span className="workbench-pack-option-label workbench-pack-option-label--full">
-									{pack.label}
-								</span>
-								<span className="workbench-pack-option-label workbench-pack-option-label--short">
-									{pack.shortLabel}
-								</span>
-							</TldrawUiToolbarToggleItem>
-						)
-					})}
-				</TldrawUiToolbarToggleGroup>
-				<div className="workbench-template-control">
-					<TldrawUiDropdownMenuRoot
-						id={`workbench-templates-${activeDomain}`}
-						key={activeDomain}
-					>
-						<TldrawUiDropdownMenuTrigger>
-							<TldrawUiToolbarButton
-								type="icon"
-								className="workbench-template-trigger"
-								title={`${activePack.label} templates`}
-							>
-								<TldrawUiButtonIcon icon="pack" small />
-								<TldrawUiButtonLabel>Templates</TldrawUiButtonLabel>
-								<span className="workbench-template-count" aria-hidden="true">
-									{activePack.templates.length}
-								</span>
-							</TldrawUiToolbarButton>
-						</TldrawUiDropdownMenuTrigger>
-						<TldrawUiDropdownMenuContent
-							className="workbench-template-palette"
-							side="bottom"
-							align="end"
-							alignOffset={0}
-							sideOffset={8}
-							collisionPadding={8}
+					<TldrawUiPopoverTrigger>
+						<TldrawUiToolbarButton
+							type="icon"
+							className="workbench-rail-trigger workbench-domain-trigger workbench-template-trigger"
+							title={`Domain · ${activePack.label}`}
+							aria-label={`Domain · ${activePack.label}`}
+							aria-expanded={domainMenuOpen}
 						>
-							<TldrawUiDropdownMenuGroup className="workbench-template-group">
-								<header className="workbench-template-header">
-									<strong>{activePack.label} templates</strong>
-									<span>Native, editable tldraw shapes</span>
-								</header>
-								{activePack.templates.map((template) => (
-									<TldrawUiDropdownMenuItem key={template.id}>
+							<WorkbenchDomainIcon name={activePack.icon} />
+						</TldrawUiToolbarButton>
+					</TldrawUiPopoverTrigger>
+					<TldrawUiPopoverContent
+						side="right"
+						align="start"
+						sideOffset={8}
+						collisionPadding={12}
+						autoFocusFirstButton={false}
+					>
+						<section
+							className="workbench-domain-center workbench-template-palette"
+							aria-label="Workbench domain"
+							onPointerDown={(event) => event.stopPropagation()}
+							onClick={(event) => event.stopPropagation()}
+						>
+							<header className="workbench-popover-header">
+								<div className="workbench-popover-title">
+									<span
+										className="workbench-active-domain-icon"
+										aria-hidden="true"
+									>
+										<WorkbenchDomainIcon name={activePack.icon} />
+									</span>
+									<span className="workbench-popover-heading">
+										<span className="workbench-popover-kicker">
+											ACTIVE DOMAIN
+										</span>
+										<strong>{activePack.label}</strong>
+									</span>
+									<span className="workbench-surface-badge">Native canvas</span>
+								</div>
+								<p>{activePack.description}</p>
+							</header>
+
+							<div
+								className="workbench-domain-options workbench-pack-options"
+								role="group"
+								aria-label="Domain pack"
+							>
+								{WORKBENCH_DOMAINS.map((domain) => {
+									const pack = WORKBENCH_DOMAIN_PACKS[domain]
+									const active = domain === activeDomain
+									return (
+										<TldrawUiButton
+											key={domain}
+											type="menu"
+											className="workbench-domain-option workbench-pack-option"
+											title={pack.description}
+											aria-pressed={active}
+											data-active={active}
+											onClick={() => selectDomain(domain)}
+										>
+											<span
+												className="workbench-domain-option-icon"
+												aria-hidden="true"
+											>
+												<WorkbenchDomainIcon name={pack.icon} small />
+											</span>
+											<TldrawUiButtonLabel>{pack.label}</TldrawUiButtonLabel>
+											{active && (
+												<TldrawUiButtonIcon icon="check-circle" small />
+											)}
+										</TldrawUiButton>
+									)
+								})}
+							</div>
+
+							<div className="workbench-popover-section workbench-template-control">
+								<div className="workbench-popover-section-heading">
+									<strong>Templates</strong>
+									<span>{activePack.templates.length} native sets</span>
+								</div>
+								<div className="workbench-template-group">
+									{activePack.templates.map((template) => (
 										<TldrawUiButton
 											type="menu"
 											className="workbench-template-option"
+											key={template.id}
 											title={template.label}
 											onClick={() =>
 												createTemplate(template.id, template.label)
 											}
 										>
-											<TldrawUiButtonIcon icon="plus" small />
+											<span
+												className="workbench-template-option-icon"
+												aria-hidden="true"
+											>
+												<TldrawUiIcon icon={template.icon} label="" small />
+											</span>
 											<TldrawUiButtonLabel>
 												<span className="workbench-template-option-title">
 													{template.label}
@@ -186,30 +212,59 @@ export function WorkbenchShell({ app }: WorkbenchShellProps) {
 												</span>
 											</TldrawUiButtonLabel>
 										</TldrawUiButton>
-									</TldrawUiDropdownMenuItem>
-								))}
-							</TldrawUiDropdownMenuGroup>
-						</TldrawUiDropdownMenuContent>
-					</TldrawUiDropdownMenuRoot>
-				</div>
-				{activeDomain === 'product' && <KanbanTracksControl />}
-				<span
-					className="workbench-pack-route"
-					title={
-						templateStatus?.title ??
-						'Requests are routed per intent and selection'
-					}
-					data-status={templateStatus ? 'receipt' : 'route'}
-					role="status"
-					aria-live="polite"
-				>
-					<TldrawUiIcon
-						icon={templateStatus ? 'check-circle' : 'arrow-cycle'}
-						label=""
-						small
-					/>
-					{templateStatus?.label ?? 'Auto route'}
-				</span>
+									))}
+								</div>
+							</div>
+
+							{activeDomain === 'uiux' && (
+								<div className="workbench-popover-section workbench-mode-adjunct">
+									<div className="workbench-popover-section-heading">
+										<strong>Providers</strong>
+										<span>Selection-aware</span>
+									</div>
+									<UiuxProviderDock />
+								</div>
+							)}
+							{activeDomain === 'product' && (
+								<div className="workbench-popover-section workbench-mode-adjunct">
+									<div className="workbench-popover-section-heading">
+										<strong>Product workspace</strong>
+										<span>Read-only import</span>
+									</div>
+									<KanbanTracksControl />
+								</div>
+							)}
+
+							<span
+								className="workbench-pack-route"
+								title={
+									templateStatus?.title ??
+									'Requests are routed per intent and selection'
+								}
+								data-status={templateStatus ? 'receipt' : 'route'}
+								role="status"
+								aria-live="polite"
+							>
+								<TldrawUiIcon
+									icon={templateStatus ? 'check-circle' : 'arrow-cycle'}
+									label=""
+									small
+								/>
+								<span>
+									<strong>
+										{templateStatus?.label ?? 'Auto route'}
+									</strong>
+									<small>
+										{templateStatus
+											? 'Undoable canvas receipt'
+											: 'Intent + selection'}
+									</small>
+								</span>
+							</span>
+						</section>
+					</TldrawUiPopoverContent>
+				</TldrawUiPopover>
+				<BridgeCenter />
 			</TldrawUiToolbar>
 
 			<WorkbenchEmojiPalette />
@@ -217,8 +272,6 @@ export function WorkbenchShell({ app }: WorkbenchShellProps) {
 				<WorkflowOverlay key={toolProfile.id} profile={toolProfile} />
 			)}
 			{activePack.overlays.isoflow && <IsoflowOverlay />}
-			{activePack.overlays.htmlMockup && <HtmlMockupOverlay />}
-			{activeDomain === 'uiux' && <DesignSystemOverlay />}
 			{activePack.overlays.terminalSession && (
 				<TerminalSessionMonitor
 					role={activeDomain === 'ml' ? 'ml' : 'architecture'}

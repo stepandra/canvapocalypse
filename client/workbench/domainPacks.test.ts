@@ -22,6 +22,8 @@ describe('workbench domain packs', () => {
 			workflow: false,
 			isoflow: true,
 			htmlMockup: false,
+			designSystem: false,
+			stitch: false,
 			mlIntern: false,
 			terminalSession: true,
 		})
@@ -29,6 +31,8 @@ describe('workbench domain packs', () => {
 			workflow: true,
 			isoflow: false,
 			htmlMockup: false,
+			designSystem: false,
+			stitch: false,
 			mlIntern: true,
 			terminalSession: false,
 		})
@@ -36,6 +40,8 @@ describe('workbench domain packs', () => {
 			workflow: false,
 			isoflow: false,
 			htmlMockup: true,
+			designSystem: true,
+			stitch: true,
 			mlIntern: false,
 			terminalSession: false,
 		})
@@ -43,6 +49,8 @@ describe('workbench domain packs', () => {
 			workflow: true,
 			isoflow: false,
 			htmlMockup: false,
+			designSystem: false,
+			stitch: false,
 			mlIntern: false,
 			terminalSession: false,
 		})
@@ -97,7 +105,28 @@ describe('workbench domain packs', () => {
 		for (const pack of Object.values(WORKBENCH_DOMAIN_PACKS)) {
 			expect(pack.templates).toHaveLength(3)
 			expect(new Set(pack.templates.map((template) => template.id)).size).toBe(3)
+			expect(pack.icon).toBeTruthy()
+			expect('shortLabel' in pack).toBe(false)
+			for (const template of pack.templates) {
+				expect(template.icon).toBeTruthy()
+			}
 		}
+	})
+
+	it('uses semantic domain glyphs instead of letter badges', () => {
+		expect(
+			Object.fromEntries(
+				Object.entries(WORKBENCH_DOMAIN_PACKS).map(([id, pack]) => [
+					id,
+					pack.icon,
+				])
+			)
+		).toEqual({
+			architecture: 'architecture',
+			ml: 'ml',
+			uiux: 'uiux',
+			product: 'product',
+		})
 	})
 
 	it('restores pointer interaction for the in-front-of-canvas shell and palette', () => {

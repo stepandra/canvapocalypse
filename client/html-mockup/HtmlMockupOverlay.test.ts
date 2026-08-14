@@ -9,6 +9,10 @@ const overlaySource = readFileSync(
 	new URL('./HtmlMockupOverlay.tsx', import.meta.url),
 	'utf8'
 )
+const overlayStyles = readFileSync(
+	new URL('../../scripts/tldraw-desktop-eval-lab.css', import.meta.url),
+	'utf8'
+)
 
 describe('Local HTML Mockup native surface', () => {
 	it('uses the exact fail-closed iframe sandbox', () => {
@@ -18,6 +22,8 @@ describe('Local HTML Mockup native surface', () => {
 		expect(shapeSource).not.toContain('allow-popups')
 		expect(shapeSource).not.toContain('allow-downloads')
 		expect(shapeSource).toContain('editor.select(latest.id)')
+		expect(shapeSource).toContain('HTML_MOCKUP_MODE_MESSAGE')
+		expect(shapeSource).toContain('onLoad={syncPreviewMode}')
 	})
 
 	it('offers both a resident HTML file input and the opaque registry picker', () => {
@@ -48,6 +54,29 @@ describe('Local HTML Mockup native surface', () => {
 		expect(overlaySource).toContain('aria-live="polite"')
 		expect(overlaySource).toContain('aria-atomic="true"')
 		expect(overlaySource).toContain('Tab, then Enter or Space')
+	})
+
+	it('separates prototype interaction from target selection without reloading the iframe', () => {
+		expect(overlaySource).toContain('Interact')
+		expect(overlaySource).toContain('Select target')
+		expect(overlaySource).toContain(
+			'updateLocalHtmlMockupPreviewMode(editor, latest, previewMode)'
+		)
+		expect(overlaySource).toContain("setPreviewMode('preview')")
+		expect(overlaySource).toContain("setPreviewMode('inspect')")
+		expect(overlaySource).toContain(
+			"setStatus(previewMode === 'preview' ? 'INTERACT' : 'SELECT TARGET')"
+		)
+		expect(overlaySource).toContain('aria-pressed={meta.previewMode')
+		expect(shapeSource).toContain('Interact with Local HTML Mockup')
+		expect(shapeSource).toContain('selectedTargetRef: _selectedTargetRef')
+		expect(shapeSource).not.toContain('sandbox="allow-scripts allow-forms"')
+	})
+
+	it('anchors the inspector to the viewport rather than the narrow provider dock', () => {
+		expect(overlayStyles).toMatch(
+			/\.html-mockup-inspector\s*\{\s*position:\s*fixed;/
+		)
 	})
 
 	it('keeps the preview usable through bounded responsive resizing', () => {

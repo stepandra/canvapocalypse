@@ -66,13 +66,17 @@ thread uses the repo-owned plugin at
 and exactly three tools: `tldraw_capabilities`,
 `tldraw_describe_capability`, and `tldraw_execute`.
 
-Unqualified discovery targets exactly one active tldraw Offline desktop and
-never falls back to a Vite/web preview. Context is limited to the explicit
-selection or a user-approved bounded area. Native mutations are validated,
-atomic, one-step undoable, and closed by a canvas-bound one-time lease receipt.
-Amp receives no document path, canvas binding, lease token, raw whole-canvas
-state, credential, or terminal transcript. Installation and the ready-to-paste
-instruction live in
+The plugin targets the Amp workspace's sole regular, non-symlink
+`.canvas/*.tldraw` file and requires that exact canonical document to be open
+in one tldraw Offline window. Other open documents are ignored rather than
+closed; missing, ambiguous, duplicate, symlinked, or unopened project targets
+fail closed. The document path and opaque resident binding stay inside the
+trusted local adapter and are not tool arguments or results. Context is limited
+to the explicit selection or a user-approved bounded area. Native mutations
+are validated, atomic, one-step undoable, and closed by a canvas-bound one-time
+lease receipt. The model-facing tools return no document path, canvas binding,
+lease token, raw whole-canvas state, credential, or terminal transcript.
+Installation and the ready-to-paste instruction live in
 [`references/activation.md`](./.agents/skills/tldraw-offline-workbench/references/activation.md).
 Browser Origins are restricted to bound resident polling/receipt routes and
 cannot produce capability requests against the Offline canvas.

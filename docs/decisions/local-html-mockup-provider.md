@@ -25,7 +25,8 @@ The MVP supports:
 
 - discovery of HTML documents under operator-configured roots;
 - transient import into a host-managed directory;
-- an inert, cross-origin preview in a sandboxed iframe;
+- a sandboxed cross-origin preview with explicit Interact and Select-target
+  modes;
 - resident element picking;
 - a bounded accessibility-like semantic snapshot;
 - lazy agent capabilities `html.inspect-component` and
@@ -128,7 +129,7 @@ tldraw selection. Mixed selection fails closed. The client rechecks shape ID,
 document reference, revision, and selected target after every awaited
 inspection before scheduling any context result.
 
-## Inert preview and picker
+## Sandboxed prototype and picker
 
 The iframe has exactly:
 
@@ -141,19 +142,43 @@ pointer lock, or storage access.
 
 The provider parses the source as data and builds a derived preview:
 
-- original scripts, event handlers, active embeds, refreshes, unsafe URLs, and
-  network-capable elements are removed;
-- original scripts are never executed;
+- classic inline scripts are retained only inside the opaque-origin sandbox
+  and receive the server's per-response CSP nonce so local prototype state
+  transitions can run;
+- external/module scripts, inline event-handler attributes, active embeds,
+  refreshes, unsafe URLs, and network-capable elements are removed;
 - same-root inert assets are served through an extension allowlist after
   canonical containment checks;
 - CSP denies connect, frame, object, base, and form actions; and
-- the only script is the provider's nonce-bound picker.
+- the provider's nonce-bound picker is the only parent communication surface.
+
+The shape starts in Select-target mode. Its inspector exposes an undoable
+two-state control:
+
+- **Interact** suspends picker interception without reloading the iframe, so
+  inputs, buttons, details, and local script-driven routes keep their current
+  prototype state; and
+- **Select target** resumes resident picking on the currently visible state.
+
+Switching to Interact clears the previous component target so a target from an
+earlier screen cannot be mistaken for current context. The mode command uses
+`postMessage('*')` only because the sandbox origin is intentionally opaque; the
+child accepts it exclusively from its exact parent `WindowProxy` and only when
+the document reference and revision match. The iframe still omits forms,
+same-origin authority, popups, downloads, top navigation, storage, and network
+connections.
 
 The picker reports `html-mockup:selection` with opaque document, revision, and
-target references plus a server-projected short visible label. The authenticated
-request's actual Origin determines the parent surface; clients cannot nominate
-it in a query or body. Exact allowlisted HTTP origins bind to themselves, while
-an already provisioned `Origin: null` or absent origin binds to `file://`.
+target references plus a bounded visible label. For source elements, the label
+is server-projected. For elements created later by a retained local prototype
+script, the picker names and highlights the exact visible runtime component but
+keeps the opaque reference anchored to its nearest revision-bound source
+ancestor. This lets the operator traverse Login to Home and select the visible
+Home component without pretending that runtime DOM is source authority. The
+authenticated request's actual Origin determines the parent surface; clients
+cannot nominate it in a query or body. Exact allowlisted HTTP origins bind to
+themselves, while an already provisioned `Origin: null` or absent origin binds
+to `file://`.
 
 The provider exchanges the resident capability for a short-lived preview
 ticket scoped to document, revision, and derived parent surface. Preview and
@@ -310,6 +335,8 @@ Focused deterministic tests cover:
 
 - a 20,000-line source producing a bounded snapshot;
 - hidden and script content exclusion;
+- nonce-authorized local prototype scripts, blocked external scripts, and
+  mode-gated picker interception;
 - CSP, exact HTTP parent-origin binding, explicit `file://` Offline binding,
   and exact iframe sandboxing;
 - exact iframe-source message validation;

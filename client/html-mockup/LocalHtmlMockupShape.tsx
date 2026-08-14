@@ -13,11 +13,13 @@ import {
 	useEditor,
 } from 'tldraw'
 import {
+	HTML_MOCKUP_MODE_MESSAGE,
 	HtmlMockupDocumentSummary,
 	HtmlMockupSnapshotSummary,
 	issueHtmlMockupPreviewUrl,
 	parseHtmlMockupSelectionMessage,
 } from './htmlMockupBridge'
+import type { StitchProviderReference } from '../../shared/types/Stitch'
 
 export const LOCAL_HTML_MOCKUP_SHAPE_TYPE = 'local-html-mockup' as const
 const HTML_MOCKUP_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/i
@@ -49,6 +51,7 @@ export interface LocalHtmlMockupMeta {
 	previewMode: LocalHtmlMockupPreviewMode
 	truncated: boolean
 	targetCount?: number
+	provider?: StitchProviderReference
 }
 
 export class LocalHtmlMockupShapeUtil extends BaseBoxShapeUtil<LocalHtmlMockupShape> {
@@ -100,7 +103,8 @@ export class LocalHtmlMockupShapeUtil extends BaseBoxShapeUtil<LocalHtmlMockupSh
 
 export function createLocalHtmlMockupMeta(
 	document: HtmlMockupDocumentSummary | HtmlMockupSnapshotSummary,
-	previewMode: LocalHtmlMockupPreviewMode = 'inspect'
+	previewMode: LocalHtmlMockupPreviewMode = 'inspect',
+	provider?: StitchProviderReference
 ): LocalHtmlMockupMeta {
 	return {
 		schema: 'canvapocalypse-local-html/v1',
@@ -112,6 +116,7 @@ export function createLocalHtmlMockupMeta(
 		...(typeof document.targetCount === 'number'
 			? { targetCount: document.targetCount }
 			: {}),
+		...(provider ? { provider } : {}),
 	}
 }
 
@@ -139,7 +144,14 @@ export function readLocalHtmlMockupMeta(
 		(value.targetCount !== undefined &&
 			(typeof value.targetCount !== 'number' ||
 				!Number.isSafeInteger(value.targetCount) ||
-				value.targetCount < 0))
+				value.targetCount < 0)) ||
+		(value.provider !== undefined &&
+			(!isRecord(value.provider) ||
+				value.provider.schema !== 'canvapocalypse-stitch-ref/v1' ||
+				typeof value.provider.projectRef !== 'string' ||
+				!/^stp_[A-Za-z0-9_-]{22,64}$/.test(value.provider.projectRef) ||
+				typeof value.provider.screenRef !== 'string' ||
+				!/^sts_[A-Za-z0-9_-]{22,64}$/.test(value.provider.screenRef)))
 	) {
 		return null
 	}
@@ -157,7 +169,8 @@ export function isLocalHtmlMockupShape(
 
 export function createLocalHtmlMockupShape(
 	editor: Editor,
-	document: HtmlMockupDocumentSummary | HtmlMockupSnapshotSummary
+	document: HtmlMockupDocumentSummary | HtmlMockupSnapshotSummary,
+	provider?: StitchProviderReference
 ) {
 	const bounds = editor.getViewportPageBounds()
 	const width = Math.max(
@@ -175,7 +188,7 @@ export function createLocalHtmlMockupShape(
 		)
 	)
 	const id = createShapeId(`html-mockup-${document.documentRef}-${Date.now()}`)
-	const meta = createLocalHtmlMockupMeta(document)
+	const meta = createLocalHtmlMockupMeta(document, 'inspect', provider)
 
 	editor.markHistoryStoppingPoint('Insert Local HTML Mockup')
 	editor.createShape<LocalHtmlMockupShape>({
@@ -235,7 +248,8 @@ export function updateLocalHtmlMockupSnapshot(
 export function replaceLocalHtmlMockupDocument(
 	editor: Editor,
 	shape: LocalHtmlMockupShape,
-	document: HtmlMockupDocumentSummary | HtmlMockupSnapshotSummary
+	document: HtmlMockupDocumentSummary | HtmlMockupSnapshotSummary,
+	provider?: StitchProviderReference
 ) {
 	editor.markHistoryStoppingPoint('Change Local HTML Mockup document')
 	editor.updateShape<LocalHtmlMockupShape>({
@@ -243,7 +257,11 @@ export function replaceLocalHtmlMockupDocument(
 		type: LOCAL_HTML_MOCKUP_SHAPE_TYPE,
 		meta: {
 			...shape.meta,
-			htmlMockup: createLocalHtmlMockupMeta(document) as any,
+			htmlMockup: createLocalHtmlMockupMeta(
+				document,
+				'inspect',
+				provider
+			) as any,
 		},
 	})
 	editor.select(shape.id)
@@ -270,6 +288,37 @@ export function clearLocalHtmlMockupTarget(
 	})
 }
 
+export function updateLocalHtmlMockupPreviewMode(
+	editor: Editor,
+	shape: LocalHtmlMockupShape,
+	previewMode: LocalHtmlMockupPreviewMode
+) {
+	const meta = readLocalHtmlMockupMeta(shape)
+	if (!meta || meta.previewMode === previewMode) return
+	const {
+		selectedTargetRef: _selectedTargetRef,
+		selectedTargetLabel: _selectedTargetLabel,
+		...stableMeta
+	} = meta
+	editor.markHistoryStoppingPoint(
+		previewMode === 'preview'
+			? 'Interact with Local HTML Mockup'
+			: 'Select Local HTML Mockup target'
+	)
+	editor.updateShape<LocalHtmlMockupShape>({
+		id: shape.id,
+		type: LOCAL_HTML_MOCKUP_SHAPE_TYPE,
+		meta: {
+			...shape.meta,
+			htmlMockup: {
+				...stableMeta,
+				previewMode,
+			} as any,
+		},
+	})
+	editor.select(shape.id)
+}
+
 function LocalHtmlMockupCard({ shape }: { shape: LocalHtmlMockupShape }) {
 	const editor = useEditor()
 	const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -278,6 +327,24 @@ function LocalHtmlMockupCard({ shape }: { shape: LocalHtmlMockupShape }) {
 	const [previewError, setPreviewError] = useState<string>()
 	const documentRef = meta?.documentRef
 	const revision = meta?.revision
+	const previewMode = meta?.previewMode
+
+	const syncPreviewMode = () => {
+		const source = iframeRef.current?.contentWindow
+		if (!source || !documentRef || !revision || !previewMode) return
+		// The preview intentionally has an opaque origin. The child accepts
+		// this command only from its exact parent WindowProxy and validates
+		// documentRef + revision.
+		source.postMessage(
+			{
+				type: HTML_MOCKUP_MODE_MESSAGE,
+				documentRef,
+				revision,
+				mode: previewMode,
+			},
+			'*'
+		)
+	}
 
 	useEffect(() => {
 		setPreviewUrl(undefined)
@@ -339,6 +406,10 @@ function LocalHtmlMockupCard({ shape }: { shape: LocalHtmlMockupShape }) {
 		return () => window.removeEventListener('message', onMessage)
 	}, [editor, meta, shape.id])
 
+	useEffect(() => {
+		syncPreviewMode()
+	}, [previewMode, previewUrl])
+
 	if (!meta) {
 		return (
 			<HTMLContainer
@@ -378,6 +449,7 @@ function LocalHtmlMockupCard({ shape }: { shape: LocalHtmlMockupShape }) {
 						src={previewUrl}
 						sandbox="allow-scripts"
 						referrerPolicy="no-referrer"
+						onLoad={syncPreviewMode}
 					/>
 				) : (
 					<div className="html-mockup-shape-loading" role="status">
@@ -387,7 +459,7 @@ function LocalHtmlMockupCard({ shape }: { shape: LocalHtmlMockupShape }) {
 			</div>
 			<footer className="html-mockup-shape-footer">
 				<span>
-					{meta.previewMode === 'inspect' ? 'SELECT TARGET' : 'PREVIEW'}
+					{meta.previewMode === 'inspect' ? 'SELECT TARGET' : 'INTERACT'}
 				</span>
 				<strong title={meta.selectedTargetRef}>
 					{meta.selectedTargetLabel ?? 'No component selected'}

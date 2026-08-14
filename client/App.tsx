@@ -15,6 +15,8 @@ import {
 } from './agent/TldrawAgentAppProvider'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { DesignSystemShapeUtil } from './design-system/DesignSystemShape'
+import { ExperimentCardShapeUtil } from './experiments/ExperimentCardShape'
+import './experiments/experimentCard.css'
 import { LocalHtmlMockupShapeUtil } from './html-mockup/LocalHtmlMockupShape'
 import { ISOFLOW_EMBED_DEFINITION } from './isoflow/isoflowProvider'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
@@ -36,6 +38,7 @@ const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
 	embedDefinitions: [ISOFLOW_EMBED_DEFINITION, ...DEFAULT_EMBED_DEFINITIONS],
 })
 const shapeUtils = [
+	ExperimentCardShapeUtil,
 	WorkflowNodeShapeUtil,
 	WorkflowRichOutputShapeUtil,
 	DesignSystemShapeUtil,

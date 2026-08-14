@@ -46,12 +46,45 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
+	it('registers the C1-style experiment card shape used by both surfaces', () => {
+		expect(desktopConfigSource).toContain(
+			"import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'"
+		)
+		expect(desktopConfigSource).toMatch(
+			/shapeUtils:\s*mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*ExperimentCardShapeUtil,[\s\S]*\],\s*'type'/
+		)
+		expect(desktopConfigSource).toContain(
+			"import experimentCardStylesheet from '../client/experiments/experimentCard.css'"
+		)
+	})
+
 	it('requires the Offline bundle to install its resident HTML capability', () => {
 		expect(desktopConfigSource).toContain(
 			'installHtmlMockupResidentCapability(\n\t__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__\n)'
 		)
 		expect(desktopConfigSource).not.toContain(
 			"typeof __TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__"
+		)
+	})
+
+	it('installs the same resident capability for the bridge supervisor client', () => {
+		expect(desktopConfigSource).toContain(
+			"import { installBridgeSupervisorResidentCapability } from '../client/bridges/bridgeSupervisorClient'"
+		)
+		expect(desktopConfigSource).toContain(
+			'installBridgeSupervisorResidentCapability(\n\t__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__\n)'
+		)
+	})
+
+	it('replaces the prior workbench desktop layer on hot reapply', () => {
+		expect(desktopConfigSource).toContain(
+			"import {\n\tmarkWorkbenchDesktopLayer,\n\tunwrapWorkbenchDesktopLayer,\n} from './tldraw-desktop-config-layer'"
+		)
+		expect(desktopConfigSource).toContain(
+			'const PreviousInFrontOfTheCanvas = unwrapWorkbenchDesktopLayer('
+		)
+		expect(desktopConfigSource).toContain(
+			'markWorkbenchDesktopLayer(\n\t\tInFrontOfTheCanvas,\n\t\tPreviousInFrontOfTheCanvas\n\t)'
 		)
 	})
 })

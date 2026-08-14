@@ -320,34 +320,51 @@ raw whole-canvas state into prompts, canvas metadata, manifests, or receipts.
 Mutations still require completed native tldraw action evidence and return a
 compact receipt. Isoflow remains a separate explicit infrastructure provider.
 
-### D-024 — The live Offline canvas is resolved by a resident lease and a short-lived context digest
+### D-024 — Amp resolves the project Offline canvas before issuing a resident lease
 
 **Decision:** Mount one provider-neutral executor beside every Workbench canvas.
 It registers an opaque browser-session binding and coarse client kind with the
-loopback bridge. Amp receives neither value: unqualified companion discovery
-resolves exactly one active `offline-desktop` client and never falls back to a
-web preview. Zero or multiple active Offline clients fail closed. The Offline
-lease tolerates bounded background timer suspension; previews retain a short
-lease. An inspection returns a short-lived `contextRef` derived from the
-bounded semantic projection plus the selected records' current revisions.
-Mutations must present the same reference and a validated `AgentAction[]` plan.
-Each leased request also receives a fresh random receipt token known only to
-the resident client; a terminal receipt requires that token and the exact
-leased canvas binding.
+loopback bridge. The Amp plugin selects its target from
+`amp.system.workspaceRoot`: the workspace must contain exactly one regular,
+non-symlink `.canvas/*.tldraw` file, and exactly one open tldraw Offline
+document must resolve to that canonical path. The plugin reads that document's
+opaque resident binding through the local Offline API and uses it only as an
+internal capability-discovery selector; the binding and document path are not
+LLM-facing tool arguments or results. Other open Offline documents are ignored
+and never closed. Missing, ambiguous, escaped, symlinked, or unopened project
+targets fail closed. Callers without the internal selector retain the stricter
+exactly-one-active-Offline-client discovery rule and never fall back to a web
+preview.
 
-**Why:** The existing Ampcode thread needs to operate the canvas that is
-actually open, without persisting a machine path, control-server token, Amp
-thread ID, or raw document snapshot in the canvas or prompt. Binding the plan
-to current records also prevents a stale architectural edit from landing after
-the user changes the selection.
+The Offline lease tolerates bounded background timer suspension; previews
+retain a short lease. An inspection returns a short-lived `contextRef` derived
+from the bounded semantic projection plus the selected records' current
+revisions. Mutations must present the same reference and a validated
+`AgentAction[]` plan. Each leased request also receives a fresh random receipt
+token known only to the resident client; a terminal receipt requires that token
+and the exact leased canvas binding.
 
-**Boundary:** The resident binding, client kind, and receipt token are local
-transport state and are not canvas metadata, manifests, provider status, or
-receipts. A web Origin cannot register as `offline-desktop`; no-Origin callers
-remain inside the existing same-user loopback trust boundary. Browser Origins
-may call only resident `next`, bound aggregate status, and receipt routes;
-agent-facing discovery, description, execution, legacy invoke, request status,
-and unbound status reject browser Origins. Unbound status does not expose the
+**Why:** The existing Ampcode thread needs to operate its repository's canvas,
+not whichever Offline window happens to be the only one open. Project-scoped
+routing allows unrelated and unsaved documents to remain open without making
+the architecture tool unusable, while keeping the selection deterministic and
+without persisting a machine path, control-server token, Amp thread ID, or raw
+document snapshot in the canvas or prompt. Binding the plan to current records
+also prevents a stale architectural edit from landing after the user changes
+the selection.
+
+**Boundary:** Workspace/path resolution and resident-binding lookup occur only
+inside the trusted local Amp plugin and Offline API boundary. The tool contract
+exposes no path, workspace-root parameter, canvas-binding parameter, client
+enumeration, or arbitrary URL. The resident binding, client kind, and receipt
+token are private adapter/bridge transport state. They are not canvas metadata,
+provider status, model-facing manifests/results, or public receipts; an
+internal manifest may retain the binding solely to enforce lease affinity. A
+web Origin cannot register as `offline-desktop`; no-Origin callers remain
+inside the existing same-user loopback trust boundary. Browser Origins may call
+only resident `next`, bound aggregate status, and receipt routes; agent-facing
+discovery, description, execution, legacy invoke, request status, and unbound
+status reject browser Origins. Unbound status does not expose the
 latest request/result. Instruction-only external mutations are rejected. The
 executor accepts only the hydrated native action allowlist, checks every
 existing shape reference against the explicit selection or bounded area,
@@ -728,6 +745,85 @@ surface; Isoflow Bridge v2 remains reserved for explicit infrastructure and
 deployment diagrams. An already running interactive ML-Intern process must be
 restarted before Python can load newly registered built-ins.
 
+### D-043 — Stitch is a server-only UI/UX provider over Local HTML
+
+**Decision:** Integrate `@google/stitch-sdk` only in the loopback workbench
+bridge. Stitch generation and editing download HTML server-side and import it
+into the existing Local HTML Mockup registry. The UI/UX pack exposes Stitch,
+`DESIGN.md`, and Local HTML together in one labeled provider dock. The
+repository root `DESIGN.md` is the initial discoverable Canvapocalypse design
+system.
+
+**Why:** Stitch is useful for generating and revising screens, while the
+existing Local HTML shape already owns safe rendering, bounded component
+inspection, agent context, and undoable canvas placement. Reusing it avoids a
+second renderer and makes the previously anonymous, empty `DESIGN.md` control
+discoverable.
+
+**Boundary:** Stitch credentials, Google IDs, SDK schemas, raw responses,
+signed URLs, and HTML never enter the browser bundle, canvas, prompts, or
+receipts. Canvas metadata may store only opaque workbench project/screen
+references. `/stitch/*` requires the resident capability; remote HTML downloads
+are HTTPS allowlisted and capped. Edits require the expected managed HTML
+revision and return a compact receipt. Selected `DESIGN.md` context is the
+existing bounded semantic projection, never source Markdown. UI/UX remains a
+native tldraw surface and never routes through Isoflow.
+
+### D-044 — Local HTML separates prototype interaction from component picking
+
+**Decision:** Give every Local HTML Mockup an explicit, undoable Interact /
+Select-target mode. Interact leaves the iframe mounted and suspends picker
+interception so the operator can traverse a local prototype; returning to
+Select-target inspects the currently visible state. Classic inline prototype
+scripts execute only with a per-response nonce inside the existing opaque-origin
+sandbox. Components created by those scripts may be highlighted and named from
+their bounded visible runtime label, while the opaque target reference remains
+the nearest revision-bound source element.
+
+**Why:** Treating every click as a selection made multi-screen mockups
+impossible to traverse: Login could be selected, but never activated to reach
+Home. Reloading between modes would also discard the exact state the operator
+wanted to inspect.
+
+**Boundary:** Entering Interact clears the old selected target. External/module
+scripts, handler attributes, network connections, forms, embeds, popups,
+downloads, storage, same-origin authority, and top navigation stay unavailable.
+The child accepts a mode message only from its exact parent window and only for
+the matching opaque document reference plus revision. HTML and scripts remain
+outside canvas metadata and model context; agents still receive only the
+bounded semantic projection of an explicitly selected component. A runtime-only
+child is not promoted to source authority: mutations remain guarded by the
+nearest static source target and its revision.
+
+### D-045 — Bridge lifecycle is host-owned and modes live in one auxiliary rail
+
+**Decision:** Add a small loopback supervisor on `127.0.0.1:5177`, installed as
+a user LaunchAgent, with a fixed registry for the two repo-owned processes:
+the Workbench Bridge on `5176` and Isoflow Studio plus Bridge v2 on `4174`.
+Expose their health and safe Start/Stop/Restart actions through a compact
+tldraw-native Bridge Center. Replace the permanent top-center mode strip with
+an auxiliary left Workbench rail containing one domain trigger and one
+aggregate bridge-status trigger.
+
+**Why:** A bridge cannot start itself after it is down, and asking the operator
+to recover hidden local infrastructure in a terminal defeats the canvas as a
+workbench. The former top strip also competed with native page chrome while
+other integrations independently claimed fixed canvas coordinates. A tiny
+host-owned control plane solves bootstrap without giving the browser general
+shell authority, and a single rail gives the custom chrome one predictable
+layout owner.
+
+**Boundary:** The supervisor accepts no browser-supplied commands, paths, URLs,
+ports, environment keys, or process IDs. Every mutation requires the resident
+capability and an exact local origin; the Offline bundle receives the
+capability at build time. Only processes launched by this supervisor may be
+stopped or restarted. An already-running instance is reported as external.
+Kanban `:3484` and the legacy ML-Intern backend `:7860` are observed external
+dependencies and receive no fake lifecycle controls; terminal-first ML-Intern
+does not require `:7860`. Credentials, environment, and unbounded logs never
+enter the UI, canvas metadata, or prompts. Existing revision guards, validated
+canvas actions, receipts, and undo remain authoritative.
+
 ## 2026-08-02 — Agents / Models domain canvas document script
 
 ### D-046 — Agents/Models document script auth, click, and Play policy
@@ -772,3 +868,123 @@ fetch failures render one error section and never throw. Mesh remains
 budget-expensive and is not a default. Unmodified preset graphs reuse the
 service preset script with `meta.name` filled; modified graphs recompile a
 best-effort skeleton. Credentials remain outside shape metadata and receipts.
+
+### D-047 — Visual graph is authoritative; Agent and Persona are first-class nodes
+
+**Decision:** Supersede the D-046 Stage-field / generic subagent interaction
+model. The Grok toolbox is now a palette with separate Stage, Agent, and
+Persona node commands plus presets, Apply, and Play. Presets place editable
+native nodes and bound tldraw arrows; the current graph topology is the only
+input to modified-workflow compilation. Legacy `subagent` records are accepted
+as Agent nodes while old documents migrate.
+
+Apply and Play both validate the graph and materialize it through
+`/api/grok/workflows/save` with revision-safe overwrite/backup behavior. Play
+returns `/workflow <name>` because Grok 0.2.118 exposes workflow launch only
+inside its TUI; the canvas must not fake a headless execution endpoint.
+
+**Persona mapping:** Rhai `agent()` has no `persona` option. A connected
+Persona node stores only a persona id and optional model override. At compile
+time the loopback bridge serves a bounded detail record from the allowlisted
+`~/.grok/personas/<id>.toml`; the compiler embeds its instruction text into the
+connected Agent prompt. The compact catalog and canvas metadata never receive
+that instruction body. Disconnected Agent/Persona nodes, unresolved persona
+details, and cyclic Stage dependencies fail closed with a compact receipt.
+
+**Why:** Agents and personas are composable workflow resources, not attributes
+of a monolithic editor or a Stage. This makes presets genuinely editable and
+keeps the canvas graph inspectable while producing runnable Rhai without
+inventing unsupported Grok syntax.
+
+### D-048 — Native Grok workflow cards, contextual continuation, and explicit config sync
+
+**Decision:** Replace the schematic dark Stage/Agent/Persona presentation with
+the existing light workflow-card visual language. Selecting a workflow node
+opens one compact top inspector; continuation buttons materialize a compatible
+next node plus a real bound arrow. `Parallel agent` is the only added
+convenience: it creates another Agent attached to the same Stage and therefore
+maps to documented Rhai `parallel(...)` rather than inventing a new node type.
+
+Add an explicit **Sync config.toml** command. It synchronizes only explicit
+catalog-backed Agent→Model assignments into `[subagents.models]`, after a
+sanitized snapshot and dry-run, with SHA-256 compare-and-swap, validation,
+backup, atomic write, mode preservation, and a compact next-session receipt.
+Apply and Play never invoke this command implicitly.
+
+**Why:** The canvas should feel like the rest of tldraw Offline and make the
+next legal graph operation discoverable without becoming a monolithic
+configuration form. Grok configuration is broader and longer-lived than one
+workflow graph, so only the documented Agent model-assignment seam is safe to
+project from the canvas.
+
+**Boundary:** No credential, raw config, persona body, MCP definition, or
+arbitrary filesystem path enters tldraw metadata. Node connectivity is derived
+only from arrow binding records. A stale config revision fails closed, and
+config changes affect the next Grok session.
+
+**Migration:** The first `native-light-v2` run reflows only existing
+Agents/Models workflow nodes into their two lanes and removes only generated
+arrows lacking two endpoint bindings. The version is recorded on the hidden
+control record, so later opens preserve the user's manual layout.
+
+### D-049 — Graph-aware placement and drag-out Agent/Persona catalog
+
+**Decision:** Workflow nodes live in page coordinates even when visually
+contained by Stage and Agent/Persona frames. Preset placement and the one-time
+`native-graph-v5` migration derive positions from real bound-arrow topology
+and each node's current dimensions: Stage→Stage control flow is horizontal,
+Stage→Agent assignment is vertical, Persona follows its connected Agent, and
+large fan-out sets use a bounded grid. Lane frames grow to contain the
+resulting graph.
+
+The canvas now contains one visible, resizeable **Agents & personas** catalog
+node. Its rows are compact references only. Dragging an Agent or Persona row
+outside the catalog emits the same inspected toolbar action used by the
+toolbox, with a page-space drop point; the document script materializes and
+selects a native node carrying only the selected catalog id and model
+reference. Dropping inside the catalog is a no-op.
+
+Stage, Agent, and Persona cards use role-specific resize minimums and CSS
+container queries. Agent/Persona fields switch from two columns to one when
+the card is narrow, descriptions disappear only at compact heights, and the
+catalog hides secondary reference text when narrow.
+
+**Why:** Bound arrows cannot be reliable when endpoints mix frame-local and
+page coordinates, and fixed field layouts break as soon as a user resizes a
+node. A visible drag source makes the live Grok inventory composable without
+turning the toolbox into another monolithic form.
+
+**Boundary:** Drag-out never carries prompt bodies, credentials, raw TOML, or
+arbitrary paths. The action is undoable, inspectable, and processed by the
+existing allowlisted node-materialization seam.
+
+### D-050 — Policy, data, gate, skill, and reusable-module nodes
+
+**Decision:** Extend the Grok visual graph with Capability, Skill, Gate, Input,
+Artifact, Result, and Module nodes. Capability defaults to Grok
+`capability_mode = "all"` rather than an empty permission state. A Skill stores
+only a compact id discovered from the current project's direct
+`.agents/skills/<id>/SKILL.md` children; the skill body never enters canvas
+metadata. Input is bounded literal text, Artifact is a reference, and Result
+selects one explicit output Stage.
+
+Every Apply, Play, and config sync runs deterministic graph preflight first.
+Broken bindings, orphan policy/data nodes, missing refs, malformed gates,
+multiple results, cycles, and missing module definitions fail closed. Retry,
+timeout, error-route, and exact tool ids remain inspectable adapter policy and
+produce warnings until the Grok workflow API exposes enforceable matching
+options; the UI must not present prompt text as a security boundary.
+
+Modules are versioned project-local subgraph references under
+`.grok/workflow-modules`. The visual node carries only name, version, and
+parameters. Unknown definitions fail preflight instead of falling through to an
+implicit prompt.
+
+**Why:** The graph must state not only who runs, but with what authority, which
+project instructions, under what condition, across which data boundary, and
+with which reusable unit. Fail-closed preflight keeps this expressive surface
+honest.
+
+**Extraction:** After focused and live parity checks, the reusable contract is
+copied to a clean local `grok-workflow-canvas` repository without AutoRecruit
+artifacts, user configuration, credentials, or generated documents.

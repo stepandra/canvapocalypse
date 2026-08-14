@@ -10,10 +10,11 @@ import {
 import type { AgentAction } from '../../shared/types/AgentAction'
 import { getActionSchemaForMode } from '../../shared/types/AgentAction'
 import type { ContextItem } from '../../shared/types/ContextItem'
-import type { WorkbenchArtifactSummary, WorkbenchRelationSummary } from '../../shared/schema/PromptPartDefinitions'
 import type { Streaming } from '../../shared/types/Streaming'
+import { convertTldrawShapeToBlurryShape } from '../../shared/format/convertTldrawShapeToBlurryShape'
+import { convertTldrawShapeToFocusedShape } from '../../shared/format/convertTldrawShapeToFocusedShape'
+import { convertTldrawShapesToPeripheralShapes } from '../../shared/format/convertTldrawShapesToPeripheralShapes'
 import { AgentHelpers } from '../AgentHelpers'
-import { summarizeWorkbenchMeta } from '../parts/WorkbenchArtifactsPartUtil'
 import type { TldrawAgent } from './TldrawAgent'
 import {
 	COMPANION_CANVAS_BINDING,
@@ -173,7 +174,7 @@ export async function executeCompanionCanvasToolRequest(
 			requestId: request.id,
 			status: 'succeeded',
 			capabilityId: request.capabilityId,
-			summary: `${request.capabilityId === 'canvas.result.read' ? 'Read' : 'Inspected'} ${result.shapes.length} bounded native tldraw shape${result.shapes.length === 1 ? '' : 's'} (${result.boundary}).`,
+			summary: `${request.capabilityId === 'canvas.result.read' ? 'Read' : 'Inspected'} focused ${result.focused.length} / blurry ${result.blurry.length} / peripheral ${result.peripheral.length} (${result.boundary}).`,
 			result,
 		}
 	}
@@ -249,10 +250,7 @@ export function resolveExplicitCanvasContext(
 	)
 	const areaItem = explicitItems.find((item) => item.type === 'area')
 	const contextShapes = getContextShapes(agent, shapeItems)
-	const explicitShapes = uniqueShapes([...selectedShapes, ...contextShapes]).slice(
-		0,
-		MAX_INSPECTION_SHAPES
-	)
+	const explicitShapes = uniqueShapes([...selectedShapes, ...contextShapes])
 
 	if (policy === 'selection' && explicitShapes.length === 0) {
 		throw new Error(
@@ -299,26 +297,68 @@ export function buildBoundedSemanticInspectionResult(
 	capabilityId: 'canvas.inspect' | 'canvas.result.read',
 	context: ExplicitCompanionCanvasContext
 ) {
-	const candidates =
+	const authorizedCandidates =
 		context.explicitShapes.length > 0
 			? context.explicitShapes
 			: getShapesInsideBounds(agent, context.bounds)
-	const authorized = uniqueShapes(candidates).sort((a, b) => a.id.localeCompare(b.id))
-	const ordered = authorized.slice(0, MAX_INSPECTION_SHAPES)
-	const projected = ordered.map((shape) => projectShape(agent, shape))
+	const authorized = uniqueShapes(authorizedCandidates).sort((a, b) => a.id.localeCompare(b.id))
+	const pageShapes = uniqueShapes(agent.editor.getCurrentPageShapesSorted()).sort((a, b) =>
+		a.id.localeCompare(b.id)
+	)
+	const focusedCandidates = uniqueShapes(context.explicitShapes).sort((a, b) =>
+		a.id.localeCompare(b.id)
+	)
+	const blurryCandidates = pageShapes.filter((shape) => {
+		const bounds = getShapeBounds(agent, shape)
+		return bounds ? boxInsideBox(bounds, context.bounds) : false
+	})
+	const peripheralCandidates = pageShapes.filter((shape) => {
+		const bounds = getShapeBounds(agent, shape)
+		return bounds ? !boxInsideBox(bounds, context.bounds) : false
+	})
+	const focusedShapes = focusedCandidates.slice(0, MAX_INSPECTION_SHAPES)
+	const blurryShapes = blurryCandidates.slice(0, MAX_INSPECTION_SHAPES)
 	const projection = {
-		version: 1,
+		version: 2,
 		kind: capabilityId === 'canvas.result.read' ? 'canvas-result' : 'canvas-inspection',
 		boundary: context.boundary,
 		bounds: roundBox(context.bounds),
-		truncated: authorized.length > ordered.length,
-		shapes: projected,
+		truncated:
+			focusedCandidates.length + blurryCandidates.length >
+			focusedShapes.length + blurryShapes.length,
+		focused: focusedShapes.map((shape) =>
+			sanitizeFocusedShape(convertTldrawShapeToFocusedShape(agent.editor, shape))
+		),
+		blurry: blurryShapes.flatMap((shape) => {
+			const blurry = convertTldrawShapeToBlurryShape(agent.editor, shape)
+			if (!blurry) return []
+			return [
+				sanitizeBlurryShape({
+					...blurry,
+					...(blurry.type === 'unknown' ? { subType: shape.type } : {}),
+				}),
+			]
+		}),
+		peripheral: convertTldrawShapesToPeripheralShapes(
+			agent.editor,
+			peripheralCandidates,
+			{ padding: 75 }
+		).map((cluster) => ({
+			numberOfShapes: cluster.numberOfShapes,
+			bounds: roundBox(cluster.bounds),
+		})),
 	}
 
 	return {
 		...projection,
 		contextDigest: createContextRef({
-			projection,
+			projection: {
+				version: projection.version,
+				kind: projection.kind,
+				boundary: projection.boundary,
+				bounds: projection.bounds,
+				truncated: projection.truncated,
+			},
 			// Store-record fields strengthen drift detection but are hashed only;
 			// they never cross the bridge as raw canvas state.
 			// Hash every authorized record, including records omitted from the
@@ -366,68 +406,19 @@ function getContextSnapshot(contextRef: string) {
 	return snapshot
 }
 
-function projectShape(agent: TldrawAgent, shape: TLShape) {
-	const pageBounds = boxModel(
-		agent.editor.getShapeMaskedPageBounds(shape) ??
-			agent.editor.getShapePageBounds(shape.id)
-	)
-	const label = safePlainLabel(agent.editor.getShapeUtil(shape).getText(shape))
-	const semantic = summarizeWorkbenchMeta(shape.meta)
-	return {
-		id: shape.id,
-		type: shape.type,
-		...(label ? { label } : {}),
-		...(pageBounds ? { bounds: roundBox(pageBounds) } : {}),
-		...compactSemantic(semantic),
-	}
+function sanitizeFocusedShape<T extends object>(shape: T): T {
+	return sanitizeProjectedText(shape)
 }
 
-function compactSemantic(
-	semantic: {
-		artifact?: WorkbenchArtifactSummary
-		relation?: WorkbenchRelationSummary
-	} | null
-) {
-	if (!semantic) return {}
-	const artifact = semantic.artifact
-	const relation = semantic.relation
-	return {
-		...(artifact
-			? {
-					workbench: {
-						artifact: compactDefined({
-							artifactId: artifact.artifactId,
-							pack: artifact.pack,
-							kind: artifact.kind,
-							title: artifact.title,
-							status: artifact.status,
-						}),
-					},
-				}
-			: {}),
-		...(relation
-			? {
-					relation: compactDefined({
-						relationId: relation.relationId,
-						pack: relation.pack,
-						type: relation.type,
-						label: relation.label,
-						start: relation.start
-							? compactDefined({
-									artifactId: relation.start.artifactId,
-									shapeId: relation.start.shapeId,
-								})
-							: undefined,
-						end: relation.end
-							? compactDefined({
-									artifactId: relation.end.artifactId,
-									shapeId: relation.end.shapeId,
-								})
-							: undefined,
-					}),
-				}
-			: {}),
-	}
+function sanitizeBlurryShape<T extends object>(shape: T): T {
+	return sanitizeProjectedText(shape)
+}
+
+function sanitizeProjectedText<T extends object>(shape: T): T {
+	const result = { ...shape } as T & { text?: unknown; note?: unknown }
+	if (typeof result.text === 'string') result.text = safePlainLabel(result.text) ?? ''
+	if (typeof result.note === 'string') result.note = safePlainLabel(result.note) ?? ''
+	return result
 }
 
 function validateDirectCompanionActions(
@@ -584,6 +575,11 @@ function assertMutationStayedInsideBoundary(
 	}
 
 	const authorizedIds = new Set([...authorizedExistingIds, ...plannedCreatedIds])
+	const removedShapeIds = new Set(
+		Object.values(diff.removed)
+			.filter((record): record is TLShape => record.typeName === 'shape')
+			.map((record) => record.id)
+	)
 
 	const assertAuthorized = (id: TLShapeId, description: string) => {
 		if (!authorizedIds.has(id)) {
@@ -635,6 +631,22 @@ function assertMutationStayedInsideBoundary(
 			}
 		}
 	}
+	const assertSelectionClearedForRemovedShapes = (
+		before: Extract<TLRecord, { typeName: 'instance_page_state' }>,
+		after: Extract<TLRecord, { typeName: 'instance_page_state' }>
+	) => {
+		const expected = {
+			...before,
+			selectedShapeIds: before.selectedShapeIds.filter(
+				(id) => !removedShapeIds.has(id)
+			),
+		}
+		if (JSON.stringify(after) !== JSON.stringify(expected)) {
+			throw new Error(
+				`Companion native mutation updated unexpected ${after.typeName} record ${after.id}`
+			)
+		}
+	}
 
 	for (const record of Object.values(diff.added)) {
 		if (record.typeName === 'shape') {
@@ -652,6 +664,14 @@ function assertMutationStayedInsideBoundary(
 			assertFinalShape(after, before)
 		} else if (before.typeName === 'binding' && after.typeName === 'binding') {
 			assertBindingReferences(after, 'updated a binding that')
+		} else if (
+			before.typeName === 'instance_page_state' &&
+			after.typeName === 'instance_page_state'
+		) {
+			// Deleting an explicitly selected shape necessarily clears that id from
+			// tldraw's local selection. Permit only that exact derived change; any
+			// camera, focus, editing, or unrelated selection mutation still fails.
+			assertSelectionClearedForRemovedShapes(before, after)
 		} else {
 			throw new Error(
 				`Companion native mutation updated unexpected ${after.typeName} record ${after.id}`
@@ -867,14 +887,16 @@ function normalizeShapeId(shapeId: string) {
 }
 
 function boundsForShapes(agent: TldrawAgent, shapes: TLShape[]) {
-	return unionBoxes(
-		shapes.flatMap((shape) => {
-			const bounds = boxModel(
-				agent.editor.getShapeMaskedPageBounds(shape) ??
-					agent.editor.getShapePageBounds(shape.id)
-			)
-			return bounds ? [bounds] : []
-		})
+	return unionBoxes(shapes.flatMap((shape) => {
+		const bounds = getShapeBounds(agent, shape)
+		return bounds ? [bounds] : []
+	}))
+}
+
+function getShapeBounds(agent: TldrawAgent, shape: TLShape) {
+	return boxModel(
+		agent.editor.getShapeMaskedPageBounds(shape) ??
+			agent.editor.getShapePageBounds(shape.id)
 	)
 }
 
@@ -894,8 +916,14 @@ function uniqueShapes(shapes: TLShape[]) {
 function safePlainLabel(value: string | undefined | null) {
 	if (!value) return undefined
 	const plain = value.replace(/\s+/g, ' ').trim()
-	if (!plain || containsLocalFilesystemPath(plain)) return undefined
+	if (!plain || containsLocalFilesystemPath(plain) || containsCredential(plain)) return undefined
 	return plain.slice(0, MAX_LABEL_CHARS)
+}
+
+function containsCredential(value: string) {
+	return /(?:authorization\s*:|bearer\s+[A-Za-z0-9._~+/=-]+|api[_-]?key\s*[=:]\s*\S+|password\s*[=:]\s*\S+|secret\s*[=:]\s*\S+|sk-[A-Za-z0-9_-]{8,})/i.test(
+		value
+	)
 }
 
 function containsLocalFilesystemPath(value: string) {

@@ -141,25 +141,32 @@ exactly three tools:
 3. `tldraw_execute` submits one bounded operation and waits for its compact
    receipt.
 
-The tldraw Offline client is resident beside the open editor. It owns the live
-editor handle and resolves the currently open document from its client binding;
-Amp does not choose a document by path or receive a raw document dump.
-Unqualified discovery resolves exactly one active Offline desktop and never a
-web preview. A web Origin cannot register itself as an Offline client. The
-binding and a fresh per-lease receipt token remain resident-only transport
-state, so only the canvas that leased an operation may close it. Browser
-Origins are denied producer capability discovery, description, execution, and
-request polling; they retain only bound resident polling, leasing, and receipt.
+The tldraw Offline client is resident beside the open editor and owns the live
+editor handle. The trusted local Amp plugin canonicalizes
+`amp.system.workspaceRoot`, requires exactly one regular non-symlink
+`.canvas/*.tldraw`, matches it to exactly one open Offline document, and uses
+that resident's opaque binding only as an internal discovery selector. The
+model neither chooses nor receives a document path, workspace root, client
+enumeration, or binding. Other open documents are ignored and never closed;
+missing, ambiguous, escaped, symlinked, unopened, or duplicate project targets
+fail closed. Discovery never targets a web preview. A web Origin cannot
+register itself as an Offline client. The binding and a fresh per-lease receipt
+token remain private trusted-adapter/bridge transport state and never become
+model-facing tool inputs or results, so only the canvas that leased an operation
+may close it. Browser Origins are denied producer capability discovery,
+description, execution, and request polling; they retain only bound resident
+polling, leasing, and receipt.
 Selection is the default context. An area is allowed only when the user
 explicitly identifies or approves a bounded area. Inspection returns semantic
 artifact summaries and native binding data under hard budgets.
 
 Mutations continue through validated native tldraw actions and return the
 operation count, affected stable IDs, terminal status, and receipt reference.
-They remain inspectable and undoable. A missing/expired Offline binding,
-multiple active Offline desktops, wrong/expired receipt lease, empty selection
-for a selection-only request, invalid area, validation failure, timeout, or
-unknown result fails closed; the Architect must inspect before retrying.
+They remain inspectable and undoable. A missing/ambiguous project target,
+missing/expired Offline binding, duplicate window for that target,
+wrong/expired receipt lease, empty selection for a selection-only request,
+invalid area, validation failure, timeout, or unknown result fails closed; the
+Architect must inspect before retrying.
 
 The repo-local operating contract is
 `.agents/skills/tldraw-offline-workbench/SKILL.md`. The canonical Amp plugin
@@ -508,15 +515,19 @@ dispatcher, plugin registry, artifact platform, and reconciliation service.
 
 - Keep the existing Ampcode thread as the Architect and conversation owner.
 - Add the repo-owned Amp plugin at
-  `amp/plugins/tldraw-offline-workbench.ts`; install it by symlink rather than
-  copying it into user configuration.
+  `amp/plugins/tldraw-offline-workbench.ts`; install a regular root-level Amp
+  entrypoint that re-exports the repo-owned implementation. The entrypoint is
+  not a symlink and the implementation is not copied.
 - Register only `tldraw_capabilities`, `tldraw_describe_capability`, and
   `tldraw_execute`.
-- Reuse the resident client lease/binding core so the currently open Offline
-  document is resolved client-side.
+- Resolve the Amp workspace's sole regular, non-symlink `.canvas/*.tldraw`
+  file in the trusted plugin, match it to exactly one open Offline document by
+  canonical path, and use that resident binding only as an internal selector.
 - Prove selection-only and explicit-area inspection, one validated native
   mutation, compact receipt, undo, expired binding, forged receipt rejection,
-  web-preview non-downgrade, and multiple-Offline fail-closed behavior.
+  web-preview non-downgrade, unrelated-Offline tolerance, and fail-closed
+  rejection of missing, ambiguous, symlinked, escaped, unopened, or duplicate
+  project targets.
 - Remove `amp -x` from the architecture workbench path. The selected Isoflow
   overlay is a passive handoff/review surface for external revision-guarded
   proposals; stale callers to the legacy backend receive the HTTP 410 tombstone.

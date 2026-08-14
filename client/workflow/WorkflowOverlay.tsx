@@ -24,13 +24,16 @@ import {
 	WorkbenchPaletteTool,
 	WorkbenchToolProfile,
 } from '../workbench/workbenchToolProfiles'
+import { installLeadAcquisitionExperimentCards } from '../experiments/experimentCanvas'
 import {
+	configureLlmModelSet,
 	getWorkflowNodeMeta,
 	adoptDuplicatedLlmBranch,
 	duplicateLlmBranch,
 	installCurrentFlow,
 	installEditableLlmFlow,
 	installMlflowWorkflow,
+	installPromptExperimentWorkflow,
 	isWorkflowNode,
 	updateWorkflowNode,
 	WorkflowNodeShape,
@@ -54,6 +57,13 @@ import { runWorkflow, stopWorkflow } from './workflowRuntime'
 import { WorkflowIcon, WorkflowIconName } from './WorkflowIcons'
 
 const PRODUCT_PALETTE_TEMPLATE_ID = 'product-planning-palette'
+
+const builtinModels = [
+	{ value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+	{ value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+	{ value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+	{ value: 'gpt-5.2-2025-12-11', label: 'GPT-5.2' },
+]
 
 function insertProductArtifact(
 	editor: Editor,
@@ -179,6 +189,18 @@ export function WorkflowOverlay({
 		setPaletteOpen(false)
 	}, [editor])
 
+	const createPromptExperiment = useCallback(() => {
+		const result = installPromptExperimentWorkflow(editor)
+		setMessage(`PROMPT EXPERIMENT: ${result.workflowId}`)
+		setPaletteOpen(false)
+	}, [editor])
+
+	const createLeadExperiments = useCallback(() => {
+		const result = installLeadAcquisitionExperimentCards(editor)
+		setMessage(`LEAD EXPERIMENTS: ${result.count} CARDS`)
+		setPaletteOpen(false)
+	}, [editor])
+
 	const createMlflow = useCallback(() => {
 		const result = installMlflowWorkflow(editor)
 		setMessage(`MLFLOW FLOW: ${result.workflowId}`)
@@ -254,7 +276,7 @@ export function WorkflowOverlay({
 				>
 					<TldrawUiTooltip
 						content={profile.label}
-						side="right"
+						side="bottom"
 						sideOffset={8}
 						delayDuration={350}
 					>
@@ -276,16 +298,16 @@ export function WorkflowOverlay({
 						</TldrawUiPopoverTrigger>
 					</TldrawUiTooltip>
 					<TldrawUiPopoverContent
-						side="right"
-						align="start"
+						side="bottom"
+						align="center"
 						sideOffset={8}
 						collisionPadding={8}
 					>
 						<TldrawUiToolbar
 							className="workflow-toolbar"
 							label={profile.label}
-							orientation="grid"
-							tooltipSide="right"
+							orientation="horizontal"
+							tooltipSide="bottom"
 						>
 							{profile.mode === 'workflow' && (
 								<>
@@ -298,6 +320,16 @@ export function WorkflowOverlay({
 										icon="new"
 										label="Новый TEXT → PROMPT → LLM → OUTPUT"
 										onClick={createCandidate}
+									/>
+									<WorkflowToolButton
+										icon="experiment"
+										label="Prompt Experiment Lab"
+										onClick={createPromptExperiment}
+									/>
+									<WorkflowToolButton
+										icon="experiment"
+										label="Lead Acquisition Experiment Cards"
+										onClick={createLeadExperiments}
 									/>
 									<WorkflowToolButton
 										icon="mlflow-experiment"
@@ -466,6 +498,93 @@ function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
 			: 'NOT CONNECTED'
 	)
 	const [compatibleConnecting, setCompatibleConnecting] = useState(false)
+	const [experimentModelSearch, setExperimentModelSearch] = useState('')
+	const provider =
+		meta.config.provider ??
+		(meta.config.model?.includes('/') ? 'openrouter' : 'builtin')
+	const currentProviderModels = useMemo(() => {
+		switch (provider) {
+			case 'openrouter':
+				return models.map((model) => ({ value: model.id, label: formatOpenRouterModelLabel(model) }))
+			case 'compatible':
+				return compatibleModels.map((model) => ({ value: model.id, label: model.name || model.id }))
+			default:
+				return builtinModels
+		}
+	}, [provider, models, compatibleModels])
+	const filteredExperimentModels = useMemo(() => {
+		const query = experimentModelSearch.trim().toLowerCase()
+		if (!query) return currentProviderModels
+		return currentProviderModels.filter(
+			(model) =>
+				model.value.toLowerCase().includes(query) ||
+				model.label.toLowerCase().includes(query)
+		)
+	}, [currentProviderModels, experimentModelSearch])
+	const [selectedExperimentModels, setSelectedExperimentModels] = useState<string[]>([])
+	useEffect(() => {
+		setSelectedExperimentModels((previous) => {
+			const available = new Set(currentProviderModels.map((model) => model.value))
+			const kept = previous.filter((id) => available.has(id))
+			const currentModel = meta.config.model ?? ''
+			if (!kept.includes(currentModel) && available.has(currentModel)) return [...kept, currentModel]
+			return kept
+		})
+	}, [currentProviderModels, meta.config.model])
+	const experimentSampleConfig = useMemo(
+		() => ({
+			sampleCount: Math.max(1, Math.min(100, Number(meta.config.sampleCount ?? 1))),
+			sampleConcurrency: Math.max(1, Math.min(8, Number(meta.config.sampleConcurrency ?? 1))),
+			temperature: Math.max(0, Math.min(2, Number(meta.config.temperature ?? 0.7))),
+			maxTokens: Math.max(256, Math.min(8192, Number(meta.config.maxTokens ?? 2048))),
+			samplingSeed: meta.config.samplingSeed ? Number(meta.config.samplingSeed) : null,
+		}),
+		[
+			meta.config.sampleCount,
+			meta.config.sampleConcurrency,
+			meta.config.temperature,
+			meta.config.maxTokens,
+			meta.config.samplingSeed,
+		]
+	)
+	const applyModelSet = useCallback(() => {
+		if (selectedExperimentModels.length === 0) return
+		const result = configureLlmModelSet(
+			editor,
+			shape,
+			selectedExperimentModels.map((model) => ({
+				provider,
+				model,
+				...(provider === 'compatible' ? { baseUrl: compatibleBaseUrl } : {}),
+			}))
+		)
+		for (const branchId of result.branchIds) {
+			const branch = editor.getShape(branchId)
+			if (!branch || !isWorkflowNode(branch)) continue
+			const branchMeta = getWorkflowNodeMeta(branch)
+			updateWorkflowNode(editor, branch, {
+				status: 'idle',
+				error: undefined,
+				config: {
+					...branchMeta.config,
+					sampleCount: String(experimentSampleConfig.sampleCount),
+					sampleConcurrency: String(experimentSampleConfig.sampleConcurrency),
+					temperature: String(experimentSampleConfig.temperature),
+					maxTokens: String(experimentSampleConfig.maxTokens),
+					...(experimentSampleConfig.samplingSeed != null
+						? { samplingSeed: String(experimentSampleConfig.samplingSeed) }
+						: {}),
+				},
+			})
+		}
+	}, [
+		editor,
+		shape,
+		selectedExperimentModels,
+		provider,
+		compatibleBaseUrl,
+		experimentSampleConfig,
+	])
 	const updateConfigValues = (patch: Record<string, string>) => {
 		if (meta.readonly) return
 		updateWorkflowNode(editor, shape, {
@@ -476,9 +595,6 @@ function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
 	}
 	const updateConfig = (key: string, value: string) =>
 		updateConfigValues({ [key]: value })
-	const provider =
-		meta.config.provider ??
-		(meta.config.model?.includes('/') ? 'openrouter' : 'builtin')
 	const loadOpenRouterModels = async (candidateKey = apiKey) => {
 		setConnecting(true)
 		setConnectionStatus('CONNECTING…')
@@ -629,177 +745,222 @@ function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
 							label="MODEL"
 							value={meta.config.model ?? 'claude-sonnet-4-5'}
 							disabled={meta.readonly}
-							options={[
-								{ value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-								{ value: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
-								{ value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
-								{ value: 'gpt-5.2-2025-12-11', label: 'GPT-5.2' },
-							]}
+							options={builtinModels}
 							onValueChange={(value) => updateConfig('model', value)}
 						/>
 					)}
 					{provider === 'openrouter' && (
-						<div className="workflow-openrouter">
+						<div className="workflow-provider-connection">
 							<label>
 								OPENROUTER API KEY
 								<input
 									type="password"
 									value={apiKey}
-									placeholder="sk-or-v1-…"
 									autoComplete="off"
-									spellCheck={false}
 									disabled={meta.readonly || connecting}
 									onChange={(event) => setApiKey(event.currentTarget.value)}
-									onPaste={(event) => {
-										const pasted = event.clipboardData.getData('text').trim()
-										if (pasted) void loadOpenRouterModels(pasted)
-									}}
-									onKeyDown={(event) => {
-										if (event.key === 'Enter') void loadOpenRouterModels()
-									}}
 								/>
 							</label>
-							<div className="workflow-openrouter-actions">
+							<div className="workflow-provider-actions">
 								<TldrawUiButton
 									type="primary"
-									onClick={() => void loadOpenRouterModels()}
 									disabled={meta.readonly || connecting || !apiKey.trim()}
+									onClick={() => void loadOpenRouterModels()}
 								>
 									{connecting ? 'CONNECTING…' : 'CONNECT + LOAD MODELS'}
 								</TldrawUiButton>
-								<TldrawUiButton
-									type="normal"
-									onClick={disconnectOpenRouter}
-									disabled={meta.readonly || (!apiKey && !models.length)}
-								>
+								<TldrawUiButton type="low" onClick={disconnectOpenRouter} disabled={meta.readonly}>
 									CLEAR
 								</TldrawUiButton>
 							</div>
-							<small
-								className={
-									connectionStatus.includes('MODELS') ? 'is-connected' : ''
-								}
-							>
-								{connectionStatus}
-							</small>
-							<small>Key stays in sessionStorage for this tab only.</small>
-							{models.length ? (
+							<small>{connectionStatus}</small>
+							{models.length > 0 && (
 								<WorkflowSelect
 									id={`workflow-openrouter-model-${shape.id}`}
-									label="OPENROUTER MODEL"
+									label="MODEL"
 									value={meta.config.model ?? models[0].id}
 									disabled={meta.readonly}
-									options={models.map((model) => ({
-										value: model.id,
-										label: formatOpenRouterModelLabel(model),
-									}))}
+									options={models.map((model) => ({ value: model.id, label: formatOpenRouterModelLabel(model) }))}
 									onValueChange={(value) => updateConfig('model', value)}
 								/>
-							) : (
-								<div className="workflow-inspector-field">
-									<span>OPENROUTER MODEL</span>
-									<TldrawUiInput
-										value="Connect to load models"
-										disabled
-										aria-label="OpenRouter model"
-									/>
-								</div>
 							)}
 						</div>
 					)}
 					{provider === 'compatible' && (
-						<div className="workflow-compatible">
+						<div className="workflow-provider-connection">
 							<label>
 								BASE URL
 								<input
 									type="url"
 									value={compatibleBaseUrl}
-									placeholder="http://127.0.0.1:11434/v1"
-									spellCheck={false}
 									disabled={meta.readonly || compatibleConnecting}
-									onChange={(event) => {
-										const nextBaseUrl = event.currentTarget.value
-										setCompatibleBaseUrl(nextBaseUrl)
-										setCompatibleApiKey(getCompatibleApiKey(nextBaseUrl))
-										setCompatibleModels(getCachedCompatibleModels(nextBaseUrl))
-										updateConfig('baseUrl', nextBaseUrl)
-									}}
+									onChange={(event) => setCompatibleBaseUrl(event.currentTarget.value)}
 								/>
 							</label>
 							<label>
-								API KEY <span>(OPTIONAL FOR LOCAL SERVERS)</span>
+								API KEY <span>(OPTIONAL)</span>
 								<input
 									type="password"
 									value={compatibleApiKey}
-									placeholder="Bearer token"
 									autoComplete="off"
-									spellCheck={false}
 									disabled={meta.readonly || compatibleConnecting}
-									onChange={(event) =>
-										setCompatibleApiKey(event.currentTarget.value)
-									}
-									onKeyDown={(event) => {
-										if (event.key === 'Enter') void loadCompatibleModels()
-									}}
+									onChange={(event) => setCompatibleApiKey(event.currentTarget.value)}
 								/>
 							</label>
-							<div className="workflow-openrouter-actions">
+							<div className="workflow-provider-actions">
 								<TldrawUiButton
 									type="primary"
+									disabled={meta.readonly || compatibleConnecting || !compatibleBaseUrl.trim()}
 									onClick={() => void loadCompatibleModels()}
-									disabled={
-										meta.readonly ||
-										compatibleConnecting ||
-										!compatibleBaseUrl.trim()
-									}
 								>
-									{compatibleConnecting
-										? 'CONNECTING…'
-										: 'CONNECT + LOAD MODELS'}
+									{compatibleConnecting ? 'CONNECTING…' : 'CONNECT + LOAD MODELS'}
 								</TldrawUiButton>
-								<TldrawUiButton
-									type="normal"
-									onClick={disconnectCompatible}
-									disabled={
-										meta.readonly ||
-										(!compatibleApiKey && !compatibleModels.length)
-									}
-								>
+								<TldrawUiButton type="low" onClick={disconnectCompatible} disabled={meta.readonly}>
 									CLEAR
 								</TldrawUiButton>
 							</div>
-							<small
-								className={
-									compatibleStatus.includes('MODELS') ? 'is-connected' : ''
-								}
-							>
-								{compatibleStatus}
-							</small>
-							<small>
-								Key stays in sessionStorage; Base URL and model stay on the
-								node.
-							</small>
-							<label>
-								MODEL ID
-								<input
-									list={`compatible-models-${shape.id}`}
-									value={meta.config.model ?? ''}
-									placeholder="e.g. llama3.2"
+							<small>{compatibleStatus}</small>
+							{compatibleModels.length > 0 && (
+								<WorkflowSelect
+									id={`workflow-compatible-model-${shape.id}`}
+									label="MODEL"
+									value={meta.config.model ?? compatibleModels[0].id}
 									disabled={meta.readonly}
-									onChange={(event) =>
-										updateConfig('model', event.currentTarget.value)
-									}
+									options={compatibleModels.map((model) => ({ value: model.id, label: model.name || model.id }))}
+									onValueChange={(value) => updateConfig('model', value)}
 								/>
-								<datalist id={`compatible-models-${shape.id}`}>
-									{compatibleModels.map((model) => (
-										<option key={model.id} value={model.id}>
-											{model.name}
-										</option>
-									))}
-								</datalist>
-							</label>
+							)}
 						</div>
 					)}
+					<div className="workflow-experiment-controls">
+						<span>PROMPT EXPERIMENT LAB</span>
+						<div className="workflow-experiment-numeric">
+							<label>
+								SAMPLES / MODEL
+								<input
+									type="number"
+									min={1}
+									max={100}
+									value={experimentSampleConfig.sampleCount}
+									disabled={meta.readonly}
+									onChange={(event) =>
+										updateConfig('sampleCount', String(Math.max(1, Math.min(100, Number(event.currentTarget.value)))))
+									}
+								/>
+							</label>
+							<label>
+								PARALLEL / MODEL
+								<input
+									type="number"
+									min={1}
+									max={8}
+									value={experimentSampleConfig.sampleConcurrency}
+									disabled={meta.readonly}
+									onChange={(event) =>
+										updateConfig('sampleConcurrency', String(Math.max(1, Math.min(8, Number(event.currentTarget.value)))))
+									}
+								/>
+							</label>
+							<label>
+								TEMPERATURE
+								<input
+									type="number"
+									min={0}
+									max={2}
+									step={0.1}
+									value={experimentSampleConfig.temperature}
+									disabled={meta.readonly}
+									onChange={(event) =>
+										updateConfig('temperature', String(Math.max(0, Math.min(2, Number(event.currentTarget.value)))))
+									}
+								/>
+							</label>
+							<label>
+								MAX TOKENS
+								<input
+									type="number"
+									min={256}
+									max={8192}
+									value={experimentSampleConfig.maxTokens}
+									disabled={meta.readonly}
+									onChange={(event) =>
+										updateConfig('maxTokens', String(Math.max(256, Math.min(8192, Number(event.currentTarget.value)))))
+									}
+								/>
+							</label>
+							<label>
+								SEED BASE <span>(OPTIONAL)</span>
+								<input
+									type="number"
+									value={experimentSampleConfig.samplingSeed ?? ''}
+									placeholder="random"
+									disabled={meta.readonly}
+									onChange={(event) => {
+										const value = event.currentTarget.value.trim()
+										updateConfig(
+											'samplingSeed',
+											value === '' ? '' : String(Number(value))
+										)
+									}}
+								/>
+							</label>
+						</div>
+						<div className="workflow-experiment-search">
+							<span>MODEL SET</span>
+							<input
+								type="text"
+								value={experimentModelSearch}
+								placeholder="Search models…"
+								disabled={meta.readonly}
+								onChange={(event) =>
+									setExperimentModelSearch(event.currentTarget.value)
+								}
+							/>
+						</div>
+						{filteredExperimentModels.length ? (
+							<div className="workflow-experiment-model-list">
+								{filteredExperimentModels.map((model) => {
+									const isSelected =
+										selectedExperimentModels.includes(model.value)
+									return (
+										<label key={model.value}>
+											<input
+												type="checkbox"
+												checked={isSelected}
+												disabled={meta.readonly}
+												onChange={(event) => {
+													setSelectedExperimentModels(
+														(event.currentTarget.checked
+															? [...selectedExperimentModels, model.value]
+															: selectedExperimentModels.filter(
+																	(id) => id !== model.value
+															)
+													).sort()
+													)
+												}}
+											/>
+											<span>{model.label}</span>
+											<small>{model.value}</small>
+										</label>
+									)
+								})}
+							</div>
+						) : (
+							<div className="workflow-experiment-empty">
+								No models match your search.
+							</div>
+						)}
+						<TldrawUiButton
+							type="primary"
+							className="workflow-experiment-apply"
+							disabled={
+								meta.readonly || selectedExperimentModels.length === 0
+							}
+							onClick={applyModelSet}
+						>
+							APPLY MODEL SET
+						</TldrawUiButton>
+					</div>
 					<TldrawUiButton
 						type="low"
 						className="workflow-duplicate-branch"

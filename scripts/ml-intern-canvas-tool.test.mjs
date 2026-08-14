@@ -1274,6 +1274,65 @@ test('provider-neutral discovery targets the sole offline desktop over active pr
 	)
 })
 
+test('targeted provider-neutral discovery accepts only an active offline desktop binding', async () => {
+	registerMlInternCanvasClient('preview-target', Date.now(), 'web-preview')
+	registerMlInternCanvasClient('offline-other', Date.now(), 'offline-desktop')
+	registerMlInternCanvasClient('offline-target', Date.now(), 'offline-desktop')
+	const response = { setHeader() {} }
+	const send = (_response, status, body) => ({ status, body })
+
+	await assert.rejects(
+		() =>
+			handleCompanionCanvasToolRequest(
+				new URL(
+					'http://127.0.0.1:5176/companion/canvas-tool/capabilities?canvasBinding=preview-target'
+				),
+				{ method: 'GET' },
+				response,
+				async () => '',
+				send
+			),
+		(error) => {
+			assert.match(error.message, /not an active offline-desktop client/)
+			assert.doesNotMatch(error.message, /preview-target/)
+			return true
+		}
+	)
+
+	let sent
+	await handleCompanionCanvasToolRequest(
+		new URL(
+			'http://127.0.0.1:5176/companion/canvas-tool/capabilities?canvasBinding=offline-target'
+		),
+		{ method: 'GET' },
+		response,
+		async () => '',
+		(_response, status, body) => {
+			sent = { status, body }
+		}
+	)
+	assert.equal(sent.status, 200)
+	const manifest = JSON.parse(sent.body)
+	const queued = executeCompanionCanvasCapability({
+		manifestId: manifest.manifestId,
+		capabilityId: 'canvas.inspect',
+		context: 'selection',
+		idempotencyKey: 'targeted-offline-binding',
+	})
+	assert.equal(
+		leaseNextMlInternCanvasTool(Date.now(), 'offline-other', 'direct-actions'),
+		null
+	)
+	assert.equal(
+		leaseNextMlInternCanvasTool(Date.now(), 'preview-target', 'direct-actions'),
+		null
+	)
+	assert.equal(
+		leaseNextMlInternCanvasTool(Date.now(), 'offline-target', 'direct-actions').id,
+		queued.id
+	)
+})
+
 test('a web-origin client cannot claim or lease an offline desktop binding', async () => {
 	const response = { setHeader() {} }
 	const send = (_response, status, body) => ({ status, body })
@@ -1558,15 +1617,20 @@ test('web origins are resident-only and cannot call companion or ML producer end
 	)
 })
 
-test('Amp plugin source exposes only three loopback tools and never spawns or identifies a thread', async () => {
+test('Amp plugin exposes only three bounded tools and keeps local routing out of their schemas', async () => {
 	const source = await readFile(
 		new URL('../amp/plugins/tldraw-offline-workbench.ts', import.meta.url),
 		'utf8'
 	)
 	const registeredNames = [...source.matchAll(/name:\s*'([^']+)'/g)].map((match) => match[1])
+	const inputSchemas = [...source.matchAll(/inputSchema:\s*\{([\s\S]*?)\n\t\t\},\n\t\tasync execute/g)].map(
+		(match) => match[1]
+	)
 	assert.deepEqual(registeredNames, COMPANION_TLDRAW_TOOL_NAMES)
 	assert.equal((source.match(/amp\.registerTool\(/g) ?? []).length, 3)
-	assert.doesNotMatch(source, /\bspawn\b|amp\.threads|thread\.id|threadId|filePath|apiKey|token/i)
+	assert.equal(inputSchemas.length, 3)
+	assert.doesNotMatch(inputSchemas.join('\n'), /workspaceRoot|filePath|canvasBinding|apiKey|token|url/i)
+	assert.doesNotMatch(source, /\bspawn\b|amp\.threads|thread\.id|threadId/i)
 	assert.equal(resolveLoopbackBridgeUrl(), 'http://127.0.0.1:5176')
 	assert.throws(() => resolveLoopbackBridgeUrl('https://example.com'), /loopback/)
 })

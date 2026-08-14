@@ -1,0 +1,81 @@
+{
+  "id": "evidence-review",
+  "version": "1.0.0",
+  "description": "A bounded implementation stage followed by an evidence gate and review stage.",
+  "entry": "implement",
+  "exit": "review",
+  "params": [
+    "task"
+  ],
+  "nodes": [
+    {
+      "id": "implement",
+      "role": "stage",
+      "meta": {
+        "am": {
+          "label": "{{task}}",
+          "stageType": "single"
+        }
+      }
+    },
+    {
+      "id": "builder",
+      "role": "agent",
+      "meta": {
+        "am": {
+          "label": "Implementer",
+          "agentRef": "general-purpose"
+        }
+      }
+    },
+    {
+      "id": "evidence",
+      "role": "gate",
+      "meta": {
+        "am": {
+          "label": "Evidence present",
+          "gateOperator": "not-empty",
+          "gateOnFalse": "stop"
+        }
+      }
+    },
+    {
+      "id": "review",
+      "role": "stage",
+      "meta": {
+        "am": {
+          "label": "Review",
+          "stageType": "single"
+        }
+      }
+    },
+    {
+      "id": "reviewer",
+      "role": "agent",
+      "meta": {
+        "am": {
+          "label": "Reviewer",
+          "agentRef": "reviewer"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "implement",
+      "to": "builder"
+    },
+    {
+      "from": "implement",
+      "to": "evidence"
+    },
+    {
+      "from": "evidence",
+      "to": "review"
+    },
+    {
+      "from": "review",
+      "to": "reviewer"
+    }
+  ]
+}

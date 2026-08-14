@@ -1,3 +1,4 @@
+import { Box } from 'tldraw'
 import { describe, expect, it, vi } from 'vitest'
 import type { TldrawAgent } from './TldrawAgent'
 import {
@@ -60,14 +61,17 @@ function mockAgent({
 		const current = pageShapes.find((candidate) => candidate.id === target.id)
 		const index = Number(target.id.split('-').at(-1)) || 1
 		const props = current?.props as { w?: number; h?: number } | undefined
-		return {
-			x: typeof current?.x === 'number' ? current.x : index * 10,
-			y: typeof current?.y === 'number' ? current.y : index * 10,
-			w: props?.w ?? 80,
-			h: props?.h ?? 48,
-		}
+		return new Box(
+			typeof current?.x === 'number' ? current.x : index * 10,
+			typeof current?.y === 'number' ? current.y : index * 10,
+			props?.w ?? 80,
+			props?.h ?? 48
+		)
 	})
 	const editor = {
+		store: {
+			query: { records: vi.fn(() => ({ get: () => [] })) },
+		},
 		getSelectedShapes: vi.fn(() => selected),
 		getShapeMaskedPageBounds: vi.fn(getBounds),
 		getShapePageBounds: vi.fn((target: unknown) =>
@@ -235,7 +239,68 @@ describe('provider-neutral companion live-canvas executor', () => {
 		}
 	})
 
-	it('returns at most 24 semantic shapes without raw metadata, screenshots, or local paths', async () => {
+	it('projects selected, in-bounds, and far page shapes as focused, blurry, and peripheral', async () => {
+		const selected = shape(1, {
+			x: 0,
+			y: 0,
+			meta: { note: 'Authorization: Bearer secret-inspection-token' },
+			props: {
+				w: 200,
+				h: 200,
+				geo: 'rectangle',
+				color: 'black',
+				fill: 'none',
+				align: 'middle',
+				richText: { type: 'doc', content: [{ type: 'private-node' }] },
+			},
+		})
+		const inside = shape(2, {
+			x: 20,
+			y: 20,
+			label: 'Bearer blurry-secret-token',
+			props: { w: 40, h: 40, geo: 'ellipse' },
+		})
+		const far = shape(3, {
+			x: 1_000,
+			y: 1_000,
+			props: { w: 80, h: 48, geo: 'rectangle' },
+		})
+		const { agent } = mockAgent({
+			selected: [selected],
+			pageShapes: [selected, inside, far],
+		})
+
+		const receipt = await executeCompanionCanvasToolRequest(agent, request())
+		const result = receipt.result as {
+			version: number
+			contextRef: string
+			focused: Array<Record<string, unknown>>
+			blurry: Array<Record<string, unknown>>
+			peripheral: Array<Record<string, unknown>>
+			shapes?: unknown
+		}
+
+		expect(result.version).toBe(2)
+		expect(result.contextRef).toMatch(/^ctx-v1-[0-9a-f]{8}$/)
+		expect(result.shapes).toBeUndefined()
+		expect(result.focused).toHaveLength(1)
+		expect(result.focused[0]).toMatchObject({
+			_type: 'rectangle',
+			shapeId: 'node-1',
+		})
+		expect(result.blurry).toEqual([
+			expect.objectContaining({ shapeId: 'node-1', type: 'rectangle' }),
+			expect.objectContaining({ shapeId: 'node-2', type: 'ellipse' }),
+		])
+		expect(result.peripheral).toEqual([
+			expect.objectContaining({ numberOfShapes: 1 }),
+		])
+		expect(JSON.stringify(result)).not.toContain('secret-inspection-token')
+		expect(JSON.stringify(result)).not.toContain('blurry-secret-token')
+		expect(JSON.stringify(result)).not.toContain('richText')
+	})
+
+	it('returns at most 24 projected shapes without raw metadata, screenshots, or local paths', async () => {
 		const shapes = Array.from({ length: 30 }, (_, index) =>
 			shape(index + 1, {
 				label: index === 0 ? '/Users/example/private/diagram.md' : `Service ${index + 1}`,
@@ -296,42 +361,115 @@ describe('provider-neutral companion live-canvas executor', () => {
 		)
 		const result = receipt.result as {
 			contextRef: string
-			shapes: Array<Record<string, unknown>>
+			focused: Array<Record<string, unknown>>
+			blurry: Array<Record<string, unknown>>
+			peripheral: Array<Record<string, unknown>>
+			truncated: boolean
 		}
 
-		expect(result.shapes).toHaveLength(24)
+		expect(result.focused).toEqual([])
+		expect(result.blurry).toHaveLength(24)
+		expect(result.peripheral).toEqual([])
+		expect(result.truncated).toBe(true)
 		expect(result.contextRef).toMatch(/^ctx-v1-/)
-		expect(result.shapes[0]).not.toHaveProperty('label')
-		expect(result.shapes.find((candidate) => candidate.id === 'shape:node-2')).toMatchObject({
-			id: 'shape:node-2',
-			type: 'geo',
-			workbench: {
-				artifact: {
-					artifactId: 'architecture.service.api',
-					pack: 'architecture',
-					kind: 'service',
-					title: 'API',
-					status: 'active',
-				},
-			},
-		})
 		expect(JSON.stringify(result)).not.toContain('must-not-leak')
-		expect(result.shapes.find((candidate) => candidate.id === 'shape:node-3')).toMatchObject({
-			relation: {
-				relationId: 'architecture.relation.api-db',
-				type: 'depends-on',
-				start: {
-					artifactId: 'architecture.service.api',
-					shapeId: 'shape:node-2',
-				},
-				end: {
-					artifactId: 'architecture.store.db',
-					shapeId: 'shape:node-4',
-				},
-			},
-		})
+		expect(JSON.stringify(result)).not.toContain('workbench')
+		expect(JSON.stringify(result)).not.toContain('relationId')
 		expect(JSON.stringify(result)).not.toContain('/Users/')
 		expect(JSON.stringify(result)).not.toContain('screenshot')
+	})
+
+	it('hashes every selected shape, including those omitted from the focused projection', async () => {
+		const shapes = Array.from({ length: 30 }, (_, index) => shape(index + 1))
+		const { agent, actions } = mockAgent({
+			selected: shapes,
+			pageShapes: shapes,
+		})
+		const inspection = await executeCompanionCanvasToolRequest(agent, request())
+		const result = inspection.result as {
+			focused: unknown[]
+			truncated: boolean
+			contextRef: string
+		}
+
+		expect(result.focused).toHaveLength(24)
+		expect(result.truncated).toBe(true)
+
+		shapes[29].x += 1
+
+		await expect(
+			executeCompanionCanvasToolRequest(
+				agent,
+				request({
+					capabilityId: 'canvas.shape.basic',
+					contextRef: result.contextRef,
+					actions: [
+						{
+							_type: 'label',
+							intent: 'Change a visible shape',
+							shapeId: 'node-1',
+							text: 'Changed',
+						},
+					],
+				})
+			)
+		).rejects.toThrow('context drifted')
+		expect(actions.act).not.toHaveBeenCalled()
+	})
+
+	it('projects an in-bounds custom shape as unknown with its subtype', async () => {
+		const custom = shape(4, {
+			type: 'workflow-node',
+			x: 30,
+			y: 30,
+			props: { w: 40, h: 40 },
+		})
+		const { agent } = mockAgent({
+			selected: [custom],
+			pageShapes: [custom],
+		})
+
+		const receipt = await executeCompanionCanvasToolRequest(agent, request())
+		const result = receipt.result as {
+			focused: Array<Record<string, unknown>>
+			blurry: Array<Record<string, unknown>>
+		}
+
+		expect(result.focused[0]).toMatchObject({
+			_type: 'unknown',
+			subType: 'workflow-node',
+			shapeId: 'node-4',
+		})
+		expect(result.blurry.find((item) => item.shapeId === 'node-4')).toMatchObject({
+			type: 'unknown',
+			subType: 'workflow-node',
+			shapeId: 'node-4',
+		})
+	})
+
+	it('redacts api keys and passwords from projected text', async () => {
+		const selected = shape(1, {
+			label: 'api_key=sk-live-super-secret',
+			props: { w: 80, h: 48, geo: 'rectangle' },
+		})
+		const inside = shape(2, {
+			label: 'password=hunter2',
+			x: 20,
+			y: 20,
+			props: { w: 40, h: 40, geo: 'ellipse' },
+		})
+		const { agent } = mockAgent({
+			selected: [selected],
+			pageShapes: [selected, inside],
+		})
+
+		const receipt = await executeCompanionCanvasToolRequest(agent, request())
+		const dumped = JSON.stringify(receipt.result)
+
+		expect(dumped).not.toContain('sk-live-super-secret')
+		expect(dumped).not.toContain('hunter2')
+		expect(dumped).not.toContain('password=')
+		expect(dumped).not.toContain('api_key=')
 	})
 
 	it('hashes every shape authorized by a dense area, including shapes omitted from projection', async () => {
@@ -414,6 +552,107 @@ describe('provider-neutral companion live-canvas executor', () => {
 				undoable: true,
 			},
 		})
+	})
+
+	it('allows deleting the selected shape to clear only that id from instance page state', async () => {
+		const target = shape(1)
+		const pageShapes = [target]
+		const { agent, actions, editor, history } = mockAgent({ selected: [target], pageShapes })
+		const inspection = await executeCompanionCanvasToolRequest(agent, request())
+		const contextRef = (inspection.result as { contextRef: string }).contextRef
+		actions.act.mockImplementationOnce(((action: unknown) => {
+			const beforePageState = {
+				id: 'instance_page_state:page:page',
+				typeName: 'instance_page_state',
+				pageId: 'page:page',
+				selectedShapeIds: [target.id],
+				focusedGroupId: null,
+				meta: {},
+			}
+			const afterPageState = { ...beforePageState, selectedShapeIds: [] }
+			pageShapes.splice(0, 1)
+			const diff = {
+				added: {},
+				updated: { [beforePageState.id]: [beforePageState, afterPageState] },
+				removed: { [target.id]: target },
+			}
+			history.push({ type: 'action', action, diff, acceptance: 'pending' })
+			return { diff, promise: null }
+		}) as unknown as Parameters<typeof actions.act.mockImplementationOnce>[0])
+
+		const receipt = await executeCompanionCanvasToolRequest(
+			agent,
+			request({
+				capabilityId: 'canvas.shape.basic',
+				contextRef,
+				actions: [
+					{
+						_type: 'delete',
+						intent: 'Delete the explicitly selected shape',
+						shapeId: 'node-1',
+					},
+				],
+			})
+		)
+
+		expect(editor.bailToMark).not.toHaveBeenCalled()
+		expect(editor.squashToMark).toHaveBeenCalledWith('companion-history-mark')
+		expect(receipt).toMatchObject({
+			status: 'succeeded',
+			result: { shapeIds: ['shape:node-1'], undoable: true },
+		})
+	})
+
+	it('rejects unrelated instance page state changes during a selected-shape deletion', async () => {
+		const target = shape(1)
+		const pageShapes = [target]
+		const { agent, actions, editor, history } = mockAgent({ selected: [target], pageShapes })
+		const inspection = await executeCompanionCanvasToolRequest(agent, request())
+		const contextRef = (inspection.result as { contextRef: string }).contextRef
+		actions.act.mockImplementationOnce(((action: unknown) => {
+			const beforePageState = {
+				id: 'instance_page_state:page:page',
+				typeName: 'instance_page_state',
+				pageId: 'page:page',
+				selectedShapeIds: [target.id],
+				focusedGroupId: null,
+				meta: {},
+			}
+			const afterPageState = {
+				...beforePageState,
+				selectedShapeIds: [],
+				focusedGroupId: 'shape:unauthorized-group',
+			}
+			pageShapes.splice(0, 1)
+			const diff = {
+				added: {},
+				updated: { [beforePageState.id]: [beforePageState, afterPageState] },
+				removed: { [target.id]: target },
+			}
+			history.push({ type: 'action', action, diff, acceptance: 'pending' })
+			return { diff, promise: null }
+		}) as unknown as Parameters<typeof actions.act.mockImplementationOnce>[0])
+
+		await expect(
+			executeCompanionCanvasToolRequest(
+				agent,
+				request({
+					capabilityId: 'canvas.shape.basic',
+					contextRef,
+					actions: [
+						{
+							_type: 'delete',
+							intent: 'Delete the explicitly selected shape',
+							shapeId: 'node-1',
+						},
+					],
+				})
+			)
+		).rejects.toThrow('updated unexpected instance_page_state')
+
+		expect(editor.bailToMark).toHaveBeenCalledWith('companion-history-mark')
+		expect(editor.squashToMark).not.toHaveBeenCalled()
+		expect(history).toEqual([])
 	})
 
 	it('rolls back the whole request when a later native action fails', async () => {
@@ -717,7 +956,17 @@ describe('provider-neutral companion live-canvas executor', () => {
 	})
 
 	it('rejects update-arrow endpoints outside the authorized shape IDs', async () => {
-		const arrow = shape(10, { type: 'arrow' })
+		const arrow = shape(10, {
+			type: 'arrow',
+			props: {
+				w: 80,
+				h: 48,
+				start: { x: 0, y: 0 },
+				end: { x: 80, y: 48 },
+				bend: 0,
+				color: 'black',
+			},
+		})
 		const inside = shape(1)
 		const outside = shape(2)
 		const { agent, actions } = mockAgent({

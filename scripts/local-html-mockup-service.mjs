@@ -87,6 +87,19 @@ const FORBIDDEN_REPLACEMENT_TAGS = new Set([
 	'object',
 	'script',
 ])
+const FORBIDDEN_PREVIEW_TAGS = new Set([
+	'base',
+	'embed',
+	'iframe',
+	'object',
+])
+const SAFE_INLINE_PREVIEW_SCRIPT_TYPES = new Set([
+	'',
+	'application/ecmascript',
+	'application/javascript',
+	'text/ecmascript',
+	'text/javascript',
+])
 const URL_ATTRIBUTES = new Set([
 	'action',
 	'formaction',
@@ -370,6 +383,30 @@ export function createLocalHtmlMockupService(options = {}) {
 	}
 }
 
+/**
+ * Server-internal importer used by trusted provider adapters such as Stitch.
+ * It grants no HTTP or filesystem authority to the caller: roots are fixed at
+ * construction time and the same import validation/managed directory are used
+ * as the resident Local HTML endpoint.
+ */
+export function createLocalHtmlMockupImporter(options = {}) {
+	const cwd = resolve(options.cwd ?? process.cwd())
+	const configuredRoots =
+		options.roots ??
+		[cwd, ...parseConfiguredRoots(options.rootsEnv ?? process.env.TLDRAW_HTML_MOCKUP_ROOTS, cwd)]
+	let rootsPromise
+
+	const getRoots = () => {
+		rootsPromise ??= resolveRoots(configuredRoots)
+		return rootsPromise
+	}
+
+	return async function importLocalHtmlMockup({ name, content }) {
+		const roots = await getRoots()
+		return persistImportedDocument({ roots, name, content })
+	}
+}
+
 let defaultService
 
 export async function handleLocalHtmlMockupRequest(...args) {
@@ -478,13 +515,22 @@ function readRequestHeader(request, name) {
 }
 
 async function importDocument({ roots, request, response, readBody, send }) {
-	if (!roots.length) throw httpError(503, 'mockup_root_unavailable', 'No mockup root is available.')
 	const payload = parseJson(await readBody(request, MAX_IMPORT_BODY_BYTES))
-	const name = validateImportName(payload?.name)
-	if (typeof payload?.content !== 'string') {
+	const document = await persistImportedDocument({
+		roots,
+		name: payload?.name,
+		content: payload?.content,
+	})
+	return sendJson(response, send, 201, { document })
+}
+
+async function persistImportedDocument({ roots, name: rawName, content }) {
+	if (!roots.length) throw httpError(503, 'mockup_root_unavailable', 'No mockup root is available.')
+	const name = validateImportName(rawName)
+	if (typeof content !== 'string') {
 		throw httpError(400, 'invalid_import_content', 'content must be a UTF-8 string.')
 	}
-	const contentBytes = Buffer.byteLength(payload.content, 'utf8')
+	const contentBytes = Buffer.byteLength(content, 'utf8')
 	if (contentBytes > MAX_FILE_BYTES) {
 		throw httpError(413, 'import_too_large', 'The HTML mockup exceeds the 4 MiB limit.')
 	}
@@ -501,22 +547,20 @@ async function importDocument({ roots, request, response, readBody, send }) {
 	const extension = extname(name).toLowerCase()
 	const stem = basename(name, extension).replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 96) || 'mockup'
 	const suffix = createHash('sha256')
-		.update(payload.content)
+		.update(content)
 		.update(randomBytes(12))
 		.digest('hex')
 		.slice(0, 10)
 	const outputName = `${stem}-${suffix}${extension}`
 	const outputPath = join(importDirectory, outputName)
-	await atomicWrite(outputPath, payload.content)
+	await atomicWrite(outputPath, content)
 	const outputRealPath = await realpath(outputPath)
 	const entry = await makeRegistryEntry(root, outputRealPath)
-	const revision = revisionFor(Buffer.from(payload.content, 'utf8'))
-	return sendJson(response, send, 201, {
-		document: {
-			...publicDocumentMetadata(entry),
-			revision,
-		},
-	})
+	const revision = revisionFor(Buffer.from(content, 'utf8'))
+	return {
+		...publicDocumentMetadata(entry),
+		revision,
+	}
 }
 
 async function sendSnapshot({
@@ -678,6 +722,7 @@ async function sendPreview({
 	}
 
 	const nonce = randomBytes(18).toString('base64')
+	authorizeInlinePreviewScripts(parsed.document, nonce)
 	const documentDirectory = dirname(entry.relativePath)
 	const encodedDirectory =
 		documentDirectory === '.'
@@ -1212,7 +1257,13 @@ function sanitizePreviewTree(document) {
 		if (!isElement(node)) return
 		node.attrs = (node.attrs ?? []).filter((attribute) => {
 			const name = qualifiedAttributeName(attribute)
-			if (name.startsWith('data-tldraw-html-') || name.startsWith('on')) return false
+			if (
+				name.startsWith('data-tldraw-html-') ||
+				name.startsWith('on') ||
+				name === 'nonce'
+			) {
+				return false
+			}
 			if (
 				URL_ATTRIBUTES.has(name) &&
 				normalizeUrlScheme(attribute.value).includes('javascript:')
@@ -1236,7 +1287,7 @@ function removeUnsafeChildren(node) {
 		for (const child of collection) {
 			if (
 				isElement(child) &&
-				(FORBIDDEN_REPLACEMENT_TAGS.has(child.tagName.toLowerCase()) ||
+				(isUnsafePreviewElement(child) ||
 					isUnsafePreviewMeta(child))
 			) {
 				continue
@@ -1246,6 +1297,30 @@ function removeUnsafeChildren(node) {
 		}
 		collection.splice(0, collection.length, ...kept)
 	}
+}
+
+function isUnsafePreviewElement(node) {
+	const tag = node.tagName.toLowerCase()
+	if (FORBIDDEN_PREVIEW_TAGS.has(tag)) return true
+	if (tag !== 'script') return false
+	if (getAttribute(node, 'src')) return true
+	const type = (getAttribute(node, 'type') ?? '').trim().toLowerCase()
+	return !SAFE_INLINE_PREVIEW_SCRIPT_TYPES.has(type)
+}
+
+function authorizeInlinePreviewScripts(document, nonce) {
+	walkNodes(document, (node) => {
+		if (
+			!isElement(node) ||
+			node.tagName.toLowerCase() !== 'script' ||
+			getAttribute(node, 'src')
+		) {
+			return
+		}
+		const type = (getAttribute(node, 'type') ?? '').trim().toLowerCase()
+		if (!SAFE_INLINE_PREVIEW_SCRIPT_TYPES.has(type)) return
+		setAttribute(node, 'nonce', nonce)
+	})
 }
 
 function injectPreviewRuntime(document, config) {
@@ -1280,7 +1355,7 @@ function previewBridgeSource(documentRef, revision, parentOrigin) {
 		parentOrigin,
 		postMessageTarget: parentOrigin === 'file://' ? '*' : parentOrigin,
 	})
-	return `(()=>{'use strict';const c=${config};let a=null,t=0;const clean=v=>String(v??'').replace(/\\s+/g,' ').trim().slice(0,160);const pick=e=>e&&e.closest?e.closest('[data-tldraw-html-ref]'):null;const activate=n=>{if(!n||n===a)return;if(a)a.removeAttribute('data-tldraw-html-active');a=n;a.setAttribute('data-tldraw-html-active','')};const say=(phase,e)=>{const r=e&&e.getAttribute('data-tldraw-html-ref');if(!r||r.length>${MAX_TARGET_REF_CHARS})return;const s=clean(e.getAttribute('data-tldraw-html-summary')||e.tagName);parent.postMessage({type:'html-mockup:selection',phase,documentRef:c.documentRef,revision:c.revision,targetRef:r,summary:s},c.postMessageTarget)};for(const n of document.querySelectorAll('[data-tldraw-html-ref]')){if(n.tabIndex<0){n.tabIndex=0;n.setAttribute('data-tldraw-html-keyboard-target','')}}addEventListener('mouseover',e=>{const n=pick(e.target);if(!n||n===a)return;activate(n);clearTimeout(t);t=setTimeout(()=>say('hover',n),50)},true);addEventListener('focusin',e=>{const n=pick(e.target);if(!n)return;activate(n);say('hover',n)},true);addEventListener('click',e=>{const n=pick(e.target);if(!n)return;e.preventDefault();e.stopPropagation();activate(n);say('click',n)},true);addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const n=pick(e.target);if(!n)return;e.preventDefault();e.stopPropagation();activate(n);say('click',n)},true)})();`
+	return `(()=>{'use strict';const c=${config};let a=null,t=0,m='inspect';const clean=v=>String(v??'').replace(/\\s+/g,' ').trim().slice(0,160);const pick=e=>{const n=e&&e.nodeType===1?e:null;if(!n||!n.closest)return null;const hit=n.closest('button,a,input,select,textarea,[role],[aria-label],[data-testid],[data-component]')||n;const owner=hit.closest('[data-tldraw-html-ref]');return owner?{hit,owner}:null};const label=n=>clean(n.getAttribute('aria-label')||n.getAttribute('title')||n.innerText||n.value||n.getAttribute('placeholder')||n.tagName);const activate=n=>{if(!n||n===a)return;if(a)a.removeAttribute('data-tldraw-html-active');a=n;a.setAttribute('data-tldraw-html-active','')};const say=(phase,p)=>{const r=p&&p.owner.getAttribute('data-tldraw-html-ref');if(!r||r.length>${MAX_TARGET_REF_CHARS})return;const s=label(p.hit)||clean(p.owner.getAttribute('data-tldraw-html-summary')||p.owner.tagName);parent.postMessage({type:'html-mockup:selection',phase,documentRef:c.documentRef,revision:c.revision,targetRef:r,summary:s},c.postMessageTarget)};const enableKeys=()=>{for(const n of document.querySelectorAll('[data-tldraw-html-ref]')){if(n.tabIndex<0&&!n.hasAttribute('data-tldraw-html-keyboard-target')){const v=n.getAttribute('tabindex');n.setAttribute('data-tldraw-html-keyboard-target',v===null?'':v);n.tabIndex=0}}};const disableKeys=()=>{for(const n of document.querySelectorAll('[data-tldraw-html-keyboard-target]')){const v=n.getAttribute('data-tldraw-html-keyboard-target');if(v==='')n.removeAttribute('tabindex');else n.setAttribute('tabindex',v);n.removeAttribute('data-tldraw-html-keyboard-target')}};const mode=v=>{m=v==='preview'?'preview':'inspect';document.documentElement.setAttribute('data-tldraw-html-mode',m);if(m==='inspect')enableKeys();else{clearTimeout(t);if(a)a.removeAttribute('data-tldraw-html-active');a=null;disableKeys()}};addEventListener('message',e=>{if(e.source!==parent)return;const d=e.data;if(!d||d.type!=='html-mockup:mode'||d.documentRef!==c.documentRef||d.revision!==c.revision)return;mode(d.mode)},false);mode('inspect');addEventListener('mouseover',e=>{if(m!=='inspect')return;const p=pick(e.target);if(!p||p.hit===a)return;activate(p.hit);clearTimeout(t);t=setTimeout(()=>say('hover',p),50)},true);addEventListener('focusin',e=>{if(m!=='inspect')return;const p=pick(e.target);if(!p)return;activate(p.hit);say('hover',p)},true);addEventListener('click',e=>{if(m!=='inspect')return;const p=pick(e.target);if(!p)return;e.preventDefault();e.stopPropagation();activate(p.hit);say('click',p)},true);addEventListener('keydown',e=>{if(m!=='inspect'||(e.key!=='Enter'&&e.key!==' '))return;const p=pick(e.target);if(!p)return;e.preventDefault();e.stopPropagation();activate(p.hit);say('click',p)},true)})();`
 }
 
 function previewSelectionSummary(node) {

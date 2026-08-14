@@ -1,0 +1,10 @@
+{
+  "name": "tldraw-companion",
+  "version": "0.1.0",
+  "description": "Grok plugin: three tldraw companion tools with actor=grok. Not the Amp plugin.",
+  "author": {
+    "name": "Jerry Johnson"
+  },
+  "license": "MIT",
+  "keywords": ["tldraw", "companion", "canvas", "grok"]
+}

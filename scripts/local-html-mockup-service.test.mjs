@@ -40,7 +40,8 @@ test('registry, bounded snapshots, safe preview, and contained assets', async (t
 	<meta http-equiv="refresh" content="0;https://example.invalid">
 	<meta http-equiv="content-security-policy" content="script-src 'unsafe-inline'">
 	<link rel="stylesheet" href="app.css">
-	<script>window.SOURCE_SCRIPT_MUST_NOT_RUN = true</script>
+	<script src="https://example.invalid/remote.js"></script>
+	<script>window.LOCAL_INTERACTION_BOOT = true</script>
 	<style>.STYLE_SECRET_MUST_NOT_REACH_AGENT { color: red }</style>
 </head>
 <body>
@@ -72,7 +73,7 @@ test('registry, bounded snapshots, safe preview, and contained assets', async (t
 	assert.equal(listing.documents[0].relativePath, 'screens/index.html')
 	assert.equal(listing.limits.maxDocuments, 200)
 	assert.equal(listing.limits.maxFileBytes, 4 * 1024 * 1024)
-	assert.doesNotMatch(JSON.stringify(listing), /SOURCE_SCRIPT_MUST_NOT_RUN/)
+	assert.doesNotMatch(JSON.stringify(listing), /LOCAL_INTERACTION_BOOT/)
 
 	const documentRef = listing.documents[0].documentRef
 	const snapshotResponse = await residentFetch(`${host}/html-mockups/${documentRef}/snapshot`)
@@ -86,7 +87,7 @@ test('registry, bounded snapshots, safe preview, and contained assets', async (t
 	assert(snapshot.charCount <= 12_000)
 	assert.doesNotMatch(
 		JSON.stringify(snapshot),
-		/SOURCE_SCRIPT_MUST_NOT_RUN|STYLE_SECRET_MUST_NOT_REACH_AGENT|HIDDEN_SECRET_MUST_NOT_REACH_AGENT|ARIA_SECRET_MUST_NOT_REACH_AGENT/
+		/LOCAL_INTERACTION_BOOT|STYLE_SECRET_MUST_NOT_REACH_AGENT|HIDDEN_SECRET_MUST_NOT_REACH_AGENT|ARIA_SECRET_MUST_NOT_REACH_AGENT/
 	)
 	const button = snapshot.nodes.find((node) => node.role === 'button')
 	assert(button)
@@ -133,7 +134,11 @@ test('registry, bounded snapshots, safe preview, and contained assets', async (t
 	assert.match(csp, /connect-src 'none'/)
 	assert.match(csp, /frame-ancestors http:\/\/localhost:5173/)
 	const preview = await previewResponse.text()
-	assert.doesNotMatch(preview, /SOURCE_SCRIPT_MUST_NOT_RUN|window\.evil|example\.invalid/)
+	assert.match(
+		preview,
+		/<script nonce="[^"]+">window\.LOCAL_INTERACTION_BOOT = true<\/script>/
+	)
+	assert.doesNotMatch(preview, /remote\.js|window\.evil|example\.invalid/)
 	assert.doesNotMatch(preview, /<iframe/i)
 	assert.match(preview, /data-tldraw-html-ref="he_[A-Za-z0-9_-]+"/)
 	const leakyParentOpeningTag = preview.match(
@@ -150,9 +155,15 @@ test('registry, bounded snapshots, safe preview, and contained assets', async (t
 	)
 	assert.match(preview, /type:'html-mockup:selection'/)
 	assert.doesNotMatch(preview, /\|\|e\.textContent/)
+	assert.match(preview, /const owner=hit\.closest\('\[data-tldraw-html-ref\]'\)/)
+	assert.match(preview, /n\.innerText/)
+	assert.match(preview, /activate\(p\.hit\)/)
 	assert.match(preview, /data-tldraw-html-keyboard-target/)
 	assert.match(preview, /addEventListener\('focusin'/)
 	assert.match(preview, /addEventListener\('keydown'/)
+	assert.match(preview, /type!=='html-mockup:mode'/)
+	assert.match(preview, /if\(m!=='inspect'\)return/)
+	assert.match(preview, /e\.source!==parent/)
 	assert.match(preview, /e\.key!=='Enter'&&e\.key!==' '/)
 	assert.match(preview, /"parentOrigin":"http:\/\/localhost:5173"/)
 	assert.match(preview, /},c\.postMessageTarget\)/)

@@ -11,19 +11,27 @@ import {
   layoutLanes,
   catalogToNodes,
   catalogNodesToSections,
+  catalogToInteractiveSections,
   catalogErrorNode,
   catalogContentHeight,
   availabilityColor,
   instantiatePreset,
   compileWorkflow,
+  preflightWorkflow,
+  expandWorkflowModules,
   fillPresetScriptName,
   collectWorkflowGraph,
+  collectBoundWorkflowEdges,
+  countWorkflowPorts,
   countSpecs,
   suggestWorkflowName,
   resolveAuthToken,
   truncateCatalogLabel,
   packGrid,
   layoutLayered,
+  layoutWorkflowGraph,
+  suggestConnectedNodePosition,
+  workflowEdgeStyle,
   GROK_CONFIG_TOKEN,
   makeStageCard,
   makeSubagentCard,
@@ -83,7 +91,7 @@ describe("layoutLanes", () => {
     assert.equal(layout.subagentLane.w, 1040);
     assert.ok(layout.subagentLane.h >= 800);
     assert.equal(layout.catalog.x, 1450);
-    assert.equal(layout.catalog.w, 420);
+    assert.equal(layout.catalog.w, 360);
     const gap = layout.subagentLane.y - (layout.stageLane.y + layout.stageLane.h);
     assert.ok(gap >= 60, `lane vertical gap ${gap} < 60`);
     // horizontal breathing room between toolbar and stage
@@ -96,6 +104,141 @@ describe("layoutLanes", () => {
     const a = layoutLanes([]);
     const b = layoutLanes([]);
     assert.deepEqual(a, b);
+  });
+});
+
+describe("native workflow graph layout", () => {
+  test("keeps stage flow horizontal and assigned workers in the matching column", () => {
+    const nodes = [
+      { id: "s1", role: "stage", x: 0, y: 0, w: 280, h: 180 },
+      { id: "s2", role: "stage", x: 500, y: 0, w: 340, h: 180 },
+      { id: "a1", role: "agent", x: 0, y: 500, w: 220, h: 200 },
+      { id: "a2", role: "agent", x: 500, y: 500, w: 300, h: 200 },
+      { id: "p2", role: "persona", x: 500, y: 760, w: 240, h: 210 },
+    ];
+    const result = layoutWorkflowGraph(
+      nodes,
+      [
+        { from: "s1", to: "s2" },
+        { from: "s1", to: "a1" },
+        { from: "s2", to: "a2" },
+        { from: "a2", to: "p2" },
+      ],
+      { stageX: 400, stageY: 100, workerY: 500 },
+    );
+    const s1 = result.positions.get("s1");
+    const s2 = result.positions.get("s2");
+    const a1 = result.positions.get("a1");
+    const a2 = result.positions.get("a2");
+    const p2 = result.positions.get("p2");
+    assert.equal(s1.y, s2.y);
+    assert.ok(s2.x > s1.x + s1.w);
+    assert.equal(a1.x + a1.w / 2, s1.x + s1.w / 2);
+    assert.equal(a2.x + a2.w / 2, s2.x + s2.w / 2);
+    assert.equal(p2.x + p2.w / 2, s2.x + s2.w / 2);
+    assert.ok(p2.y > a2.y);
+    assert.ok(result.requiredLaneWidth >= LAYOUT.stageLane.w);
+  });
+
+  test("packs large worker sets into a bounded grid using their real sizes", () => {
+    const nodes = [
+      { id: "s", role: "stage", w: 260, h: 175 },
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `a${index}`,
+        role: "agent",
+        w: index % 2 ? 280 : 220,
+        h: 175 + (index % 3) * 20,
+      })),
+    ];
+    const result = layoutWorkflowGraph(
+      nodes,
+      nodes.slice(1).map((node) => ({ from: "s", to: node.id })),
+    );
+    const workerCenters = new Set(
+      nodes
+        .slice(1)
+        .map((node) => {
+          const position = result.positions.get(node.id);
+          return position.x + position.w / 2;
+        }),
+    );
+    assert.equal(workerCenters.size, 3);
+    assert.ok(result.requiredSubagentHeight < 1_600);
+  });
+
+  test("suggests semantic connection positions and avoids occupied bounds", () => {
+    const source = {
+      role: "stage",
+      minX: 400,
+      minY: 100,
+      maxX: 680,
+      maxY: 280,
+      center: { x: 540, y: 190 },
+    };
+    const worker = suggestConnectedNodePosition(
+      source,
+      "agent",
+      { w: 220, h: 184 },
+      [],
+      { workerY: 500 },
+    );
+    assert.equal(worker.x + worker.w / 2, source.center.x);
+    assert.equal(worker.y, 500);
+    const stage = suggestConnectedNodePosition(
+      source,
+      "stage",
+      { w: 280, h: 180 },
+      [{ x: 772, y: 100, w: 280, h: 180 }],
+      { gap: 92 },
+    );
+    assert.ok(stage.x > 772 + 280);
+  });
+
+  test("uses role-specific edge styling", () => {
+    assert.deepEqual(workflowEdgeStyle("stage", "stage"), {
+      kind: "control",
+      color: "grey",
+      dash: "solid",
+    });
+    assert.equal(workflowEdgeStyle("agent", "persona").dash, "dashed");
+    assert.equal(workflowEdgeStyle("stage", "agent").kind, "assignment");
+  });
+});
+
+describe("interactive catalog projection", () => {
+  test("keeps agents and personas bounded but draggable", () => {
+    const catalog = {
+      agents: Array.from({ length: 70 }, (_, index) => ({
+        id: `agent-${index}`,
+        modelRef: `model-${index % 3}`,
+      })),
+      personas: [{ id: "reviewer", modelRef: "model-1" }],
+      skills: [
+        {
+          id: "diagram-review",
+          name: "Diagram review",
+          sourceRef: ".agents/skills/diagram-review/SKILL.md",
+        },
+      ],
+      modules: [{ id: "review-loop", version: "1.0.0" }],
+      models: { slots: [{ id: "grok-test" }] },
+    };
+    const sections = catalogToInteractiveSections(catalog, 64);
+    const materializable = sections.filter((section) =>
+      ["agents", "personas", "skills", "modules"].includes(section.id),
+    );
+    assert.deepEqual(
+      materializable.map((section) => section.id),
+      ["agents", "personas", "skills", "modules"],
+    );
+    assert.equal(materializable[0].items.length, 64);
+    assert.equal(materializable[0].hidden, 6);
+    assert.equal(materializable[1].items[0].id, "reviewer");
+    assert.equal(
+      materializable[2].items[0].value,
+      ".agents/skills/diagram-review/SKILL.md",
+    );
+    assert.equal(materializable[3].items[0].value, "1.0.0");
   });
 });
 
@@ -492,7 +635,7 @@ result
     assert.match(s, /name:\s*"abc"/);
   });
 
-  test("modified graph emits skeleton with meta.name (not verbatim)", () => {
+  test("modified graph compiles actual connected Stage and Agent nodes", () => {
     const presetScript = `let meta = #{ name: "{{name}}" };\nlet keep_me = 1;\n`;
     const out = compileWorkflow({
       name: "edited-flow",
@@ -500,26 +643,236 @@ result
       stageType: "single",
       unmodified: false,
       presetScript,
+      stages: [
+        {
+          id: "shape:stage",
+          x: 0,
+          y: 0,
+          meta: { am: { role: "stage", label: "Implement", stageType: "dag" } },
+        },
+      ],
+      agents: [
+        {
+          id: "shape:agent",
+          x: 200,
+          y: 0,
+          meta: {
+            am: {
+              role: "agent",
+              label: "implementer",
+              agentRef: "implementer",
+              modelRef: "builder",
+            },
+          },
+        },
+      ],
+      edges: [{ from: "shape:stage", to: "shape:agent" }],
     });
     assert.match(out, /name:\s*"edited-flow"/);
     assert.doesNotMatch(out, /keep_me/);
-    assert.match(out, /unverified-skeleton/);
+    assert.match(out, /Canvas source-of-truth/);
     assert.match(out, /agent\(/);
+    assert.match(out, /agent_type:\s*"implementer"/);
+    assert.match(out, /model:\s*"builder"/);
   });
 
-  test("foreach/mesh stage types compile parallel skeletons", () => {
-    const fan = compileWorkflow({
-      name: "f",
-      stageType: "foreach",
+  test("two connected Agents compile to parallel jobs and Persona is hydrated", () => {
+    const stage = {
+      id: "shape:stage",
+      x: 0,
+      y: 0,
+      meta: { am: { role: "stage", label: "Review", stageType: "foreach" } },
+    };
+    const agentA = {
+      id: "shape:a",
+      x: 200,
+      y: 0,
+      meta: { am: { role: "agent", label: "a", agentRef: "scout" } },
+    };
+    const agentB = {
+      id: "shape:b",
+      x: 200,
+      y: 200,
+      meta: { am: { role: "agent", label: "b", agentRef: "reviewer" } },
+    };
+    const persona = {
+      id: "shape:p",
+      x: 500,
+      y: 0,
+      meta: { am: { role: "persona", persona: "strict-review" } },
+    };
+    const out = compileWorkflow({
+      name: "parallel-review",
       unmodified: false,
+      stages: [stage],
+      agents: [agentA, agentB],
+      personas: [persona],
+      edges: [
+        { from: stage.id, to: agentA.id },
+        { from: stage.id, to: agentB.id },
+        { from: persona.id, to: agentB.id },
+      ],
+      personaDetails: {
+        "strict-review": { instructions: "Return only evidence-backed findings." },
+      },
     });
-    assert.match(fan, /parallel\(/);
-    const mesh = compileWorkflow({
-      name: "m",
-      stageType: "mesh",
-      unmodified: false,
+    assert.match(out, /parallel\(/);
+    assert.match(out, /\[Persona strict-review\]/);
+    assert.match(out, /Return only evidence-backed findings/);
+    assert.doesNotMatch(out, /apiKey|credential/i);
+  });
+
+  test("compiles default-all capabilities, compact skill refs, data boundaries, gate, and result", () => {
+    const stageA = {
+      id: "stage-a",
+      meta: { am: { role: "stage", label: "Research" } },
+    };
+    const stageB = {
+      id: "stage-b",
+      meta: { am: { role: "stage", label: "Ship" } },
+    };
+    const agent = {
+      id: "agent-a",
+      meta: { am: { role: "agent", label: "builder", agentRef: "general-purpose" } },
+    };
+    const capability = {
+      id: "cap-a",
+      meta: { am: { role: "capability", capabilityMode: "all" } },
+    };
+    const skill = {
+      id: "skill-a",
+      meta: { am: { role: "skill", skillRef: "diagram-review" } },
+    };
+    const gate = {
+      id: "gate-a",
+      meta: {
+        am: {
+          role: "gate",
+          label: "Evidence present",
+          gateOperator: "contains",
+          gateValue: "evidence",
+          gateOnFalse: "stop",
+        },
+      },
+    };
+    const input = {
+      id: "input-a",
+      meta: { am: { role: "input", dataValue: "bounded brief" } },
+    };
+    const artifact = {
+      id: "artifact-a",
+      meta: { am: { role: "artifact", artifactRef: "artifacts/report.json" } },
+    };
+    const result = {
+      id: "result-a",
+      meta: { am: { role: "result", resultLabel: "Final" } },
+    };
+    const graph = {
+      name: "policy-flow",
+      stages: [stageA, stageB],
+      agents: [agent],
+      capabilities: [capability],
+      skills: [skill],
+      gates: [gate],
+      inputs: [input],
+      artifacts: [artifact],
+      results: [result],
+      edges: [
+        { from: stageA.id, to: agent.id },
+        { from: agent.id, to: capability.id },
+        { from: agent.id, to: skill.id },
+        { from: input.id, to: stageA.id },
+        { from: artifact.id, to: stageA.id },
+        { from: stageA.id, to: gate.id },
+        { from: gate.id, to: stageB.id },
+        { from: stageB.id, to: result.id },
+      ],
+    };
+    const report = preflightWorkflow(graph);
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+    const out = compileWorkflow(graph);
+    assert.match(out, /capability_mode:\s*"all"/);
+    assert.match(out, /\.agents\/skills\/diagram-review\/SKILL\.md/);
+    assert.match(out, /\[Input\].*bounded brief/);
+    assert.match(out, /artifacts\/report\.json/);
+    assert.match(out, /contains\("evidence"\)/);
+    assert.match(out, /throw "Gate failed: Evidence present"/);
+  });
+
+  test("expands a versioned module and applies bounded params", () => {
+    const moduleNode = {
+      id: "module-instance",
+      meta: {
+        am: {
+          role: "module",
+          moduleRef: "review-loop",
+          moduleVersion: "1.0.0",
+          moduleParams: '{"title":"Review evidence"}',
+        },
+      },
+    };
+    const details = {
+      "review-loop@1.0.0": {
+        id: "review-loop",
+        version: "1.0.0",
+        entry: "stage",
+        exit: "agent",
+        nodes: [
+          {
+            id: "stage",
+            role: "stage",
+            meta: { am: { role: "stage", label: "{{title}}" } },
+          },
+          {
+            id: "agent",
+            role: "agent",
+            meta: { am: { role: "agent", label: "reviewer" } },
+          },
+        ],
+        edges: [{ from: "stage", to: "agent" }],
+      },
+    };
+    const graph = {
+      name: "module-flow",
+      modules: [moduleNode],
+      moduleDetails: details,
+      edges: [],
+    };
+    const expanded = expandWorkflowModules(graph);
+    assert.equal(expanded.modules.length, 0);
+    assert.equal(expanded.stages[0].meta.am.label, "Review evidence");
+    assert.equal(preflightWorkflow(expanded).ok, true);
+    assert.match(compileWorkflow(graph), /phase\("Review evidence"\)/);
+  });
+
+  test("preflight fails closed on orphan policy nodes and missing modules", () => {
+    const stage = { id: "stage", meta: { am: { role: "stage" } } };
+    const capability = {
+      id: "capability",
+      meta: { am: { role: "capability", capabilityMode: "all" } },
+    };
+    const moduleNode = {
+      id: "module",
+      meta: {
+        am: {
+          role: "module",
+          moduleRef: "missing",
+          moduleVersion: "1",
+          moduleParams: "{}",
+        },
+      },
+    };
+    const report = preflightWorkflow({
+      stages: [stage],
+      capabilities: [capability],
+      modules: [moduleNode],
+      edges: [],
     });
-    assert.match(mesh, /parallel\(/);
+    assert.equal(report.ok, false);
+    assert.deepEqual(
+      report.errors.map((item) => item.code).sort(),
+      ["capability_boundary", "module_orphan", "module_unavailable"],
+    );
   });
 
   test("suggestWorkflowName", () => {
@@ -545,6 +898,81 @@ describe("collectWorkflowGraph", () => {
     });
     assert.match(script, /name:\s*"canvas-reduce"/);
     assert.match(script, /reduce_body/);
+  });
+
+  test("derives directed graph edges from real tldraw arrow bindings", () => {
+    const nodes = [
+      { id: "shape:stage", meta: { am: { role: "stage" } } },
+      { id: "shape:agent", meta: { am: { role: "agent" } } },
+      { id: "shape:persona", meta: { am: { role: "persona" } } },
+    ];
+    const records = [
+      {
+        typeName: "binding",
+        type: "arrow",
+        fromId: "shape:arrow-1",
+        toId: "shape:stage",
+        props: { terminal: "start" },
+      },
+      {
+        typeName: "binding",
+        type: "arrow",
+        fromId: "shape:arrow-1",
+        toId: "shape:agent",
+        props: { terminal: "end" },
+      },
+    ];
+    assert.deepEqual(collectBoundWorkflowEdges(nodes, records), [
+      { id: "shape:arrow-1", from: "shape:stage", to: "shape:agent" },
+    ]);
+    const graph = collectWorkflowGraph(nodes, { records });
+    assert.equal(graph.agents.length, 1);
+    assert.equal(graph.personas.length, 1);
+    assert.equal(graph.edges.length, 1);
+  });
+});
+
+describe("countWorkflowPorts", () => {
+  test("derives input/output counts from real arrow binding records", () => {
+    const nodes = [
+      { id: "shape:stage", meta: { am: { role: "stage" } } },
+      { id: "shape:agent-a", meta: { am: { role: "agent" } } },
+      { id: "shape:agent-b", meta: { am: { role: "agent" } } },
+    ];
+    const records = [
+      {
+        typeName: "binding",
+        type: "arrow",
+        fromId: "shape:arrow-a",
+        toId: "shape:stage",
+        props: { terminal: "start" },
+      },
+      {
+        typeName: "binding",
+        type: "arrow",
+        fromId: "shape:arrow-a",
+        toId: "shape:agent-a",
+        props: { terminal: "end" },
+      },
+      {
+        typeName: "binding",
+        type: "arrow",
+        fromId: "shape:arrow-b",
+        toId: "shape:stage",
+        props: { terminal: "start" },
+      },
+      {
+        typeName: "binding",
+        type: "arrow",
+        fromId: "shape:arrow-b",
+        toId: "shape:agent-b",
+        props: { terminal: "end" },
+      },
+    ];
+    const counts = countWorkflowPorts(nodes, records);
+    assert.deepEqual(counts.get("shape:stage"), { inCount: 0, outCount: 2 });
+    assert.deepEqual(counts.get("shape:agent-a"), { inCount: 1, outCount: 0 });
+    assert.deepEqual(counts.get("shape:agent-b"), { inCount: 1, outCount: 0 });
   });
 });
 

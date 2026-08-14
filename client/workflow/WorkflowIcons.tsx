@@ -1,6 +1,7 @@
 export type WorkflowIconName =
 	| 'map'
 	| 'new'
+	| 'experiment'
 	| 'input'
 	| 'trigger'
 	| 'context'
@@ -47,6 +48,12 @@ export function WorkflowIcon({ name }: { name: WorkflowIconName }) {
 					<rect x="15" y="15" width="6" height="5" rx="1.2" />
 					<path d="M9 6.5h3a4 4 0 0 1 4 4V15" />
 					<path d="M16.5 5v5M14 7.5h5" />
+				</>
+			)}
+			{name === 'experiment' && (
+				<>
+					<path d="M7 3h10M7 3l4 8M17 3l-4 8M7 13h10M7 13l4 8M17 13l-4 8" />
+					<circle cx="12" cy="11" r="2" />
 				</>
 			)}
 			{name === 'input' && (

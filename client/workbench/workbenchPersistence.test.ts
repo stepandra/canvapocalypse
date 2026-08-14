@@ -31,4 +31,19 @@ describe('workbench canvas persistence namespace', () => {
 			EVAL_LAB_CANVAS_PERSISTENCE_KEY
 		)
 	})
+
+	it('isolates named project canvases by URL slug', () => {
+		expect(resolveCanvasPersistenceKey('?canvas=work-project')).toBe(
+			'tldraw-agent-canvas-v1:work-project'
+		)
+		expect(resolveCanvasPersistenceKey('?canvas=client%20discovery')).toBe(
+			'tldraw-agent-canvas-v1:client%20discovery'
+		)
+		expect(resolveCanvasPersistenceKey('?canvas=work-project&workflow=ml-intern')).toBe(
+			'tldraw-agent-canvas-v1:work-project'
+		)
+		expect(resolveCanvasPersistenceKey('?canvas=%20%20')).toBe(
+			DEFAULT_CANVAS_PERSISTENCE_KEY
+		)
+	})
 })

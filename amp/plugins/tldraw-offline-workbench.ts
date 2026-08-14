@@ -1,7 +1,18 @@
 import type { PluginAPI } from '@ampcode/plugin'
-import { createAmpTldrawCompanionClient } from '../../scripts/amp-tldraw-companion-runtime.mjs'
+import { fileURLToPath } from 'node:url'
+import {
+	createAmpTldrawCompanionClient,
+	resolveProjectCanvasBinding,
+	startWorkbenchBridge,
+} from '../../scripts/amp-tldraw-companion-runtime.mjs'
+import { loadOrCreateHtmlMockupResidentCapability } from '../../scripts/html-mockup-resident-capability.mjs'
 
-const client = createAmpTldrawCompanionClient()
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
+const client = createAmpTldrawCompanionClient({
+	startBridge: () => startWorkbenchBridge({
+		residentCapability: loadOrCreateHtmlMockupResidentCapability({ cwd: repoRoot }),
+	}),
+})
 
 function render(value: unknown) {
 	return JSON.stringify(value, null, 2)
@@ -11,14 +22,20 @@ export default function tldrawOfflineWorkbenchPlugin(amp: PluginAPI) {
 	amp.registerTool({
 		name: 'tldraw_capabilities',
 		description:
-			'Discover the compact native-tldraw capability manifest for the one active local canvas. Call this before describe or execute. Fails closed when zero or multiple canvases are active.',
+			'Discover the compact native-tldraw capability manifest for this Amp workspace\'s sole .canvas/*.tldraw document. Call this before describe or execute. Fails closed when the project target is missing, ambiguous, or not open.',
 		inputSchema: {
 			type: 'object',
 			properties: {},
 			additionalProperties: false,
 		},
 		async execute() {
-			return render(await client.capabilities())
+			if (!amp.system.workspaceRoot) {
+				throw new Error('tldraw project routing requires an Amp workspace')
+			}
+			const canvasBinding = await resolveProjectCanvasBinding({
+				workspaceRoot: amp.helpers.filePathFromURI(amp.system.workspaceRoot),
+			})
+			return render(await client.capabilities({ canvasBinding }))
 		},
 	})
 
@@ -76,8 +93,4 @@ export default function tldrawOfflineWorkbenchPlugin(amp: PluginAPI) {
 			return render(await client.execute(input))
 		},
 	})
-
-	amp.logger.log(
-		'tldraw offline workbench loaded: existing Amp threads can inspect and mutate one bounded local canvas'
-	)
 }

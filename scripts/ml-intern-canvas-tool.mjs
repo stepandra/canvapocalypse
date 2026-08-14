@@ -1338,7 +1338,13 @@ function resolveActiveCanvasBinding(requested, now = Date.now()) {
 
 function resolveCompanionCanvasBinding(requested, now = Date.now()) {
 	pruneBrowserClients(now)
-	if (requested) return resolveActiveCanvasBinding(requested, now)
+	if (requested) {
+		const client = browserClients.get(requested)
+		if (!client || client.kind !== 'offline-desktop') {
+			throw httpError(409, 'requested canvas binding is not an active offline-desktop client')
+		}
+		return requested
+	}
 	const offlineDesktop = [...browserClients]
 		.filter(([, client]) => client.kind === 'offline-desktop')
 		.map(([binding]) => binding)

@@ -64,6 +64,21 @@ after the asynchronous read, and sends only the bounded projection. This slice
 is read-only; source mutation is deferred until a separately reviewed,
 revision-guarded diff and receipt contract exists.
 
+### UI/UX Stitch provider
+
+Google Stitch is a server-only generation/editing provider, not a second
+canvas or an agent-wide tool surface. The loopback bridge owns the SDK and
+credentials. Generated HTML is downloaded and imported into the existing Local
+HTML Mockup registry; tldraw stores only opaque provider references and the
+managed document revision. An explicitly selected Design System node may add
+its bounded semantic projection to a Stitch operation. The underlying
+`DESIGN.md`, raw HTML, signed URLs, provider IDs, and Stitch tool inventory
+never enter the canvas or an ordinary agent prompt.
+
+The UI/UX pack presents `Stitch`, `DESIGN.md`, and `Local HTML` in one visible
+provider dock. Full operation and security details are recorded in
+`docs/decisions/stitch-uiux-provider.md`.
+
 ## Agent request contract
 
 Every routed request has:
@@ -91,18 +106,20 @@ Ampcode thread: it owns the architecture conversation, judgment, and decision
 cycle and reaches the currently open tldraw Offline document through a thin
 loopback plugin.
 
-The resident tldraw Offline client, not Amp, resolves the current document and
-holds the short-lived canvas binding. Unqualified companion discovery accepts
-exactly one active Offline desktop and never downgrades to a web preview; zero
-or multiple Offline desktops fail closed. The Amp plugin exposes exactly
+The trusted local Amp plugin resolves the workspace's sole regular,
+non-symlink `.canvas/*.tldraw` file to exactly one open tldraw Offline document.
+It uses the resident's short-lived canvas binding internally; other open
+documents are ignored and never closed. Missing, ambiguous, symlinked,
+escaped, unopened, or duplicate project targets fail closed, and discovery
+never downgrades to a web preview. The Amp plugin exposes exactly
 `tldraw_capabilities`, `tldraw_describe_capability`, and `tldraw_execute`.
 Discovery returns compact IDs, the thread hydrates exactly one capability, and
 execution carries only an explicit selection or user-approved bounded area.
 Validated native actions return a compact inspectable/undoable receipt.
 Terminal receipts require a fresh per-lease token and the exact canvas binding,
-neither of which is exposed to Amp. Browser Origins are resident executors
-only; capability discovery, hydration, execution, and request polling are
-reserved for the local Amp/terminal producer.
+neither of which is exposed to the model. Browser Origins are resident
+executors only; capability discovery, hydration, execution, and request
+polling are reserved for the local Amp/terminal producer.
 
 Amp thread IDs, credentials, full chat history, document paths, raw whole-canvas
 state, and unrestricted filesystem content never cross that boundary or enter
@@ -140,7 +157,7 @@ not overwrite earlier output.
 
 ## Deferred
 
-- Open Design integration or a second UI document engine.
+- A second UI document engine beyond native tldraw plus managed Local HTML.
 - Direct or agent-authored `DESIGN.md` source mutation.
 - High-fidelity interactive UI component shapes.
 - Autonomous multi-agent orchestration inside the browser.

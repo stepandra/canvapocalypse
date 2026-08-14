@@ -22,12 +22,13 @@ import {
 	LocalHtmlMockupShape,
 	readLocalHtmlMockupMeta,
 	replaceLocalHtmlMockupDocument,
+	updateLocalHtmlMockupPreviewMode,
 	updateLocalHtmlMockupSnapshot,
 } from './LocalHtmlMockupShape'
 
 const MAX_IMPORT_BYTES = 4 * 1024 * 1024
 
-export function HtmlMockupOverlay() {
+export function HtmlMockupOverlay({ docked = false }: { docked?: boolean }) {
 	const editor = useEditor()
 	const selected = useValue(
 		'selected Local HTML Mockup',
@@ -118,7 +119,7 @@ export function HtmlMockupOverlay() {
 	return (
 		<>
 			<div
-				className="html-mockup-provider-toolbar"
+				className={`html-mockup-provider-toolbar${docked ? ' is-docked' : ''}`}
 				onPointerDown={(event) => event.stopPropagation()}
 				onClick={(event) => event.stopPropagation()}
 			>
@@ -142,6 +143,9 @@ export function HtmlMockupOverlay() {
 								isActive={pickerOpen || Boolean(selected)}
 							>
 								<TldrawUiButtonIcon icon="code" />
+								{docked && (
+									<span className="uiux-provider-label">Local HTML</span>
+								)}
 							</TldrawUiButton>
 						</TldrawUiPopoverTrigger>
 					</TldrawUiTooltip>
@@ -243,6 +247,16 @@ function HtmlMockupInspector({
 	const [status, setStatus] = useState('READY')
 	const [refreshing, setRefreshing] = useState(false)
 
+	const setPreviewMode = (previewMode: 'inspect' | 'preview') => {
+		const latest = editor.getShape(shape.id)
+		if (!latest || !isLocalHtmlMockupShape(latest)) {
+			setStatus('MOCKUP UNAVAILABLE')
+			return
+		}
+		updateLocalHtmlMockupPreviewMode(editor, latest, previewMode)
+		setStatus(previewMode === 'preview' ? 'INTERACT' : 'SELECT TARGET')
+	}
+
 	const refresh = async () => {
 		setRefreshing(true)
 		setStatus('REFRESHING…')
@@ -294,13 +308,39 @@ function HtmlMockupInspector({
 				<strong>{meta.selectedTargetLabel ?? 'None'}</strong>
 				<small>
 					{meta.selectedTargetRef ??
-						'Select a component in the preview. Keyboard: Tab, then Enter or Space.'}
+						(meta.previewMode === 'preview'
+							? 'Interact with the mockup, then switch back to Select target.'
+							: 'Select a component in the preview. Keyboard: Tab, then Enter or Space.')}
 				</small>
+			</div>
+			<div
+				className="html-mockup-inspector-mode"
+				role="group"
+				aria-label="Local HTML Mockup preview mode"
+			>
+				<TldrawUiButton
+					type="normal"
+					aria-pressed={meta.previewMode === 'preview'}
+					isActive={meta.previewMode === 'preview'}
+					onClick={() => setPreviewMode('preview')}
+				>
+					<TldrawUiButtonIcon icon="tool-hand" small />
+					Interact
+				</TldrawUiButton>
+				<TldrawUiButton
+					type="normal"
+					aria-pressed={meta.previewMode === 'inspect'}
+					isActive={meta.previewMode === 'inspect'}
+					onClick={() => setPreviewMode('inspect')}
+				>
+					<TldrawUiButtonIcon icon="tool-pointer" small />
+					Select target
+				</TldrawUiButton>
 			</div>
 			<div className="html-mockup-inspector-actions">
 				<TldrawUiButton type="normal" onClick={onSelectDocument}>
 					<TldrawUiButtonIcon icon="pack" small />
-					Select
+					Source
 				</TldrawUiButton>
 				<TldrawUiButton type="normal" disabled={refreshing} onClick={refresh}>
 					<TldrawUiButtonIcon icon="arrow-cycle" small />

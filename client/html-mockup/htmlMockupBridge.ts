@@ -1,5 +1,6 @@
 export const HTML_MOCKUP_ORIGIN = 'http://127.0.0.1:5176' as const
 export const HTML_MOCKUP_SELECTION_MESSAGE = 'html-mockup:selection' as const
+export const HTML_MOCKUP_MODE_MESSAGE = 'html-mockup:mode' as const
 export const HTML_MOCKUP_OFFLINE_PARENT_ORIGIN = 'file://' as const
 export const HTML_MOCKUP_RESIDENT_CAPABILITY_HEADER =
 	'x-tldraw-html-capability' as const

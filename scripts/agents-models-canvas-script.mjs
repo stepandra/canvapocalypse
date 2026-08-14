@@ -18,6 +18,23 @@
 // ---------------------------------------------------------------------------
 export const GROK_CONFIG_TOKEN = "REPLACE_WITH_GROK_CONFIG_TOKEN";
 export const GROK_CONFIG_BASE = "http://127.0.0.1:5188";
+export const WORKFLOW_UI_VERSION = "native-graph-v6";
+export const WORKFLOW_NODE_ROLES = Object.freeze([
+  "stage",
+  "agent",
+  "persona",
+  "capability",
+  "skill",
+  "gate",
+  "input",
+  "artifact",
+  "result",
+  "module",
+]);
+const WORKFLOW_RUNTIME_ROLES = new Set([
+  ...WORKFLOW_NODE_ROLES,
+  "subagent",
+]);
 
 export const PRESET_IDS = [
   "single",
@@ -39,11 +56,11 @@ export const LAYOUT = {
   originX: 80,
   originY: 80,
   // Lane gaps: TOOLBAR | gap | STAGE/SUBAGENT | gap | CATALOG
-  toolbar: { x: 80, y: 80, w: 240, h: 610 },
+  toolbar: { x: 80, y: 80, w: 240, h: 690 },
   stageLane: { x: 370, y: 80, w: 1040, h: 290 },
   // vertical gap between STAGE and SUBAGENT lanes >= 60
   subagentLane: { x: 370, y: 430, w: 1040, h: 840 },
-  catalog: { x: 1450, y: 80, w: 420, h: 840 },
+  catalog: { x: 1450, y: 80, w: 360, h: 720 },
   buttonW: 220,
   buttonH: 36,
   buttonGap: 10,
@@ -56,12 +73,12 @@ export const LAYOUT = {
   stageFooterH: 16,
   stagePadX: 10,
   stagePadY: 8,
-  subagentW: 220,
-  subagentH: 175,
+  subagentW: 280,
+  subagentH: 190,
   /** @deprecated use subagentW — kept for any external readers */
-  subagentR: 220,
-  moreNodeW: 180,
-  moreNodeH: 175,
+  subagentR: 280,
+  moreNodeW: 220,
+  moreNodeH: 190,
   statusDot: 6,
   portSize: 6,
   laneLabelSize: "s", // ~10px in tldraw size scale
@@ -399,6 +416,92 @@ export function catalogNodesToSections(nodes = []) {
       label,
       items,
       hidden: Number(more?.meta?.am?.hidden ?? 0),
+    };
+  });
+}
+
+/**
+ * Full but bounded catalog payload used by the interactive canvas catalog.
+ * The visible node only renders agents and personas, while model entries stay
+ * available to the Agent/Persona select controls.
+ */
+export function catalogToInteractiveSections(catalog, maxPerSection = 64) {
+  const proxy = catalog?.models?.proxy ?? null;
+  const definitions = [
+    [
+      "models",
+      "MODELS",
+      Array.isArray(catalog?.models?.slots) ? catalog.models.slots : [],
+      (item) => ({
+        id: String(item.id),
+        label: String(item.name || item.id || "model"),
+        value: String(item.model || ""),
+        status: availabilityColor(item, proxy),
+      }),
+    ],
+    [
+      "agents",
+      "AGENTS",
+      Array.isArray(catalog?.agents) ? catalog.agents : [],
+      (item) => ({
+        id: String(item.id),
+        label: String(item.id),
+        value: String(item.modelRef || ""),
+        status: "grey",
+      }),
+    ],
+    [
+      "personas",
+      "PERSONAS",
+      Array.isArray(catalog?.personas) ? catalog.personas : [],
+      (item) => ({
+        id: String(item.id),
+        label: String(item.id),
+        value: String(item.modelRef || ""),
+        status: "grey",
+      }),
+    ],
+    [
+      "roles",
+      "ROLES",
+      Array.isArray(catalog?.roles) ? catalog.roles : [],
+      (item) => ({
+        id: String(item.id || item.name || "role"),
+        label: String(item.name || item.id || "role"),
+        value: "",
+        status: "grey",
+      }),
+    ],
+    [
+      "skills",
+      "SKILLS",
+      Array.isArray(catalog?.skills) ? catalog.skills : [],
+      (item) => ({
+        id: String(item.id),
+        label: String(item.name || item.id || "skill"),
+        value: String(item.sourceRef || ""),
+        status: "grey",
+      }),
+    ],
+    [
+      "modules",
+      "MODULES",
+      Array.isArray(catalog?.modules) ? catalog.modules : [],
+      (item) => ({
+        id: String(item.id),
+        label: String(item.id || "module"),
+        value: String(item.version || ""),
+        status: "grey",
+      }),
+    ],
+  ];
+  return definitions.map(([id, label, source, mapItem]) => {
+    const items = source.slice(0, maxPerSection).map(mapItem);
+    return {
+      id,
+      label,
+      items,
+      hidden: Math.max(0, source.length - items.length),
     };
   });
 }
@@ -910,6 +1013,374 @@ export function layoutLayered(depths, origin, opts = {}) {
 }
 
 /**
+ * Graph-aware two-lane layout for the native workflow cards.
+ *
+ * Stages are topologically ordered left-to-right. Agents and personas are
+ * assigned to the stage they are bound to and placed directly beneath that
+ * stage, so control-flow arrows stay horizontal and assignment arrows stay
+ * vertical. Existing dimensions are honored rather than replaced with a
+ * fixed card size.
+ *
+ * @param {Array<{id:string,x?:number,y?:number,w?:number,h?:number,role?:string,meta?:object,props?:object}>} nodes
+ * @param {Array<{from:string,to:string}>} edges
+ * @param {{stageX?:number,stageY?:number,workerY?:number,stageGap?:number,rowGap?:number}} [opts]
+ */
+export function layoutWorkflowGraph(nodes = [], edges = [], opts = {}) {
+  const stageX = Number(opts.stageX ?? LAYOUT.stageLane.x + 40);
+  const stageY = Number(opts.stageY ?? LAYOUT.stageLane.y + 40);
+  const workerY = Number(opts.workerY ?? LAYOUT.subagentLane.y + 48);
+  const stageGap = Number(opts.stageGap ?? 92);
+  const rowGap = Number(opts.rowGap ?? 46);
+  const normalized = nodes.map((node) => ({
+    ...node,
+    id: String(node.id),
+    role: String(node.role ?? node.meta?.am?.role ?? ""),
+    x: Number(node.x ?? 0),
+    y: Number(node.y ?? 0),
+    w: Number(node.w ?? node.props?.w ?? LAYOUT.subagentW),
+    h: Number(node.h ?? node.props?.h ?? LAYOUT.subagentH),
+    variable: Boolean(node.variable ?? node.meta?.am?.variable),
+  }));
+  const byId = new Map(normalized.map((node) => [node.id, node]));
+  const canvasOrder = (left, right) =>
+    left.x - right.x ||
+    left.y - right.y ||
+    left.id.localeCompare(right.id);
+  const stages = normalized
+    .filter((node) => node.role === "stage")
+    .sort(canvasOrder);
+  const stageIds = new Set(stages.map((stage) => stage.id));
+  const stageEdges = edges.filter(
+    (edge) => stageIds.has(String(edge.from)) && stageIds.has(String(edge.to)),
+  );
+  const outgoing = new Map(stages.map((stage) => [stage.id, []]));
+  const indegree = new Map(stages.map((stage) => [stage.id, 0]));
+  for (const edge of stageEdges) {
+    const from = String(edge.from);
+    const to = String(edge.to);
+    if (from === to) continue;
+    outgoing.get(from)?.push(to);
+    indegree.set(to, (indegree.get(to) ?? 0) + 1);
+  }
+  const stageRank = new Map(stages.map((stage, index) => [stage.id, index]));
+  const ready = stages
+    .filter((stage) => (indegree.get(stage.id) ?? 0) === 0)
+    .map((stage) => stage.id);
+  const sortReady = () =>
+    ready.sort((left, right) => (stageRank.get(left) ?? 0) - (stageRank.get(right) ?? 0));
+  sortReady();
+  const stageOrder = [];
+  while (ready.length) {
+    const id = ready.shift();
+    if (!id) break;
+    stageOrder.push(id);
+    for (const target of outgoing.get(id) ?? []) {
+      indegree.set(target, (indegree.get(target) ?? 0) - 1);
+      if (indegree.get(target) === 0) {
+        ready.push(target);
+        sortReady();
+      }
+    }
+  }
+  // Cyclic control graphs (loop/dynamic) retain deterministic canvas order.
+  for (const stage of stages) {
+    if (!stageOrder.includes(stage.id)) stageOrder.push(stage.id);
+  }
+
+  const positions = new Map();
+  const stageCenters = new Map();
+  let nextStageX = stageX;
+  for (const id of stageOrder) {
+    const stage = byId.get(id);
+    if (!stage) continue;
+    positions.set(id, {
+      x: nextStageX,
+      y: stageY,
+      w: stage.w,
+      h: stage.h,
+    });
+    stageCenters.set(id, nextStageX + stage.w / 2);
+    nextStageX += stage.w + stageGap;
+  }
+
+  const workers = normalized
+    .filter((node) => node.role !== "stage" && WORKFLOW_RUNTIME_ROLES.has(node.role))
+    .sort(
+      (left, right) =>
+        Number(left.variable) - Number(right.variable) || canvasOrder(left, right),
+    );
+  const ownerByNode = new Map();
+  const personaParentByNode = new Map();
+  for (const edge of edges) {
+    const from = String(edge.from);
+    const to = String(edge.to);
+    const fromNode = byId.get(from);
+    const toNode = byId.get(to);
+    if (!fromNode || !toNode) continue;
+    if (stageIds.has(from) && toNode.role !== "stage") {
+      ownerByNode.set(to, from);
+    }
+    if (
+      !ownerByNode.has(from) &&
+      stageIds.has(to) &&
+      fromNode.role !== "stage"
+    ) {
+      ownerByNode.set(from, to);
+    }
+    if (
+      fromNode.role === "persona" &&
+      ["agent", "subagent"].includes(toNode.role)
+    ) {
+      personaParentByNode.set(from, to);
+    }
+    if (
+      toNode.role === "persona" &&
+      ["agent", "subagent"].includes(fromNode.role)
+    ) {
+      personaParentByNode.set(to, from);
+    }
+  }
+  // Attached policy, skill, persona, and data nodes inherit the Stage owner of
+  // the Agent or boundary node they decorate.
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const edge of edges) {
+      const from = String(edge.from);
+      const to = String(edge.to);
+      if (!ownerByNode.has(from) && ownerByNode.has(to)) {
+        ownerByNode.set(from, ownerByNode.get(to));
+      }
+      if (!ownerByNode.has(to) && ownerByNode.has(from)) {
+        ownerByNode.set(to, ownerByNode.get(from));
+      }
+    }
+  }
+
+  const buckets = new Map(stageOrder.map((id) => [id, []]));
+  for (const worker of workers) {
+    let owner = ownerByNode.get(worker.id);
+    if (!owner && stageOrder.length) {
+      owner = stageOrder.reduce((best, candidate) => {
+        const center = stageCenters.get(candidate) ?? stageX;
+        const bestCenter = stageCenters.get(best) ?? stageX;
+        const workerCenter = worker.x + worker.w / 2;
+        return Math.abs(center - workerCenter) < Math.abs(bestCenter - workerCenter)
+          ? candidate
+          : best;
+      }, stageOrder[0]);
+    }
+    if (owner && buckets.has(owner)) buckets.get(owner).push(worker);
+  }
+
+  const primaryGridMetrics = (bucket) => {
+    const attachedPersonas = bucket.filter(
+      (node) => node.role === "persona" && personaParentByNode.has(node.id),
+    );
+    const primaryBucket = bucket.filter(
+      (node) => !attachedPersonas.includes(node),
+    );
+    const columnCount =
+      primaryBucket.length <= 3
+        ? Math.max(1, primaryBucket.length)
+        : primaryBucket.length <= 6
+          ? 2
+          : 3;
+    const columnWidths = Array.from({ length: columnCount }, (_, column) =>
+      Math.max(
+        ...primaryBucket
+          .filter((_, index) => index % columnCount === column)
+          .map((worker) => worker.w),
+        0,
+      ),
+    );
+    const gridWidth =
+      columnWidths.reduce((sum, width) => sum + width, 0) +
+      Math.max(0, columnCount - 1) * rowGap;
+    return {
+      attachedPersonas,
+      primaryBucket,
+      columnCount,
+      columnWidths,
+      gridWidth,
+    };
+  };
+
+  // Stage columns are sized by the widest content they own, not just the
+  // Stage card. This keeps neighboring fan-out grids from colliding.
+  positions.clear();
+  stageCenters.clear();
+  nextStageX = stageX;
+  for (const id of stageOrder) {
+    const stage = byId.get(id);
+    if (!stage) continue;
+    const metrics = primaryGridMetrics(buckets.get(id) ?? []);
+    const columnWidth = Math.max(stage.w, metrics.gridWidth);
+    const stagePositionX = nextStageX + (columnWidth - stage.w) / 2;
+    positions.set(id, {
+      x: stagePositionX,
+      y: stageY,
+      w: stage.w,
+      h: stage.h,
+    });
+    stageCenters.set(id, nextStageX + columnWidth / 2);
+    nextStageX += columnWidth + stageGap;
+  }
+
+  let requiredBottom = workerY;
+  for (const stageId of stageOrder) {
+    const center = stageCenters.get(stageId) ?? stageX;
+    const bucket = buckets.get(stageId) ?? [];
+    const {
+      attachedPersonas,
+      primaryBucket,
+      columnCount,
+      columnWidths,
+      gridWidth,
+    } = primaryGridMetrics(bucket);
+    const columnStarts = [];
+    let nextColumnX = center - gridWidth / 2;
+    for (const width of columnWidths) {
+      columnStarts.push(nextColumnX);
+      nextColumnX += width + rowGap;
+    }
+    let y = workerY;
+    for (
+      let rowStart = 0;
+      rowStart < primaryBucket.length;
+      rowStart += columnCount
+    ) {
+      const row = primaryBucket.slice(rowStart, rowStart + columnCount);
+      const rowHeight = Math.max(...row.map((worker) => worker.h), 0);
+      row.forEach((worker, column) => {
+        positions.set(worker.id, {
+          x:
+            columnStarts[column] +
+            (columnWidths[column] - worker.w) / 2,
+          y,
+          w: worker.w,
+          h: worker.h,
+        });
+      });
+      requiredBottom = Math.max(requiredBottom, y + rowHeight);
+      y += rowHeight + rowGap;
+    }
+    const nextPersonaYByParent = new Map();
+    for (const persona of attachedPersonas) {
+      const parentId = personaParentByNode.get(persona.id);
+      const parent = positions.get(parentId);
+      if (!parent) continue;
+      const personaY =
+        nextPersonaYByParent.get(parentId) ?? parent.y + parent.h + rowGap;
+      positions.set(persona.id, {
+        x: parent.x + parent.w / 2 - persona.w / 2,
+        y: personaY,
+        w: persona.w,
+        h: persona.h,
+      });
+      nextPersonaYByParent.set(parentId, personaY + persona.h + rowGap);
+      requiredBottom = Math.max(requiredBottom, personaY + persona.h);
+    }
+  }
+
+  const positioned = [...positions.values()];
+  const rightEdge = Math.max(
+    LAYOUT.stageLane.x + LAYOUT.stageLane.w,
+    ...positioned.map((position) => position.x + position.w + 40),
+  );
+  return {
+    positions,
+    stageOrder,
+    requiredLaneWidth: rightEdge - LAYOUT.stageLane.x,
+    requiredSubagentHeight: Math.max(
+      LAYOUT.subagentLane.h,
+      requiredBottom - LAYOUT.subagentLane.y + 56,
+    ),
+  };
+}
+
+export function workflowEdgeStyle(fromRole, toRole) {
+  if (fromRole === "stage" && toRole === "stage") {
+    return { kind: "control", color: "grey", dash: "solid" };
+  }
+  if (fromRole === "gate" || toRole === "gate") {
+    return { kind: "condition", color: "grey", dash: "solid" };
+  }
+  if (
+    ["capability", "skill"].includes(fromRole) ||
+    ["capability", "skill"].includes(toRole)
+  ) {
+    return { kind: "policy", color: "grey", dash: "dashed" };
+  }
+  if (
+    ["input", "artifact", "result", "module"].includes(fromRole) ||
+    ["input", "artifact", "result", "module"].includes(toRole)
+  ) {
+    return { kind: "data", color: "grey", dash: "dashed" };
+  }
+  if (fromRole === "persona" || toRole === "persona") {
+    return { kind: "persona", color: "orange", dash: "dashed" };
+  }
+  if (
+    (fromRole === "stage" && ["agent", "subagent"].includes(toRole)) ||
+    (toRole === "stage" && ["agent", "subagent"].includes(fromRole))
+  ) {
+    return { kind: "assignment", color: "grey", dash: "solid" };
+  }
+  return { kind: "flow", color: "grey", dash: "solid" };
+}
+
+export function suggestConnectedNodePosition(
+  source,
+  nodeKind,
+  targetSize,
+  occupied = [],
+  opts = {},
+) {
+  const gap = Number(opts.gap ?? 92);
+  const workerY = Number(opts.workerY ?? LAYOUT.subagentLane.y + 48);
+  const sourceRole = String(source?.role ?? source?.meta?.am?.role ?? "");
+  const sourceBounds = source?.bounds ?? source;
+  const w = Number(targetSize?.w ?? LAYOUT.subagentW);
+  const h = Number(targetSize?.h ?? LAYOUT.subagentH);
+  let x = Number(sourceBounds?.maxX ?? 0) + gap;
+  let y = Number(sourceBounds?.minY ?? 0);
+
+  if (
+    sourceRole === "stage" &&
+    nodeKind !== "stage"
+  ) {
+    x = Number(sourceBounds?.center?.x ?? 0) - w / 2;
+    y = workerY;
+  } else if (
+    (sourceRole === "agent" || sourceRole === "subagent") &&
+    ["persona", "capability", "skill"].includes(nodeKind)
+  ) {
+    x = Number(sourceBounds?.center?.x ?? 0) - w / 2;
+    y = Number(sourceBounds?.maxY ?? 0) + 58;
+  }
+
+  const overlaps = (candidateX, candidateY) =>
+    occupied.some((box) => {
+      const minX = Number(box.minX ?? box.x ?? 0);
+      const minY = Number(box.minY ?? box.y ?? 0);
+      const maxX = Number(box.maxX ?? minX + Number(box.w ?? 0));
+      const maxY = Number(box.maxY ?? minY + Number(box.h ?? 0));
+      return !(
+        candidateX + w + 18 < minX ||
+        candidateX - 18 > maxX ||
+        candidateY + h + 18 < minY ||
+        candidateY - 18 > maxY
+      );
+    });
+  let attempts = 0;
+  while (overlaps(x, y) && attempts < 24) {
+    if (nodeKind === "stage") x += w + gap;
+    else y += h + 46;
+    attempts += 1;
+  }
+  return { x, y, w, h };
+}
+
+/**
  * Build graph skeleton specs for a preset.
  * @param {{id:string, stageType?:string, title?:string, script?:string}|string} preset
  * @param {{x:number,y:number,stageY?:number,subagentY?:number}} origin
@@ -1295,6 +1766,30 @@ export function instantiatePreset(preset, origin = {}) {
       break;
   }
 
+  const graphLayout = layoutWorkflowGraph(
+    nodeDefs.map((node) => ({
+      id: node.id,
+      role: node.kind === "stage" ? "stage" : "agent",
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h,
+      variable: Boolean(node.extra?.variable),
+    })),
+    arrows.map((edge) => ({ from: edge.fromNode, to: edge.toNode })),
+    {
+      stageX: ox,
+      stageY,
+      workerY: subY,
+    },
+  );
+  for (const node of nodeDefs) {
+    const position = graphLayout.positions.get(node.id);
+    if (!position) continue;
+    node.x = position.x;
+    node.y = position.y;
+  }
+
   // Materialize card groups with footer degrees from actual edges.
   const shapes = [];
   for (const n of nodeDefs) {
@@ -1350,9 +1845,10 @@ export function instantiatePreset(preset, origin = {}) {
           meta: {
             am: {
               ...stamp,
-              role: "subagent",
+              role: "agent",
               subLocalId: n.localId,
               label: n.label,
+              agentRef: null,
               variable: Boolean(n.extra.variable),
             },
           },
@@ -1368,7 +1864,9 @@ export function instantiatePreset(preset, origin = {}) {
     unmodified: true,
     presetScript: script,
     stages: shapes.filter((s) => s.kind === "stage"),
+    agents: shapes.filter((s) => s.kind === "subagent"),
     subagents: shapes.filter((s) => s.kind === "subagent"),
+    personas: [],
     arrows,
   };
 
@@ -1410,7 +1908,7 @@ export function suggestWorkflowName(presetId) {
  * Rules:
  * - When graph was preset-instantiated and unmodified and presetScript is
  *   present, reuse the preset script with {{name}} / meta.name filled.
- * - Otherwise emit a best-effort skeleton from stage types + graph.name.
+ * - Otherwise compile the actual bounded Stage / Agent / Persona graph.
  *
  * @param {{
  *   name?: string,
@@ -1419,7 +1917,10 @@ export function suggestWorkflowName(presetId) {
  *   unmodified?: boolean,
  *   presetScript?: string|null,
  *   stages?: Array<object>,
- *   subagents?: Array<object>,
+ *   agents?: Array<object>,
+ *   personas?: Array<object>,
+ *   edges?: Array<{from:string,to:string}>,
+ *   personaDetails?: Record<string, {instructions?:string}>,
  * }} graph
  * @returns {string}
  */
@@ -1430,132 +1931,610 @@ export function compileWorkflow(graph = {}) {
       : graph.presetId
         ? suggestWorkflowName(graph.presetId)
         : "canvas-workflow";
+  const expanded = expandWorkflowModules({ ...graph, name });
 
   if (
-    graph.unmodified === true &&
-    typeof graph.presetScript === "string" &&
-    graph.presetScript.length > 0
+    expanded.unmodified === true &&
+    typeof expanded.presetScript === "string" &&
+    expanded.presetScript.length > 0 &&
+    !(expanded.personas?.length > 0) &&
+    !hasExtendedWorkflowNodes(expanded)
   ) {
-    return fillPresetScriptName(graph.presetScript, name);
+    return fillPresetScriptName(expanded.presetScript, name);
+  }
+  const preflight = preflightWorkflow(expanded);
+  if (!preflight.ok) {
+    throw new Error(
+      `Preflight failed: ${preflight.errors.map((item) => item.message).join(" ")}`,
+    );
   }
 
-  // Build skeleton from graph topology when modified or no preset script.
-  const stageType =
-    graph.stageType ||
-    graph.stages?.[0]?.meta?.am?.stageType ||
-    graph.stages?.[0]?.stageType ||
-    "single";
-  const presetId = graph.presetId || stageType;
-  const header = `// unverified-skeleton — canvas compile; not executed by grok-config
-// Compiled from Agents/Models graph (preset=${presetId}, stageType=${stageType}).
-let meta = #{
-    name: ${rhaiString(name)},
-    description: "Canvas-compiled workflow skeleton",
-};
-`;
+  return compileConnectedWorkflow(expanded);
+}
 
-  switch (stageType) {
-    case "foreach":
-    case "fanout":
-      return (
-        header +
-        `
-let items = if args.items != () { args.items } else { ["item-1", "item-2"] };
-let jobs = [];
-for item in items {
-    jobs.push(#{
-        prompt: "Work on item: " + item,
-        options: #{ label: "fanout-" + item },
+function hasExtendedWorkflowNodes(graph) {
+  return [
+    "capabilities",
+    "skills",
+    "gates",
+    "inputs",
+    "artifacts",
+    "results",
+    "modules",
+  ].some((key) => Array.isArray(graph?.[key]) && graph[key].length > 0);
+}
+
+function workflowNodeId(node) {
+  return String(node?.id ?? node?.meta?.am?.nodeId ?? "");
+}
+
+function workflowNodeMeta(node) {
+  return node?.meta?.am ?? node ?? {};
+}
+
+function workflowNodesFromGraph(graph = {}) {
+  if (Array.isArray(graph.nodes)) return graph.nodes;
+  return [
+    ...(graph.stages ?? []),
+    ...(graph.agents ?? graph.subagents ?? []),
+    ...(graph.personas ?? []),
+    ...(graph.capabilities ?? []),
+    ...(graph.skills ?? []),
+    ...(graph.gates ?? []),
+    ...(graph.inputs ?? []),
+    ...(graph.artifacts ?? []),
+    ...(graph.results ?? []),
+    ...(graph.modules ?? []),
+  ];
+}
+
+function categorizeWorkflowGraph(graph, nodes = workflowNodesFromGraph(graph)) {
+  const byRole = (role) =>
+    nodes.filter((node) => {
+      const value = workflowNodeMeta(node).role;
+      return role === "agent" ? value === "agent" || value === "subagent" : value === role;
     });
+  const agents = byRole("agent");
+  return {
+    ...graph,
+    nodes,
+    stages: byRole("stage"),
+    agents,
+    subagents: agents,
+    personas: byRole("persona"),
+    capabilities: byRole("capability"),
+    skills: byRole("skill"),
+    gates: byRole("gate"),
+    inputs: byRole("input"),
+    artifacts: byRole("artifact"),
+    results: byRole("result"),
+    modules: byRole("module"),
+  };
 }
-let results = parallel(jobs);
-results
-`
-      );
-    case "reduce":
-      return (
-        header +
-        `
-let worker_outputs = if args.outputs != () { args.outputs } else { ["a", "b"] };
-let synthesis = agent(
-    "Synthesize the following worker outputs into one result:\\n" + worker_outputs.to_string(),
-    #{ label: "reducer" },
-);
-synthesis
-`
-      );
-    case "loop":
-      return (
-        header +
-        `
-let max_rounds = 3;
-let draft = if args.draft != () { args.draft } else { "" };
-let critique = ();
-for round in 0..max_rounds {
-    let attempt = agent(
-        "Produce or refine the draft (round " + round.to_string() + "). Prior critique: " + critique.to_string(),
-        #{ label: "loop-worker-" + round.to_string() },
-    );
-    draft = attempt;
-    critique = agent(
-        "Critique the draft and say whether it is done.",
-        #{ label: "loop-critic-" + round.to_string() },
-    );
+
+function compactIssue(code, message, nodeId = null) {
+  return { code, message, ...(nodeId ? { nodeId } : {}) };
 }
-draft
-`
-      );
-    case "dag":
-      return (
-        header +
-        `
-phase("Scout");
-let scout = agent("Scout the task.", #{ label: "scout" });
-phase("Implement");
-let implementer = agent("Implement based on scout: " + scout.to_string(), #{ label: "implementer" });
-phase("Review");
-let reviewer = agent("Review: " + implementer.to_string(), #{ label: "reviewer" });
-reviewer
-`
-      );
-    case "dynamic":
-      return (
-        header +
-        `
-let plan = agent("Plan the next bounded steps: " + args.to_string(), #{ label: "controller" });
-let work = agent("Execute the controller plan: " + plan.to_string(), #{ label: "worker" });
-work
-`
-      );
-    case "mesh":
-      return (
-        header +
-        `
-let n = 3;
-let seeds = [];
-for i in 0..n { seeds.push("perspective-" + i.to_string()); }
-let draft_jobs = [];
-for seed in seeds {
-    draft_jobs.push(#{ prompt: "Draft from " + seed, options: #{ label: "mesh-draft-" + seed } });
-}
-let drafts = parallel(draft_jobs);
-let final = agent("Reduce mesh drafts: " + drafts.to_string(), #{ label: "mesh-reduce" });
-final
-`
-      );
-    case "single":
-    default:
-      return (
-        header +
-        `
-let result = agent(
-    "Do the requested work.",
-    #{ label: "worker" },
-);
-result
-`
-      );
+
+/**
+ * Deterministic, bounded graph inspection used before Apply, Play, and Sync.
+ * It never mutates editor state and returns compact issues suitable for a receipt.
+ */
+export function preflightWorkflow(rawGraph = {}) {
+  const graph = categorizeWorkflowGraph(rawGraph);
+  const nodes = graph.nodes;
+  const edges = Array.isArray(graph.edges) ? graph.edges : [];
+  const errors = [];
+  const warnings = [];
+  const ids = new Set();
+  const byId = new Map();
+  for (const node of nodes) {
+    const id = workflowNodeId(node);
+    if (!id || ids.has(id)) {
+      errors.push(compactIssue("duplicate_node", `Workflow node id "${id || "(empty)"}" is not unique.`));
+      continue;
+    }
+    ids.add(id);
+    byId.set(id, node);
   }
+  for (const edge of edges) {
+    if (!ids.has(String(edge.from)) || !ids.has(String(edge.to))) {
+      errors.push(
+        compactIssue(
+          "broken_edge",
+          `Edge "${edge.from}→${edge.to}" references a missing node.`,
+        ),
+      );
+    }
+  }
+  const incoming = (id, role) =>
+    edges
+      .filter((edge) => String(edge.to) === id)
+      .map((edge) => byId.get(String(edge.from)))
+      .filter((node) => node && (!role || workflowNodeMeta(node).role === role));
+  const outgoing = (id, role) =>
+    edges
+      .filter((edge) => String(edge.from) === id)
+      .map((edge) => byId.get(String(edge.to)))
+      .filter((node) => node && (!role || workflowNodeMeta(node).role === role));
+  const neighbors = (id, roles) =>
+    edges
+      .filter((edge) => String(edge.from) === id || String(edge.to) === id)
+      .map((edge) =>
+        byId.get(String(edge.from) === id ? String(edge.to) : String(edge.from)),
+      )
+      .filter(
+        (node) =>
+          node &&
+          (!roles || roles.includes(workflowNodeMeta(node).role)),
+      );
+
+  if (!graph.stages.length) {
+    errors.push(compactIssue("missing_stage", "Workflow needs at least one Stage node."));
+  }
+  for (const agent of graph.agents) {
+    const id = workflowNodeId(agent);
+    if (neighbors(id, ["stage"]).length !== 1) {
+      errors.push(
+        compactIssue(
+          "agent_stage_boundary",
+          `Agent "${workflowNodeMeta(agent).label || id}" must attach to exactly one Stage.`,
+          id,
+        ),
+      );
+    }
+  }
+  for (const persona of graph.personas) {
+    const id = workflowNodeId(persona);
+    if (!String(workflowNodeMeta(persona).persona ?? "").trim()) {
+      errors.push(compactIssue("persona_ref_missing", "Every Persona node must select a persona.", id));
+    }
+    if (!neighbors(id, ["agent", "subagent", "stage"]).length) {
+      errors.push(compactIssue("persona_orphan", `Persona "${workflowNodeMeta(persona).label || id}" is not attached.`, id));
+    }
+  }
+  for (const capability of graph.capabilities) {
+    const id = workflowNodeId(capability);
+    if (neighbors(id, ["agent", "subagent"]).length !== 1) {
+      errors.push(compactIssue("capability_boundary", "Capability must attach to exactly one Agent.", id));
+    }
+    const mode = workflowNodeMeta(capability).capabilityMode || "all";
+    if (!["all", "read-only", "read-write", "execute"].includes(mode)) {
+      errors.push(compactIssue("capability_mode", `Unknown capability mode "${mode}".`, id));
+    }
+    if (String(workflowNodeMeta(capability).toolRefsText ?? "").trim()) {
+      warnings.push(
+        compactIssue(
+          "tool_allowlist_advisory",
+          "Exact tool ids are preserved as advisory metadata until Grok exposes per-agent workflow allowlists.",
+          id,
+        ),
+      );
+    }
+  }
+  for (const agent of graph.agents) {
+    const attached = neighbors(workflowNodeId(agent), ["capability"]);
+    if (attached.length > 1) {
+      errors.push(
+        compactIssue(
+          "multiple_capabilities",
+          `Agent "${workflowNodeMeta(agent).label || workflowNodeId(agent)}" has more than one Capability node.`,
+          workflowNodeId(agent),
+        ),
+      );
+    }
+  }
+  for (const skill of graph.skills) {
+    const id = workflowNodeId(skill);
+    if (neighbors(id, ["agent", "subagent"]).length !== 1) {
+      errors.push(compactIssue("skill_boundary", "Skill must attach to exactly one Agent.", id));
+    }
+    if (!String(workflowNodeMeta(skill).skillRef ?? "").trim()) {
+      errors.push(compactIssue("skill_ref_missing", "Skill must reference a project-local .agents/skills entry.", id));
+    }
+  }
+  for (const gate of graph.gates) {
+    const id = workflowNodeId(gate);
+    if (incoming(id, "stage").length !== 1 || outgoing(id, "stage").length !== 1) {
+      errors.push(compactIssue("gate_boundary", "Gate needs exactly one incoming Stage and one outgoing Stage.", id));
+    }
+    if (Number(workflowNodeMeta(gate).retryCount ?? 0) > 0) {
+      warnings.push(compactIssue("retry_advisory", "Gate retry is recorded but not materialized by the current Grok workflow API.", id));
+    }
+    if (Number(workflowNodeMeta(gate).timeoutSeconds ?? 0) > 0) {
+      warnings.push(compactIssue("timeout_advisory", "Gate timeout is recorded but not materialized by the current Grok workflow API.", id));
+    }
+    if (String(workflowNodeMeta(gate).errorRoute ?? "").trim()) {
+      warnings.push(compactIssue("error_route_advisory", "Gate error route is recorded but not materialized by the current Grok workflow API.", id));
+    }
+  }
+  for (const node of [...graph.inputs, ...graph.artifacts]) {
+    const id = workflowNodeId(node);
+    if (neighbors(id, ["stage"]).length !== 1) {
+      errors.push(compactIssue("data_boundary", `${workflowNodeMeta(node).role} must attach to exactly one Stage.`, id));
+    }
+  }
+  for (const result of graph.results) {
+    const id = workflowNodeId(result);
+    if (neighbors(id, ["stage"]).length !== 1) {
+      errors.push(compactIssue("result_boundary", "Result must attach to exactly one Stage.", id));
+    }
+  }
+  if (graph.results.length > 1) {
+    errors.push(compactIssue("multiple_results", "Workflow may declare only one Result node."));
+  } else if (graph.results.length === 0) {
+    warnings.push(
+      compactIssue(
+        "implicit_result",
+        "No Result node is present; the final Stage will be returned.",
+      ),
+    );
+  }
+  for (const moduleNode of graph.modules) {
+    const id = workflowNodeId(moduleNode);
+    const meta = workflowNodeMeta(moduleNode);
+    const ref = String(meta.moduleRef ?? meta.catalogRef ?? "").trim();
+    const version = String(meta.moduleVersion ?? meta.catalogValue ?? "").trim();
+    const key = `${ref}@${version}`;
+    if (!ref || !version) {
+      errors.push(compactIssue("module_ref_missing", "Module needs an id and version.", id));
+    } else if (!rawGraph.moduleDetails?.[key] && !rawGraph.moduleDetails?.[ref]) {
+      errors.push(compactIssue("module_unavailable", `Module "${key}" was not hydrated.`, id));
+    }
+    if (
+      neighbors(id).length === 0 &&
+      graph.stages.length + graph.modules.length > 1
+    ) {
+      errors.push(compactIssue("module_orphan", `Module "${key}" is not connected.`, id));
+    }
+    try {
+      const params = JSON.parse(String(meta.moduleParams || "{}"));
+      if (!params || typeof params !== "object" || Array.isArray(params)) throw new Error();
+    } catch {
+      errors.push(compactIssue("module_params", "Module params must be a JSON object.", id));
+    }
+  }
+
+  const stageEdges = edges.filter(
+    (edge) =>
+      graph.stages.some((node) => workflowNodeId(node) === String(edge.from)) &&
+      graph.stages.some((node) => workflowNodeId(node) === String(edge.to)),
+  );
+  for (const gate of graph.gates) {
+    const from = incoming(workflowNodeId(gate), "stage")[0];
+    const to = outgoing(workflowNodeId(gate), "stage")[0];
+    if (from && to) stageEdges.push({ from: workflowNodeId(from), to: workflowNodeId(to) });
+  }
+  if (graph.stages.length) {
+    try {
+      topologicallyOrderStages(graph.stages, stageEdges);
+    } catch (error) {
+      errors.push(compactIssue("stage_cycle", error instanceof Error ? error.message : String(error)));
+    }
+  }
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    summary: {
+      nodes: nodes.length,
+      edges: edges.length,
+      stages: graph.stages.length,
+      agents: graph.agents.length,
+      modules: graph.modules.length,
+    },
+  };
+}
+
+function replaceModuleParams(value, params) {
+  if (typeof value === "string") {
+    return value.replace(/\{\{([A-Za-z0-9_-]+)\}\}/g, (_, name) =>
+      Object.prototype.hasOwnProperty.call(params, name)
+        ? String(params[name])
+        : `{{${name}}}`,
+    );
+  }
+  if (Array.isArray(value)) return value.map((item) => replaceModuleParams(item, params));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, replaceModuleParams(item, params)]),
+    );
+  }
+  return value;
+}
+
+/**
+ * Expand versioned project-local modules into ordinary workflow nodes.
+ * External edges are rewired through the declared entry/exit boundaries.
+ */
+export function expandWorkflowModules(rawGraph = {}) {
+  const graph = categorizeWorkflowGraph(rawGraph);
+  if (!graph.modules.length) return graph;
+  const moduleIds = new Set(graph.modules.map(workflowNodeId));
+  const nodes = graph.nodes.filter((node) => !moduleIds.has(workflowNodeId(node)));
+  let edges = graph.edges.filter(
+    (edge) => !moduleIds.has(String(edge.from)) && !moduleIds.has(String(edge.to)),
+  );
+  for (const moduleNode of graph.modules) {
+    const instanceId = workflowNodeId(moduleNode);
+    const meta = workflowNodeMeta(moduleNode);
+    const ref = String(meta.moduleRef ?? meta.catalogRef ?? "").trim();
+    const version = String(meta.moduleVersion ?? meta.catalogValue ?? "").trim();
+    const definition =
+      rawGraph.moduleDetails?.[`${ref}@${version}`] ??
+      rawGraph.moduleDetails?.[ref];
+    if (!definition) {
+      throw new Error(`Preflight failed: Module "${ref}@${version}" was not hydrated.`);
+    }
+    let params;
+    try {
+      params = JSON.parse(String(meta.moduleParams || "{}"));
+    } catch {
+      throw new Error(`Preflight failed: Module "${ref}" params are not valid JSON.`);
+    }
+    const prefix = `${instanceId}::`;
+    const idMap = new Map(
+      definition.nodes.map((node) => [String(node.id), `${prefix}${String(node.id)}`]),
+    );
+    const expandedNodes = definition.nodes.map((node, index) => {
+      const replaced = replaceModuleParams(node, params);
+      return {
+        ...replaced,
+        id: idMap.get(String(node.id)),
+        x: Number(moduleNode.x ?? 0) + index * 36,
+        y: Number(moduleNode.y ?? 0) + index * 26,
+        meta: {
+          ...(replaced.meta || {}),
+          am: {
+            ...(replaced.meta?.am || {}),
+            role: replaced.role ?? replaced.meta?.am?.role,
+            moduleInstance: instanceId,
+            moduleRef: ref,
+            moduleVersion: version,
+          },
+        },
+      };
+    });
+    nodes.push(...expandedNodes);
+    edges.push(
+      ...definition.edges.map((edge, index) => ({
+        id: `${instanceId}:edge:${index}`,
+        from: idMap.get(String(edge.from)),
+        to: idMap.get(String(edge.to)),
+      })),
+    );
+    const entry = idMap.get(String(definition.entry));
+    const exit = idMap.get(String(definition.exit));
+    for (const edge of graph.edges.filter((item) => String(item.to) === instanceId)) {
+      edges.push({ ...edge, to: entry });
+    }
+    for (const edge of graph.edges.filter((item) => String(item.from) === instanceId)) {
+      edges.push({ ...edge, from: exit });
+    }
+  }
+  return categorizeWorkflowGraph({ ...rawGraph, edges }, nodes);
+}
+
+function compileConnectedWorkflow(graph) {
+  const stages = [...(graph.stages ?? [])];
+  const agents = [...(graph.agents ?? graph.subagents ?? [])];
+  const personas = [...(graph.personas ?? [])];
+  const capabilities = [...(graph.capabilities ?? [])];
+  const skills = [...(graph.skills ?? [])];
+  const gates = [...(graph.gates ?? [])];
+  const inputs = [...(graph.inputs ?? [])];
+  const artifacts = [...(graph.artifacts ?? [])];
+  const results = [...(graph.results ?? [])];
+  const edges = [...(graph.edges ?? [])];
+  if (!stages.length) {
+    throw new Error("Workflow needs at least one Stage node.");
+  }
+
+  const nodeId = (node) => String(node?.id ?? node?.meta?.am?.nodeId ?? "");
+  const am = (node) => node?.meta?.am ?? node ?? {};
+  const stageIds = new Set(stages.map(nodeId));
+  const agentIds = new Set(agents.map(nodeId));
+  const personaIds = new Set(personas.map(nodeId));
+  const stageEdges = edges.filter(
+    (edge) => stageIds.has(edge.from) && stageIds.has(edge.to),
+  );
+  const connected = (left, right) =>
+    edges.some(
+      (edge) =>
+        (edge.from === left && edge.to === right) ||
+        (edge.from === right && edge.to === left),
+    );
+
+  const gateByTransition = new Map();
+  for (const gate of gates) {
+    const gateId = nodeId(gate);
+    const from = edges.find((edge) => edge.to === gateId && stageIds.has(edge.from))?.from;
+    const to = edges.find((edge) => edge.from === gateId && stageIds.has(edge.to))?.to;
+    if (from && to) {
+      stageEdges.push({ id: `gate:${gateId}`, from, to });
+      gateByTransition.set(`${from}->${to}`, gate);
+    }
+  }
+
+  const orderedStages = topologicallyOrderStages(stages, stageEdges);
+  const stageVar = new Map(
+    orderedStages.map((stage, index) => [nodeId(stage), `stage_${index}`]),
+  );
+  const lines = [`// Canvas source-of-truth: validated native workflow nodes.
+// Persona and Skill nodes are compact compile-time overlays; skill bodies stay on disk.
+let meta = #{
+    name: ${rhaiString(graph.name)},
+    description: "Compiled from a tldraw visual workflow graph",
+};
+`];
+
+  for (const stage of orderedStages) {
+    const stageId = nodeId(stage);
+    const stageMeta = am(stage);
+    const label = stageMeta.label || stageMeta.stageType || "Stage";
+    const stageType = stageMeta.stageType || "single";
+    const stageAgents = agents.filter((agent) => connected(stageId, nodeId(agent)));
+    const stagePersonas = personas.filter((persona) => connected(stageId, nodeId(persona)));
+    const predecessorExpressions = stageEdges
+      .filter((edge) => edge.to === stageId)
+      .map((edge) => {
+        const value = stageVar.get(edge.from);
+        if (!value) return null;
+        const gate = gateByTransition.get(`${edge.from}->${edge.to}`);
+        if (!gate) return `${value}.to_string()`;
+        const gateMeta = am(gate);
+        const text = `${value}.to_string()`;
+        const expected = rhaiString(String(gateMeta.gateValue ?? ""));
+        const condition =
+          gateMeta.gateOperator === "contains"
+            ? `${text}.contains(${expected})`
+            : gateMeta.gateOperator === "equals"
+              ? `${text} == ${expected}`
+              : `${text} != ""`;
+        return gateMeta.gateOnFalse === "skip"
+          ? `if ${condition} { ${text} } else { "" }`
+          : `if ${condition} { ${text} } else { throw ${rhaiString(
+              `Gate failed: ${gateMeta.label || nodeId(gate)}`,
+            )}; }`;
+      })
+      .filter(Boolean);
+    const boundaryContext = [
+      ...inputs
+        .filter((node) => connected(stageId, nodeId(node)))
+        .map((node) => `[Input]\\n${String(am(node).dataValue ?? "")}`),
+      ...artifacts
+        .filter((node) => connected(stageId, nodeId(node)))
+        .map((node) => `[Artifact]\\n${String(am(node).artifactRef ?? "")}`),
+    ].filter((value) => !/\\n$/.test(value));
+    const contextPieces = [
+      ...(predecessorExpressions.length ? predecessorExpressions : ["args.to_string()"]),
+      ...boundaryContext.map((value) => rhaiString(value)),
+    ];
+    const contextExpr = contextPieces.join(' + "\\n" + ');
+    const variable = stageVar.get(stageId);
+    lines.push(`phase(${rhaiString(label)});`);
+
+    if (!stageAgents.length) {
+      lines.push(`let ${variable} = ${contextExpr};`, "");
+      continue;
+    }
+
+    const jobs = stageAgents.map((agent, index) => {
+      const agentMeta = am(agent);
+      const overlays = personas.filter(
+        (persona) =>
+          connected(nodeId(persona), nodeId(agent)) || stagePersonas.includes(persona),
+      );
+      const personaText = overlays
+        .map((persona) => {
+          const ref = String(am(persona).persona ?? "").trim();
+          const detail = graph.personaDetails?.[ref];
+          const instructions = String(detail?.instructions ?? "").trim();
+          if (!instructions) {
+            throw new Error(`Persona "${ref}" could not be hydrated for compilation.`);
+          }
+          return `[Persona ${ref}]\\n${instructions}`;
+        })
+        .join("\\n\\n");
+      const attachedSkills = skills
+        .filter((skill) => connected(nodeId(skill), nodeId(agent)))
+        .map((skill) => String(am(skill).skillRef ?? "").trim())
+        .filter(Boolean)
+        .map(
+          (ref) =>
+            `[Skill reference: .agents/skills/${ref}/SKILL.md]\\nLoad this project-local skill only for this agent.`,
+        )
+        .join("\\n\\n");
+      const promptPrefix = [
+        `Stage: ${label}`,
+        `Control: ${stageType}`,
+        personaText,
+        attachedSkills,
+        "Complete the bounded task using the supplied workflow context.",
+      ]
+        .filter(Boolean)
+        .join("\\n\\n");
+      const prompt = `${rhaiString(`${promptPrefix}\\n\\nContext:\\n`)} + ${contextExpr}`;
+      const labelValue = agentMeta.label || agentMeta.agentRef || `agent-${index + 1}`;
+      const options = [`label: ${rhaiString(labelValue)}`];
+      if (agentMeta.agentRef) {
+        options.push(`agent_type: ${rhaiString(agentMeta.agentRef)}`);
+      }
+      const personaModel = overlays
+        .map((persona) => am(persona).modelRef)
+        .find(Boolean);
+      const model = agentMeta.modelRef || personaModel;
+      if (model) options.push(`model: ${rhaiString(model)}`);
+      const capability = capabilities.find((node) =>
+        connected(nodeId(node), nodeId(agent)),
+      );
+      options.push(
+        `capability_mode: ${rhaiString(
+          String(am(capability).capabilityMode || "all"),
+        )}`,
+      );
+      return { prompt, options: `#{ ${options.join(", ")} }` };
+    });
+
+    if (jobs.length === 1) {
+      lines.push(
+        `let ${variable} = agent(`,
+        `    ${jobs[0].prompt},`,
+        `    ${jobs[0].options},`,
+        `);`,
+        "",
+      );
+    } else {
+      lines.push(`let ${variable}_jobs = [];`);
+      for (const job of jobs) {
+        lines.push(
+          `${variable}_jobs.push(#{`,
+          `    prompt: ${job.prompt},`,
+          `    options: ${job.options},`,
+          `});`,
+        );
+      }
+      lines.push(`let ${variable} = parallel(${variable}_jobs);`, "");
+    }
+  }
+  const resultStage = results.length
+    ? stages.find((stage) => connected(nodeId(stage), nodeId(results[0])))
+    : orderedStages.at(-1);
+  lines.push(stageVar.get(nodeId(resultStage)) || "()");
+  return `${lines.join("\n")}\n`;
+}
+
+function topologicallyOrderStages(stages, edges) {
+  const byId = new Map(stages.map((stage) => [String(stage.id), stage]));
+  const indegree = new Map([...byId.keys()].map((id) => [id, 0]));
+  const outgoing = new Map([...byId.keys()].map((id) => [id, []]));
+  for (const edge of edges) {
+    if (!byId.has(edge.from) || !byId.has(edge.to) || edge.from === edge.to) continue;
+    outgoing.get(edge.from).push(edge.to);
+    indegree.set(edge.to, indegree.get(edge.to) + 1);
+  }
+  const sortCanvasOrder = (left, right) =>
+    Number(left?.x ?? 0) - Number(right?.x ?? 0) ||
+    Number(left?.y ?? 0) - Number(right?.y ?? 0);
+  const queue = stages
+    .filter((stage) => indegree.get(String(stage.id)) === 0)
+    .sort(sortCanvasOrder);
+  const ordered = [];
+  while (queue.length) {
+    const stage = queue.shift();
+    ordered.push(stage);
+    for (const next of outgoing.get(String(stage.id)) ?? []) {
+      indegree.set(next, indegree.get(next) - 1);
+      if (indegree.get(next) === 0) {
+        queue.push(byId.get(next));
+        queue.sort(sortCanvasOrder);
+      }
+    }
+  }
+  if (ordered.length !== stages.length) {
+    throw new Error("Stage dependency cycle is not materializable; use a bounded loop preset.");
+  }
+  return ordered;
 }
 
 export function fillPresetScriptName(script, name) {
@@ -1575,7 +2554,12 @@ export function fillPresetScriptName(script, name) {
 }
 
 function rhaiString(value) {
-  return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return `"${String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t")}"`;
 }
 
 /**
@@ -1585,14 +2569,14 @@ function rhaiString(value) {
 export function collectWorkflowGraph(shapes = [], opts = {}) {
   const nodes = shapes.filter((s) => {
     const am = s?.meta?.am;
-    return am && (am.role === "stage" || am.role === "subagent");
+    return am && WORKFLOW_RUNTIME_ROLES.has(am.role);
   });
-  const stages = nodes.filter((s) => s.meta.am.role === "stage");
-  const subagents = nodes.filter((s) => s.meta.am.role === "subagent");
+  const categorized = categorizeWorkflowGraph({}, nodes);
+  const { stages, agents, personas } = categorized;
   const presetId =
     opts.presetId ??
     stages[0]?.meta?.am?.presetId ??
-    subagents[0]?.meta?.am?.presetId ??
+    agents[0]?.meta?.am?.presetId ??
     null;
   const unmodified =
     opts.unmodified ??
@@ -1602,15 +2586,63 @@ export function collectWorkflowGraph(shapes = [], opts = {}) {
     stages[0]?.meta?.am?.stageType ??
     defaultStageType(presetId || "single");
 
-  return {
+  return categorizeWorkflowGraph({
     name: opts.name ?? (presetId ? suggestWorkflowName(presetId) : "canvas-workflow"),
     presetId,
     stageType,
     unmodified: Boolean(unmodified),
     presetScript: opts.presetScript ?? null,
     stages,
-    subagents,
-  };
+    agents,
+    personas,
+    edges: collectBoundWorkflowEdges(
+      nodes,
+      opts.records ?? [],
+      opts.arrows ?? [],
+    ),
+    moduleDetails: opts.moduleDetails ?? {},
+  }, nodes);
+}
+
+export function collectBoundWorkflowEdges(nodes = [], records = [], arrows = []) {
+  const nodeIds = new Set(nodes.map((node) => String(node.id)));
+  const grouped = new Map();
+  for (const record of records) {
+    if (record?.typeName !== "binding" || record?.type !== "arrow") continue;
+    if (!nodeIds.has(String(record.toId))) continue;
+    const terminals = grouped.get(String(record.fromId)) ?? {};
+    terminals[record.props?.terminal] = String(record.toId);
+    grouped.set(String(record.fromId), terminals);
+  }
+  const edges = [];
+  for (const [arrowId, terminals] of grouped) {
+    if (terminals.start && terminals.end && terminals.start !== terminals.end) {
+      edges.push({ id: arrowId, from: terminals.start, to: terminals.end });
+    }
+  }
+  for (const arrow of arrows) {
+    const from = String(
+      arrow?.from ?? arrow?.fromNode ?? arrow?.meta?.am?.fromNode ?? "",
+    );
+    const to = String(arrow?.to ?? arrow?.toNode ?? arrow?.meta?.am?.toNode ?? "");
+    if (nodeIds.has(from) && nodeIds.has(to) && from !== to) {
+      edges.push({ id: String(arrow?.id ?? `${from}->${to}`), from, to });
+    }
+  }
+  return [...new Map(edges.map((edge) => [`${edge.from}->${edge.to}`, edge])).values()];
+}
+
+export function countWorkflowPorts(nodes = [], records = [], arrows = []) {
+  const counts = new Map(
+    nodes.map((node) => [String(node.id), { inCount: 0, outCount: 0 }]),
+  );
+  for (const edge of collectBoundWorkflowEdges(nodes, records, arrows)) {
+    const from = counts.get(String(edge.from));
+    const to = counts.get(String(edge.to));
+    if (from) from.outCount += 1;
+    if (to) to.inCount += 1;
+  }
+  return counts;
 }
 
 // ---------------------------------------------------------------------------
@@ -1626,6 +2658,14 @@ export function resolveAuthToken(env = globalThis) {
   const constant = String(GROK_CONFIG_TOKEN || "").trim();
   if (constant && constant !== "REPLACE_WITH_GROK_CONFIG_TOKEN") return constant;
   return constant || "";
+}
+
+export function resolveGrokConfigBase(env = globalThis) {
+  const fromGlobal =
+    env && typeof env.__AM_GROK_CONFIG_BASE__ === "string"
+      ? env.__AM_GROK_CONFIG_BASE__.trim()
+      : "";
+  return fromGlobal || GROK_CONFIG_BASE;
 }
 
 export function authHeaders(token) {
@@ -1736,9 +2776,18 @@ export default function agentsModelsDocumentScript(ctx) {
     editor.updateShape?.({
       id: existing.id,
       type: existing.type,
+      ...(Number.isFinite(shape.x) ? { x: shape.x } : {}),
+      ...(Number.isFinite(shape.y) ? { y: shape.y } : {}),
       props: { ...(existing.props || {}), ...(shape.props || {}) },
       meta: { ...(existing.meta || {}), ...(shape.meta || {}) },
     });
+    if (
+      shape.parentId &&
+      existing.parentId !== shape.parentId &&
+      typeof editor.reparentShapes === "function"
+    ) {
+      editor.reparentShapes([existing.id], shape.parentId);
+    }
     return editor.getShape?.(shape.id) ?? shape;
   };
 
@@ -1747,23 +2796,57 @@ export default function agentsModelsDocumentScript(ctx) {
       ? (fromId, toId, options) =>
           helpers.createArrowBetweenShapes(fromId, toId, options)
       : (fromId, toId, props = {}) => {
-      const id = props.id || createShapeId(`${ID_NS}-arrow-${Date.now()}`);
-      editor.createShape?.({
-        id,
-        type: "arrow",
-        x: 0,
-        y: 0,
-        props: {
-          color: props.color ?? "grey",
-          dash: props.dash ?? "draw",
-          size: "s",
-          arrowheadEnd: "arrow",
-          richText: toRichText(props.label || ""),
-        },
-        meta: props.meta ?? {},
-      });
-      return id;
-    };
+          const from = editor.getShapePageBounds?.(fromId);
+          const to = editor.getShapePageBounds?.(toId);
+          if (!from || !to) {
+            throw new Error("Cannot connect nodes before their bounds are available.");
+          }
+          const id = props.id || createShapeId(`${ID_NS}-arrow-${Date.now()}`);
+          editor.createShape?.({
+            id,
+            type: "arrow",
+            x: from.maxX,
+            y: from.center.y,
+            props: {
+              start: { x: 0, y: 0 },
+              end: {
+                x: to.minX - from.maxX,
+                y: to.center.y - from.center.y,
+              },
+              color: props.color ?? "grey",
+              dash: props.dash ?? "solid",
+              size: "s",
+              arrowheadEnd: props.arrowheadEnd ?? "arrow",
+              richText: props.richText ?? toRichText(props.label || ""),
+            },
+            meta: props.meta ?? {},
+          });
+          editor.createBindings?.([
+            {
+              type: "arrow",
+              fromId: id,
+              toId: fromId,
+              props: {
+                terminal: "start",
+                normalizedAnchor: { x: 1, y: 0.5 },
+                isExact: false,
+                isPrecise: true,
+              },
+            },
+            {
+              type: "arrow",
+              fromId: id,
+              toId,
+              props: {
+                terminal: "end",
+                normalizedAnchor: { x: 0, y: 0.5 },
+                isExact: false,
+                isPrecise: true,
+              },
+            },
+          ]);
+          return id;
+        };
 
   const run = (fn) => {
     if (typeof editor.run === "function") {
@@ -1782,24 +2865,30 @@ export default function agentsModelsDocumentScript(ctx) {
     lastSavedName: null,
     applying: false,
     instantiating: false,
+    syncing: false,
   };
+  const previousUiVersion = editor.getShape?.(
+    createShapeId(`${ID_NS}-toolbar`),
+  )?.meta?.am?.uiVersion;
 
   run(() => {
     // One native toolbar shape replaces the old frame + nine selectable geos.
     upsertNativeShape({
       id: createShapeId(`${ID_NS}-toolbar`),
       type: AGENTS_MODELS_SHAPE_TYPE,
-      x: layout.toolbar.x,
-      y: layout.toolbar.y,
+      x: -10_000,
+      y: -10_000,
       props: {
-        w: layout.toolbar.w,
-        h: layout.toolbar.h,
+        w: 1,
+        h: 1,
       },
       meta: {
         am: {
           domain: "agents-models",
           role: "toolbar",
           kind: "toolbar",
+          hiddenControl: true,
+          uiVersion: WORKFLOW_UI_VERSION,
           actionState: "idle",
           actionMessage: "Choose a preset to begin.",
         },
@@ -1820,7 +2909,7 @@ export default function agentsModelsDocumentScript(ctx) {
       },
       meta: { am: { role: "furniture", kind: "lane", lane: "STAGE" } },
     });
-    // SUBAGENT lane
+    // AGENT / PERSONA lane
     upsertNativeShape({
       id: createShapeId(`${ID_NS}-lane-subagent`),
       type: "frame",
@@ -1829,10 +2918,10 @@ export default function agentsModelsDocumentScript(ctx) {
       props: {
         w: layout.subagentLane.w,
         h: layout.subagentLane.h,
-        name: "SUBAGENT",
+        name: "AGENT / PERSONA",
         color: "grey",
       },
-      meta: { am: { role: "furniture", kind: "lane", lane: "SUBAGENT" } },
+      meta: { am: { role: "furniture", kind: "lane", lane: "AGENT / PERSONA" } },
     });
     // Native frames render their own names. Remove the superseded duplicate
     // text labels from the stock-geo implementation.
@@ -1845,6 +2934,7 @@ export default function agentsModelsDocumentScript(ctx) {
     }
 
     // One native, scrollable catalog shape replaces dozens of stacked geos.
+    // It is a real canvas node: operators can resize it and drag rows out.
     upsertNativeShape({
       id: createShapeId(`${ID_NS}-catalog`),
       type: AGENTS_MODELS_SHAPE_TYPE,
@@ -1859,6 +2949,7 @@ export default function agentsModelsDocumentScript(ctx) {
           domain: "agents-models",
           role: "catalog",
           kind: "catalog",
+          hiddenControl: false,
           proxyOk: null,
           catalogSections: [],
         },
@@ -1876,6 +2967,155 @@ export default function agentsModelsDocumentScript(ctx) {
     }
   });
 
+  // One-time migration from the schematic/fixed-card layout. It keeps every
+  // logical node and every valid binding, reparents workflow cards into page
+  // space, then lays them out from the actual binding graph. This prevents
+  // arrows from mixing coordinate spaces across frame parents.
+  if (previousUiVersion !== WORKFLOW_UI_VERSION) {
+    run(() => {
+      const all = editor.getCurrentPageShapes?.() ?? [];
+      const workflowNodes = all.filter((shape) =>
+        WORKFLOW_RUNTIME_ROLES.has(shape?.meta?.am?.role),
+      );
+      const records = editor.store?.allRecords?.() ?? [];
+      const arrows = all.filter((shape) => shape?.type === "arrow");
+      const edges = collectBoundWorkflowEdges(workflowNodes, records, arrows);
+      const pageId = editor.getCurrentPageId?.();
+      if (pageId && typeof editor.reparentShapes === "function") {
+        editor.reparentShapes(
+          workflowNodes.map((shape) => shape.id),
+          pageId,
+        );
+      }
+      const graphLayout = layoutWorkflowGraph(
+        workflowNodes.map((shape) => {
+          const bounds = editor.getShapePageBounds?.(shape.id);
+          return {
+            id: String(shape.id),
+            role: shape.meta.am.role,
+            x: bounds?.minX ?? shape.x,
+            y: bounds?.minY ?? shape.y,
+            w: shape.props?.w,
+            h: shape.props?.h,
+          };
+        }),
+        edges,
+        {
+          stageX: layout.stageOrigin.x,
+          stageY: layout.stageOrigin.y,
+          workerY: layout.subagentOrigin.y,
+        },
+      );
+      const updates = workflowNodes.flatMap((shape) => {
+        const position = graphLayout.positions.get(String(shape.id));
+        if (!position) return [];
+        const width = Math.max(210, Number(shape.props?.w ?? position.w));
+        const compactFields =
+          shape.meta.am.role !== "stage" && width < 260;
+        return [
+          {
+            id: shape.id,
+            type: AGENTS_MODELS_SHAPE_TYPE,
+            x: position.x,
+            y: position.y,
+            props: {
+              w: width,
+              h: Math.max(
+                shape.meta.am.role === "stage"
+                  ? 166
+                  : compactFields
+                    ? 226
+                    : 184,
+                Number(shape.props?.h ?? position.h),
+              ),
+            },
+          },
+        ];
+      });
+      if (updates.length) {
+        if (typeof editor.updateShapes === "function") {
+          editor.updateShapes(updates);
+        } else {
+          for (const update of updates) editor.updateShape?.(update);
+        }
+      }
+      const subagentLane = editor.getShape?.(
+        createShapeId(`${ID_NS}-lane-subagent`),
+      );
+      const stageLane = editor.getShape?.(createShapeId(`${ID_NS}-lane-stage`));
+      if (stageLane && graphLayout.requiredLaneWidth > stageLane.props?.w) {
+        editor.updateShape?.({
+          id: stageLane.id,
+          type: "frame",
+          props: { w: graphLayout.requiredLaneWidth },
+        });
+      }
+      if (subagentLane && graphLayout.requiredSubagentHeight > subagentLane.props?.h) {
+        editor.updateShape?.({
+          id: subagentLane.id,
+          type: "frame",
+          props: {
+            w: Math.max(
+              Number(subagentLane.props?.w ?? 0),
+              graphLayout.requiredLaneWidth,
+            ),
+            h: graphLayout.requiredSubagentHeight,
+          },
+        });
+      }
+
+      const workflowById = new Map(
+        workflowNodes.map((shape) => [String(shape.id), shape]),
+      );
+      for (const edge of edges) {
+        const arrow = editor.getShape?.(edge.id);
+        const fromRole = workflowById.get(String(edge.from))?.meta?.am?.role;
+        const toRole = workflowById.get(String(edge.to))?.meta?.am?.role;
+        if (!arrow || arrow.type !== "arrow" || !fromRole || !toRole) continue;
+        const style = workflowEdgeStyle(fromRole, toRole);
+        editor.updateShape?.({
+          id: arrow.id,
+          type: "arrow",
+          props: {
+            bend: 0,
+            color: style.color,
+            dash: style.dash,
+            size: "s",
+            arrowheadEnd: "arrow",
+          },
+          meta: {
+            ...(arrow.meta || {}),
+            am: {
+              ...(arrow.meta?.am || {}),
+              role: "arrow",
+              kind: style.kind,
+              fromNode: String(edge.from),
+              toNode: String(edge.to),
+            },
+          },
+        });
+      }
+
+      const bindingCountByArrow = new Map();
+      for (const record of editor.store?.allRecords?.() ?? []) {
+        if (record?.typeName !== "binding" || record?.type !== "arrow") continue;
+        bindingCountByArrow.set(
+          String(record.fromId),
+          (bindingCountByArrow.get(String(record.fromId)) ?? 0) + 1,
+        );
+      }
+      const orphanGeneratedArrows = all.filter(
+        (shape) =>
+          shape?.type === "arrow" &&
+          shape?.meta?.am?.role === "arrow" &&
+          (bindingCountByArrow.get(String(shape.id)) ?? 0) < 2,
+      );
+      if (orphanGeneratedArrows.length) {
+        editor.deleteShapes?.(orphanGeneratedArrows.map((shape) => shape.id));
+      }
+    });
+  }
+
   // ---- Catalog sync (debounce + AbortController tied to signal) ----
   let catalogTimer = null;
   let catalogAbort = null;
@@ -1884,15 +3124,17 @@ export default function agentsModelsDocumentScript(ctx) {
     const all = editor.getCurrentPageShapes?.() ?? [];
     const doomed = all.filter((s) => {
       const role = s?.meta?.am?.role;
+      const legacyCatalogId = String(s?.id ?? "").startsWith(
+        "shape:am-catalog-",
+      );
       return (
         role === "model-slot" ||
-        role === "agent" ||
-        role === "persona" ||
         role === "role" ||
         role === "catalog-header" ||
         role === "catalog-more" ||
         role === "catalog-error" ||
-        role === "status-dot"
+        role === "status-dot" ||
+        (legacyCatalogId && (role === "agent" || role === "persona"))
       );
     });
     if (doomed.length && editor.deleteShapes) {
@@ -1900,7 +3142,7 @@ export default function agentsModelsDocumentScript(ctx) {
     }
   };
 
-  const renderCatalogNodes = (nodes, proxyOk = null) => {
+  const renderCatalogNodes = (nodes, proxyOk = null, sections = null) => {
     run(() => {
       clearCatalogDynamic();
       const catalogId = createShapeId(`${ID_NS}-catalog`);
@@ -1926,6 +3168,7 @@ export default function agentsModelsDocumentScript(ctx) {
               role: "catalog",
               kind: "catalog",
               proxyOk: errorNode ? false : proxyOk,
+              hiddenControl: false,
               catalogSections: errorNode
                 ? [
                     {
@@ -1942,7 +3185,7 @@ export default function agentsModelsDocumentScript(ctx) {
                       hidden: 0,
                     },
                   ]
-                : catalogNodesToSections(nodes),
+                : sections ?? catalogNodesToSections(nodes),
             },
           },
         });
@@ -1961,7 +3204,7 @@ export default function agentsModelsDocumentScript(ctx) {
     }
     const token = resolveAuthToken();
     try {
-      const res = await fetch(`${GROK_CONFIG_BASE}/api/grok/catalog`, {
+      const res = await fetch(`${resolveGrokConfigBase()}/api/grok/catalog`, {
         method: "GET",
         headers: authHeaders(token),
         signal: catalogAbort.signal,
@@ -1981,6 +3224,7 @@ export default function agentsModelsDocumentScript(ctx) {
       renderCatalogNodes(
         catalogToNodes(catalog, layout.catalog),
         catalog.models?.proxy?.ok ?? true,
+        catalogToInteractiveSections(catalog),
       );
     } catch (err) {
       if (err?.name === "AbortError") return;
@@ -2011,7 +3255,16 @@ export default function agentsModelsDocumentScript(ctx) {
     const all = editor.getCurrentPageShapes?.() ?? [];
     const cardRoles = new Set([
       "stage",
+      "agent",
+      "persona",
       "subagent",
+      "capability",
+      "skill",
+      "gate",
+      "input",
+      "artifact",
+      "result",
+      "module",
       "arrow",
       "stage-header",
       "stage-divider",
@@ -2026,7 +3279,7 @@ export default function agentsModelsDocumentScript(ctx) {
       if (!am) return false;
       if (cardRoles.has(am.role)) return true;
       if (am.role === "receipt" || am.role === "play-note") return true;
-      if (am.card === "stage" || am.card === "subagent") return true;
+      if (WORKFLOW_RUNTIME_ROLES.has(am.card)) return true;
       return false;
     });
     // The desktop helper creates real arrow bindings but accepts no id/meta
@@ -2055,6 +3308,373 @@ export default function agentsModelsDocumentScript(ctx) {
     }
   };
 
+  const refreshWorkflowPortCounts = () => {
+    const all = editor.getCurrentPageShapes?.() ?? [];
+    const nodes = all.filter((shape) =>
+      WORKFLOW_RUNTIME_ROLES.has(shape?.meta?.am?.role),
+    );
+    const counts = countWorkflowPorts(
+      nodes,
+      editor.store?.allRecords?.() ?? [],
+      all.filter((shape) => shape?.type === "arrow"),
+    );
+    const updates = nodes.flatMap((shape) => {
+      const count = counts.get(String(shape.id)) ?? {
+        inCount: 0,
+        outCount: 0,
+      };
+      const meta = shape.meta?.am ?? {};
+      if (
+        meta.inCount === count.inCount &&
+        meta.outCount === count.outCount
+      ) {
+        return [];
+      }
+      return [
+        {
+          id: shape.id,
+          type: AGENTS_MODELS_SHAPE_TYPE,
+          meta: {
+            ...(shape.meta || {}),
+            am: {
+              ...meta,
+              ...count,
+            },
+          },
+        },
+      ];
+    });
+    if (updates.length) {
+      run(() => {
+        if (typeof editor.updateShapes === "function") {
+          editor.updateShapes(updates);
+        } else {
+          for (const update of updates) editor.updateShape?.(update);
+        }
+      });
+    }
+    return counts;
+  };
+
+  const relayoutWorkflowGraph = () => {
+    const all = editor.getCurrentPageShapes?.() ?? [];
+    const workflowNodes = all.filter((shape) =>
+      WORKFLOW_RUNTIME_ROLES.has(shape?.meta?.am?.role),
+    );
+    if (!workflowNodes.length) return null;
+    const arrows = all.filter((shape) => shape?.type === "arrow");
+    const edges = collectBoundWorkflowEdges(
+      workflowNodes,
+      editor.store?.allRecords?.() ?? [],
+      arrows,
+    );
+    const pageId = editor.getCurrentPageId?.();
+    if (pageId && typeof editor.reparentShapes === "function") {
+      editor.reparentShapes(
+        workflowNodes.map((shape) => shape.id),
+        pageId,
+      );
+    }
+    const graphLayout = layoutWorkflowGraph(
+      workflowNodes.map((shape) => {
+        const bounds = editor.getShapePageBounds?.(shape.id);
+        return {
+          id: String(shape.id),
+          role: shape.meta?.am?.role,
+          x: bounds?.minX ?? shape.x,
+          y: bounds?.minY ?? shape.y,
+          w: shape.props?.w,
+          h: shape.props?.h,
+        };
+      }),
+      edges,
+      {
+        stageX: layout.stageOrigin.x,
+        stageY: layout.stageOrigin.y,
+        workerY: layout.subagentOrigin.y,
+      },
+    );
+    const updates = workflowNodes.flatMap((shape) => {
+      const position = graphLayout.positions.get(String(shape.id));
+      if (!position) return [];
+      return [
+        {
+          id: shape.id,
+          type: AGENTS_MODELS_SHAPE_TYPE,
+          x: position.x,
+          y: position.y,
+        },
+      ];
+    });
+    if (updates.length) {
+      if (typeof editor.updateShapes === "function") editor.updateShapes(updates);
+      else for (const update of updates) editor.updateShape?.(update);
+    }
+
+    const stageLane = editor.getShape?.(createShapeId(`${ID_NS}-lane-stage`));
+    const subagentLane = editor.getShape?.(
+      createShapeId(`${ID_NS}-lane-subagent`),
+    );
+    if (stageLane) {
+      editor.updateShape?.({
+        id: stageLane.id,
+        type: "frame",
+        props: {
+          w: Math.max(
+            Number(stageLane.props?.w ?? 0),
+            graphLayout.requiredLaneWidth,
+          ),
+        },
+      });
+    }
+    if (subagentLane) {
+      editor.updateShape?.({
+        id: subagentLane.id,
+        type: "frame",
+        props: {
+          w: Math.max(
+            Number(subagentLane.props?.w ?? 0),
+            graphLayout.requiredLaneWidth,
+          ),
+          h: Math.max(
+            Number(subagentLane.props?.h ?? 0),
+            graphLayout.requiredSubagentHeight,
+          ),
+        },
+      });
+    }
+
+    const workflowById = new Map(
+      workflowNodes.map((shape) => [String(shape.id), shape]),
+    );
+    for (const edge of edges) {
+      const arrow = editor.getShape?.(edge.id);
+      const fromRole = workflowById.get(String(edge.from))?.meta?.am?.role;
+      const toRole = workflowById.get(String(edge.to))?.meta?.am?.role;
+      if (!arrow || arrow.type !== "arrow" || !fromRole || !toRole) continue;
+      const style = workflowEdgeStyle(fromRole, toRole);
+      editor.updateShape?.({
+        id: arrow.id,
+        type: "arrow",
+        props: {
+          bend: 0,
+          color: style.color,
+          dash: style.dash,
+          size: "s",
+          arrowheadEnd: "arrow",
+        },
+        meta: {
+          ...(arrow.meta || {}),
+          am: {
+            ...(arrow.meta?.am || {}),
+            role: "arrow",
+            kind: style.kind,
+            fromNode: String(edge.from),
+            toNode: String(edge.to),
+          },
+        },
+      });
+    }
+    return graphLayout;
+  };
+
+  const addWorkflowNode = (nodeKind, options = {}) => {
+    if (!WORKFLOW_NODE_ROLES.includes(nodeKind)) {
+      throw new Error(`Unsupported workflow node kind: ${nodeKind}`);
+    }
+    const all = editor.getCurrentPageShapes?.() ?? [];
+    const peers = all.filter((shape) => {
+      const role = shape?.meta?.am?.role;
+      return nodeKind === "stage"
+        ? role === "stage"
+        : WORKFLOW_RUNTIME_ROLES.has(role) && role !== "stage";
+    });
+    const index = peers.length;
+    const inStageLane = nodeKind === "stage";
+    const targetW =
+      nodeKind === "stage" ? LAYOUT.stageNodeW : LAYOUT.subagentW;
+    const targetH =
+      nodeKind === "stage"
+        ? LAYOUT.stageNodeH
+        : ["capability", "skill", "gate", "input", "artifact", "result", "module"].includes(nodeKind)
+          ? 226
+          : LAYOUT.subagentH;
+    let x =
+      (inStageLane ? layout.stageOrigin.x : layout.subagentOrigin.x) +
+      (index % 3) * 300;
+    let y =
+      (inStageLane ? layout.stageOrigin.y : layout.subagentOrigin.y) +
+      Math.floor(index / 3) * 220;
+    const connectFrom = options.connectFromId
+      ? editor.getShape?.(options.connectFromId)
+      : null;
+    if (
+      Number.isFinite(options.dropPoint?.x) &&
+      Number.isFinite(options.dropPoint?.y)
+    ) {
+      x = Number(options.dropPoint.x) - targetW / 2;
+      y = Number(options.dropPoint.y) - 28;
+    } else if (connectFrom) {
+      const sourceBounds = editor.getShapePageBounds?.(connectFrom.id);
+      if (sourceBounds) {
+        const suggested = suggestConnectedNodePosition(
+          {
+            role: connectFrom.meta?.am?.role,
+            bounds: sourceBounds,
+          },
+          nodeKind,
+          { w: targetW, h: targetH },
+          all.flatMap((shape) => {
+            if (
+              !WORKFLOW_RUNTIME_ROLES.has(shape?.meta?.am?.role)
+            ) {
+              return [];
+            }
+            const bounds = editor.getShapePageBounds?.(shape.id);
+            return bounds ? [bounds] : [];
+          }),
+          { workerY: layout.subagentOrigin.y },
+        );
+        x = suggested.x;
+        y = suggested.y;
+      }
+    }
+    const id = createShapeId(
+      `${ID_NS}-${nodeKind}-${Date.now().toString(36)}-${index}`,
+    );
+    const defaultLabels = {
+      stage: "Stage",
+      agent: "Agent",
+      persona: "Persona",
+      capability: "Capabilities",
+      skill: "Skill",
+      gate: "Gate",
+      input: "Input",
+      artifact: "Artifact",
+      result: "Result",
+      module: "Module",
+    };
+    const label = options.catalogItemLabel
+      ? String(options.catalogItemLabel)
+      : `${defaultLabels[nodeKind] || nodeKind} ${index + 1}`;
+    const nodeMeta = {
+      domain: "agents-models",
+      role: nodeKind,
+      card: nodeKind,
+      label,
+      statusColor: "grey",
+      inCount: 0,
+      outCount: 0,
+      unmodified: false,
+    };
+    if (nodeKind === "stage") nodeMeta.stageType = "single";
+    if (nodeKind === "agent") {
+      nodeMeta.agentRef = options.catalogItemId
+        ? String(options.catalogItemId)
+        : null;
+    }
+    if (nodeKind === "persona") {
+      nodeMeta.persona = options.catalogItemId
+        ? String(options.catalogItemId)
+        : "";
+    }
+    if (nodeKind === "capability") {
+      nodeMeta.capabilityMode = "all";
+      nodeMeta.toolRefsText = "";
+    }
+    if (nodeKind === "skill") {
+      nodeMeta.skillRef = options.catalogItemId
+        ? String(options.catalogItemId)
+        : "";
+    }
+    if (nodeKind === "gate") {
+      nodeMeta.gateOperator = "not-empty";
+      nodeMeta.gateValue = "";
+      nodeMeta.gateOnFalse = "stop";
+      nodeMeta.retryCount = 0;
+      nodeMeta.timeoutSeconds = 0;
+      nodeMeta.errorRoute = "";
+    }
+    if (nodeKind === "input") nodeMeta.dataValue = "";
+    if (nodeKind === "artifact") nodeMeta.artifactRef = "";
+    if (nodeKind === "result") nodeMeta.resultLabel = "Workflow result";
+    if (nodeKind === "module") {
+      nodeMeta.moduleRef = options.catalogItemId
+        ? String(options.catalogItemId)
+        : "";
+      nodeMeta.moduleVersion = options.catalogItemValue
+        ? String(options.catalogItemValue)
+        : "";
+      nodeMeta.moduleParams = "{}";
+    }
+    if (options.catalogItemId) {
+      nodeMeta.catalogRef = String(options.catalogItemId);
+      nodeMeta.catalogValue = String(options.catalogItemValue ?? "");
+    }
+    run(() => {
+      upsertNativeShape({
+        id,
+        type: AGENTS_MODELS_SHAPE_TYPE,
+        parentId: editor.getCurrentPageId?.(),
+        x,
+        y,
+        props: {
+          w: targetW,
+          h: targetH,
+        },
+        meta: {
+          am: nodeMeta,
+        },
+      });
+      editor.select?.(id);
+    });
+    if (connectFrom) {
+      const arrowId = createArrowBetweenShapes(connectFrom.id, id, {
+        bend: 0,
+        arrowheadEnd: "arrow",
+        richText: toRichText(""),
+      });
+      const arrow = editor.getShape?.(arrowId);
+      if (arrow?.type === "arrow") {
+        const style = workflowEdgeStyle(
+          connectFrom.meta?.am?.role,
+          nodeKind,
+        );
+        editor.updateShape?.({
+          id: arrow.id,
+          type: "arrow",
+          props: {
+            bend: 0,
+            dash: style.dash,
+            color: style.color,
+            size: "s",
+            arrowheadEnd: "arrow",
+          },
+          meta: {
+            ...(arrow.meta || {}),
+            am: {
+              role: "arrow",
+              kind: style.kind,
+              fromNode: String(connectFrom.id),
+              toNode: String(id),
+            },
+          },
+        });
+      }
+    }
+    refreshWorkflowPortCounts();
+    state.unmodified = false;
+    updateToolbarReceipt(
+      "succeeded",
+      options.catalogItemId
+        ? `Created ${nodeKind} “${label}” from the live catalog.`
+        : connectFrom
+        ? `Added ${nodeKind} and connected it with a bound arrow.`
+        : `Added ${nodeKind}.`,
+    );
+    return id;
+  };
+
   const materializePreset = async (presetId) => {
     if (state.instantiating) return;
     state.instantiating = true;
@@ -2062,7 +3682,7 @@ export default function agentsModelsDocumentScript(ctx) {
     try {
       let preset = { id: presetId, stageType: defaultStageType(presetId) };
       try {
-        const res = await fetch(`${GROK_CONFIG_BASE}/api/grok/workflow-presets`, {
+        const res = await fetch(`${resolveGrokConfigBase()}/api/grok/workflow-presets`, {
           method: "GET",
           headers: authHeaders(token),
           signal: signal ?? undefined,
@@ -2098,6 +3718,7 @@ export default function agentsModelsDocumentScript(ctx) {
           upsertNativeShape({
             id: sid,
             type: AGENTS_MODELS_SHAPE_TYPE,
+            parentId: editor.getCurrentPageId?.(),
             x: spec.x,
             y: spec.y,
             props: {
@@ -2109,9 +3730,10 @@ export default function agentsModelsDocumentScript(ctx) {
               am: {
                 ...(spec.meta?.am || {}),
                 domain: "agents-models",
-                role: spec.kind,
-                card: spec.kind,
+                role: spec.kind === "subagent" ? "agent" : spec.kind,
+                card: spec.kind === "subagent" ? "agent" : spec.kind,
                 label: spec.meta?.am?.label ?? spec.text ?? spec.kind,
+                agentRef: spec.meta?.am?.agentRef ?? null,
                 variable: Boolean(spec.meta?.am?.variable),
               },
             },
@@ -2152,6 +3774,8 @@ export default function agentsModelsDocumentScript(ctx) {
           });
         }
       }
+      relayoutWorkflowGraph();
+      refreshWorkflowPortCounts();
 
       state.lastPresetId = presetId;
       state.lastPresetScript =
@@ -2159,7 +3783,7 @@ export default function agentsModelsDocumentScript(ctx) {
       state.unmodified = true;
       updateToolbarReceipt(
         "succeeded",
-        `${presetId.toUpperCase()} ready · ${graph.stages.length} stage(s) · ${graph.subagents.length} subagent(s)`,
+        `${presetId.toUpperCase()} ready · ${graph.stages.length} stage(s) · ${graph.agents.length} agent(s)`,
       );
     } catch (error) {
       updateToolbarReceipt(
@@ -2191,37 +3815,150 @@ export default function agentsModelsDocumentScript(ctx) {
     });
   };
 
-  const handleApply = async () => {
+  const hydratePersonaDetails = async (graph) => {
+    const refs = [
+      ...new Set(
+        (graph.personas ?? [])
+          .map((persona) => String(persona?.meta?.am?.persona ?? "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const details = {};
+    for (const ref of refs) {
+      const res = await fetch(
+        `${resolveGrokConfigBase()}/api/grok/personas/${encodeURIComponent(ref)}`,
+        {
+          method: "GET",
+          headers: authHeaders(resolveAuthToken()),
+          signal: signal ?? undefined,
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.persona?.instructions) {
+        throw new Error(
+          body?.message || `Persona "${ref}" instructions are unavailable.`,
+        );
+      }
+      details[ref] = {
+        instructions: String(body.persona.instructions).slice(0, 12_000),
+      };
+    }
+    return details;
+  };
+
+  const hydrateModuleDetails = async (graph) => {
+    const refs = [
+      ...new Map(
+        (graph.modules ?? [])
+          .map((node) => {
+            const meta = node?.meta?.am ?? {};
+            const id = String(meta.moduleRef ?? meta.catalogRef ?? "").trim();
+            const version = String(
+              meta.moduleVersion ?? meta.catalogValue ?? "",
+            ).trim();
+            return id && version ? [`${id}@${version}`, { id, version }] : null;
+          })
+          .filter(Boolean),
+      ).entries(),
+    ];
+    const details = {};
+    for (const [key, ref] of refs) {
+      const res = await fetch(
+        `${resolveGrokConfigBase()}/api/grok/modules/${encodeURIComponent(
+          ref.id,
+        )}?version=${encodeURIComponent(ref.version)}`,
+        {
+          method: "GET",
+          headers: authHeaders(resolveAuthToken()),
+          signal: signal ?? undefined,
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.module?.nodes) {
+        throw new Error(
+          body?.message || `Module "${key}" definition is unavailable.`,
+        );
+      }
+      details[key] = body.module;
+    }
+    return details;
+  };
+
+  const inspectCurrentWorkflow = async () => {
+    const all = editor.getCurrentPageShapes?.() ?? [];
+    const graph = collectWorkflowGraph(all, {
+      presetId: state.lastPresetId,
+      unmodified: state.unmodified,
+      presetScript: state.lastPresetScript,
+      records: editor.store?.allRecords?.() ?? [],
+    });
+    graph.moduleDetails = await hydrateModuleDetails(graph);
+    return { all, graph, report: preflightWorkflow(graph) };
+  };
+
+  const handlePreflight = async () => {
+    try {
+      const { report } = await inspectCurrentWorkflow();
+      if (!report.ok) {
+        updateToolbarReceipt(
+          "failed",
+          `PREFLIGHT · ${report.errors[0]?.message || "Graph is invalid."} · ${
+            report.errors.length
+          } error(s)`,
+        );
+        return report;
+      }
+      updateToolbarReceipt(
+        "succeeded",
+        `PREFLIGHT OK · ${report.summary.nodes} nodes · ${report.summary.edges} edges · ${report.warnings.length} warning(s)`,
+      );
+      return report;
+    } catch (error) {
+      updateToolbarReceipt(
+        "failed",
+        `PREFLIGHT ERROR · ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  };
+
+  const handleApply = async (mode = "apply") => {
     if (state.applying) return;
     state.applying = true;
     try {
-      const all = editor.getCurrentPageShapes?.() ?? [];
-      const graph = collectWorkflowGraph(all, {
-        presetId: state.lastPresetId,
-        unmodified: state.unmodified,
-        presetScript: state.lastPresetScript,
-      });
+      const { all, graph, report } = await inspectCurrentWorkflow();
       // Detect modification: any workflow node without unmodified flag
       const wf = all.filter((s) => {
         const r = s?.meta?.am?.role;
-        return r === "stage" || r === "subagent";
+        return WORKFLOW_RUNTIME_ROLES.has(r);
       });
       if (wf.some((s) => s.meta?.am?.unmodified !== true)) {
         graph.unmodified = false;
       }
 
+      if (!report.ok) {
+        throw new Error(
+          `${report.errors[0]?.message || "Graph is invalid."} (${report.errors.length} error(s))`,
+        );
+      }
+      graph.personaDetails = await hydratePersonaDetails(graph);
       const script = compileWorkflow(graph);
       const name = graph.name;
       const token = resolveAuthToken();
       let receipt;
       try {
-        const res = await fetch(`${GROK_CONFIG_BASE}/api/grok/workflows/save`, {
+        const res = await fetch(`${resolveGrokConfigBase()}/api/grok/workflows/save`, {
           method: "POST",
           headers: {
             ...authHeaders(token),
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ name, script, scope: "user" }),
+          body: JSON.stringify({
+            name,
+            script,
+            scope: "user",
+            overwrite: true,
+          }),
           signal: signal ?? undefined,
         });
         const body = await res.json().catch(() => ({}));
@@ -2263,25 +4000,121 @@ export default function agentsModelsDocumentScript(ctx) {
         : `APPLY ERROR · ${receipt.error}: ${receipt.message || ""}`;
       updateToolbarReceipt(receipt.ok ? "succeeded" : "failed", receiptText);
 
-      // PLAY is disabled in v1 — after successful save, surface a compact
-      // receipt in the native toolbar instead of creating another stock note.
       if (receipt.ok) {
         updateToolbarReceipt(
           "succeeded",
-          `Saved ${name}. Launch with /workflow ${name} in Grok.`,
+          mode === "play"
+            ? `Materialized ${name}. Run /workflow ${name} in Grok.`
+            : `Saved ${name}. Ready for /workflow ${name}.`,
         );
       }
+    } catch (error) {
+      updateToolbarReceipt(
+        "failed",
+        `COMPILE ERROR · ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       state.applying = false;
     }
   };
 
-  const handlePlay = () => {
-    const name = state.lastSavedName || "NAME";
-    updateToolbarReceipt(
-      "succeeded",
-      `PLAY is intentionally external: /workflow ${name} in Grok.`,
-    );
+  const handlePlay = () => handleApply("play");
+
+  const handleConfigSync = async () => {
+    if (state.syncing) return;
+    state.syncing = true;
+    try {
+      const { report } = await inspectCurrentWorkflow();
+      if (!report.ok) {
+        throw new Error(
+          `Preflight failed: ${report.errors[0]?.message || "Graph is invalid."}`,
+        );
+      }
+      const assignments = [
+        ...new Map(
+          (editor.getCurrentPageShapes?.() ?? [])
+            .filter((shape) =>
+              ["agent", "subagent"].includes(shape?.meta?.am?.role),
+            )
+            .map((shape) => ({
+              agentId: String(shape.meta?.am?.agentRef ?? "").trim(),
+              modelRef: String(shape.meta?.am?.modelRef ?? "").trim(),
+            }))
+            .filter((item) => item.agentId && item.modelRef)
+            .map((item) => [item.agentId, item]),
+        ).values(),
+      ];
+      if (!assignments.length) {
+        throw new Error(
+          "Select an explicit Agent and Model on at least one Agent node first.",
+        );
+      }
+      const token = resolveAuthToken();
+      const base = resolveGrokConfigBase();
+      const snapshotRes = await fetch(`${base}/api/grok/config-snapshot`, {
+        method: "GET",
+        headers: authHeaders(token),
+        signal: signal ?? undefined,
+      });
+      const snapshot = await snapshotRes.json().catch(() => ({}));
+      if (!snapshotRes.ok) {
+        throw new Error(snapshot.message || `Snapshot failed (${snapshotRes.status}).`);
+      }
+      const requestId = `canvas-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      const payload = {
+        expectedRevision: snapshot.revision,
+        requestId,
+        assignments,
+      };
+      const previewRes = await fetch(`${base}/api/grok/config-sync`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...payload, dryRun: true }),
+        signal: signal ?? undefined,
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) {
+        throw new Error(preview.message || `Sync preview failed (${previewRes.status}).`);
+      }
+      if (!preview.changeCount) {
+        updateToolbarReceipt(
+          "succeeded",
+          `config.toml already matches · rev ${String(snapshot.revision).slice(0, 8)}`,
+        );
+        return;
+      }
+      const commitRes = await fetch(`${base}/api/grok/config-sync`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...payload, dryRun: false }),
+        signal: signal ?? undefined,
+      });
+      const receipt = await commitRes.json().catch(() => ({}));
+      if (!commitRes.ok) {
+        throw new Error(receipt.message || `Config sync failed (${commitRes.status}).`);
+      }
+      updateToolbarReceipt(
+        "succeeded",
+        `Synced ${receipt.changeCount} assignment(s) · rev ${String(
+          receipt.beforeRevision,
+        ).slice(0, 7)}→${String(receipt.afterRevision).slice(0, 7)} · next session`,
+      );
+    } catch (error) {
+      updateToolbarReceipt(
+        "failed",
+        `CONFIG SYNC ERROR · ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      state.syncing = false;
+    }
   };
 
   // ---- Native toolbar action requests + workflow edits ----
@@ -2294,18 +4127,43 @@ export default function agentsModelsDocumentScript(ctx) {
     const request = toolbar?.meta?.am?.actionRequest;
     if (!request?.id || handledActionRequests.has(request.id)) return;
     handledActionRequests.add(request.id);
-    if (request.kind === "preset" && request.presetId) {
-      materializePreset(request.presetId);
-    } else if (request.kind === "apply") {
-      handleApply();
-    } else if (request.kind === "play") {
-      handlePlay();
-    } else {
-      updateToolbarReceipt("failed", "Unknown toolbar action request.");
-    }
+    // Store listeners run inside the transaction that wrote the action
+    // request. Defer the mutation so a newly-created custom node is committed
+    // before createArrowBetweenShapes resolves its bounds and writes bindings.
+    queueMicrotask(() => {
+      if (request.kind === "preset" && request.presetId) {
+        materializePreset(request.presetId);
+      } else if (request.kind === "node" && request.nodeKind) {
+        try {
+          addWorkflowNode(request.nodeKind, {
+            connectFromId: request.connectFromId,
+            catalogItemId: request.catalogItemId,
+            catalogItemLabel: request.catalogItemLabel,
+            catalogItemValue: request.catalogItemValue,
+            dropPoint: request.dropPoint,
+          });
+        } catch (error) {
+          updateToolbarReceipt(
+            "failed",
+            `NODE ERROR · ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      } else if (request.kind === "apply") {
+        handleApply();
+      } else if (request.kind === "play") {
+        handlePlay();
+      } else if (request.kind === "preflight") {
+        handlePreflight();
+      } else if (request.kind === "config-sync") {
+        handleConfigSync();
+      } else {
+        updateToolbarReceipt("failed", "Unknown toolbar action request.");
+      }
+    });
   };
 
   let unlistenDoc = null;
+  let portRefreshTimer = null;
   if (editor.store?.listen) {
     unlistenDoc = editor.store.listen(
       (entry) => {
@@ -2313,11 +4171,32 @@ export default function agentsModelsDocumentScript(ctx) {
           onToolbarActionMaybe();
           const changes = entry?.changes;
           if (!changes) return;
+          const changedRecords = [
+            ...Object.values(changes.added || {}),
+            ...Object.values(changes.removed || {}),
+            ...Object.values(changes.updated || {}).flatMap((change) =>
+              Array.isArray(change) ? change : [change],
+            ),
+          ];
+          if (
+            changedRecords.some(
+              (record) =>
+                record?.typeName === "binding" ||
+                record?.type === "arrow" ||
+                WORKFLOW_RUNTIME_ROLES.has(record?.meta?.am?.role),
+            )
+          ) {
+            if (portRefreshTimer) clearTimeout(portRefreshTimer);
+            portRefreshTimer = setTimeout(() => {
+              portRefreshTimer = null;
+              refreshWorkflowPortCounts();
+            }, 0);
+          }
           const updated = changes.updated || {};
           for (const change of Object.values(updated)) {
             const shape = Array.isArray(change) ? change[1] : change;
             const role = shape?.meta?.am?.role;
-            if (role === "stage" || role === "subagent") {
+            if (WORKFLOW_RUNTIME_ROLES.has(role)) {
               if (shape.meta?.am?.unmodified === false) {
                 state.unmodified = false;
               }
@@ -2341,6 +4220,7 @@ export default function agentsModelsDocumentScript(ctx) {
   const cleanup = () => {
     if (catalogTimer) clearTimeout(catalogTimer);
     if (catalogAbort) catalogAbort.abort();
+    if (portRefreshTimer) clearTimeout(portRefreshTimer);
     clearInterval(catalogInterval);
     if (typeof unlistenDoc === "function") unlistenDoc();
   };
@@ -2359,8 +4239,12 @@ export default function agentsModelsDocumentScript(ctx) {
     // test seams
     _state: state,
     _materializePreset: materializePreset,
+    _addWorkflowNode: addWorkflowNode,
+    _refreshWorkflowPortCounts: refreshWorkflowPortCounts,
     _handleApply: handleApply,
     _handlePlay: handlePlay,
+    _handlePreflight: handlePreflight,
+    _handleConfigSync: handleConfigSync,
     _scheduleCatalog: scheduleCatalog,
   };
 }

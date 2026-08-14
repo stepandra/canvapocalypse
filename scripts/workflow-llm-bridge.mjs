@@ -5,11 +5,15 @@ import { fileURLToPath } from "node:url";
 import { handleCompanionCanvasToolRequest } from "./companion-canvas-tool.mjs";
 import { createDesignSystemService } from "./design-system-service.mjs";
 import { loadOrCreateHtmlMockupResidentCapability } from "./html-mockup-resident-capability.mjs";
-import { createLocalHtmlMockupService } from "./local-html-mockup-service.mjs";
+import {
+  createLocalHtmlMockupImporter,
+  createLocalHtmlMockupService,
+} from "./local-html-mockup-service.mjs";
 import { handleMlInternCanvasToolRequest } from "./ml-intern-canvas-tool.mjs";
 import { handleMlInternEvalLab } from "./ml-intern-eval-lab.mjs";
 import { handleTerminalSessionMonitorRequest } from "./terminal-session-monitor.mjs";
 import { createKanbanTracksService } from "./kanban-tracks-service.mjs";
+import { createStitchService } from "./stitch-service.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.WORKFLOW_LLM_PORT || 5176);
@@ -40,6 +44,14 @@ const handleDesignSystemRequest = createDesignSystemService({
   cwd: REPO_ROOT,
   residentCapability: HTML_MOCKUP_RESIDENT_CAPABILITY,
 });
+const importLocalHtmlMockup = createLocalHtmlMockupImporter({
+  cwd: REPO_ROOT,
+});
+const handleStitchRequest = createStitchService({
+  cwd: REPO_ROOT,
+  residentCapability: HTML_MOCKUP_RESIDENT_CAPABILITY,
+  importHtml: importLocalHtmlMockup,
+});
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
@@ -62,6 +74,7 @@ const server = createServer(async (request, response) => {
   const isResidentCapabilityRequest =
     isHtmlMockupRequest ||
     url.pathname.startsWith("/design-systems") ||
+    url.pathname.startsWith("/stitch") ||
     url.pathname.startsWith("/kanban/tracks/");
   const isAllowedResidentCapabilityOrigin =
     isResidentCapabilityRequest &&
@@ -114,6 +127,16 @@ const server = createServer(async (request, response) => {
       url,
       request,
       response,
+      send,
+    );
+    if (handled) return;
+  }
+  if (url.pathname.startsWith("/stitch")) {
+    const handled = await handleStitchRequest(
+      url,
+      request,
+      response,
+      readBody,
       send,
     );
     if (handled) return;
@@ -228,6 +251,9 @@ const server = createServer(async (request, response) => {
           input,
           instructions,
           model: typeof payload.model === "string" ? payload.model.trim() : "",
+          temperature: normalizeTemperature(payload.temperature),
+          maxTokens: normalizeMaxTokens(payload.maxTokens),
+          seed: normalizeSeed(payload.seed),
         },
         request,
         response,
@@ -240,6 +266,9 @@ const server = createServer(async (request, response) => {
           instructions,
           model: typeof payload.model === "string" ? payload.model.trim() : "",
           baseUrl: normalizeBaseUrl(payload.baseUrl),
+          temperature: normalizeTemperature(payload.temperature),
+          maxTokens: normalizeMaxTokens(payload.maxTokens),
+          seed: normalizeSeed(payload.seed),
         },
         request,
         response,
@@ -368,8 +397,9 @@ async function streamOpenRouter(payload, request, response) {
           { role: "user", content: payload.input },
         ],
         stream: true,
-        temperature: 0.2,
-        max_tokens: 2048,
+        temperature: payload.temperature ?? 0.2,
+        max_tokens: payload.maxTokens ?? 2048,
+        ...(payload.seed !== undefined ? { seed: payload.seed } : {}),
       }),
       signal: controller.signal,
     });
@@ -452,8 +482,9 @@ async function streamCompatible(payload, request, response) {
           { role: "user", content: payload.input },
         ],
         stream: true,
-        temperature: 0.2,
-        max_tokens: 2048,
+        temperature: payload.temperature ?? 0.2,
+        max_tokens: payload.maxTokens ?? 2048,
+        ...(payload.seed !== undefined ? { seed: payload.seed } : {}),
       }),
       signal: controller.signal,
       cache: "no-store",
@@ -547,6 +578,49 @@ function normalizeBaseUrl(value) {
     throw error;
   }
   return parsed.toString().replace(/\/+$/, "");
+}
+
+function normalizeTemperature(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) {
+    const error = new Error("temperature must be a number");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (number < 0 || number > 2) {
+    const error = new Error("temperature must be between 0 and 2");
+    error.statusCode = 400;
+    throw error;
+  }
+  return number;
+}
+
+function normalizeMaxTokens(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number) || !Number.isInteger(number)) {
+    const error = new Error("maxTokens must be an integer");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (number < 256 || number > 8192) {
+    const error = new Error("maxTokens must be between 256 and 8192");
+    error.statusCode = 400;
+    throw error;
+  }
+  return number;
+}
+
+function normalizeSeed(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number) || !Number.isInteger(number)) {
+    const error = new Error("seed must be an integer");
+    error.statusCode = 400;
+    throw error;
+  }
+  return number;
 }
 
 function readBody(request, maxBytes = MAX_BODY_BYTES) {

@@ -188,6 +188,97 @@ export function buildEditableLlmWorkflowSpec(id = `workflow-${Date.now()}`): Wor
 	}
 }
 
+export function buildPromptExperimentWorkflowSpec(
+	id = `prompt-experiment-${Date.now()}`
+): WorkflowSpec {
+	return {
+		id,
+		title: 'Prompt experiment',
+		mode: 'editable',
+		nodes: [
+			{
+				id: 'seed-input',
+				kind: 'input',
+				title: 'Seed Input',
+				description: 'Seed text or example that every LLM sample sees.',
+				readonly: false,
+				ports: [textOutput],
+				config: {
+					value:
+						'Describe a concise, generative prompt-seed brainstorming task.',
+				},
+			},
+			{
+				id: 'prompt-template',
+				kind: 'prompt-template',
+				title: 'Prompt Template',
+				description:
+					'Wraps the seed input in a reusable template that can include variables.',
+				readonly: false,
+				ports: [textInput, textOutput],
+				config: {
+					template:
+						'Given this seed idea, brainstorm {sampleCount} creative prompt variations:\n\n{input}',
+					inputVariable: 'input',
+					'var:sampleCount': '8',
+				},
+			},
+			{
+				id: 'llm',
+				kind: 'llm',
+				title: 'LLM',
+				description:
+					'Server-side inference node that produces multiple samples for the prompt experiment.',
+				readonly: false,
+				ports: [textInput, textOutput],
+				config: {
+					instructions:
+						'You are a prompt brainstorming assistant. Generate diverse, concise variations based on the seed and template.',
+					model: 'claude-sonnet-4-5',
+					provider: 'builtin',
+					sampleCount: '8',
+					sampleConcurrency: '4',
+					temperature: '0.8',
+					maxTokens: '2048',
+				},
+			},
+			{
+				id: 'rich-output',
+				kind: 'rich-output',
+				title: 'Rich Output',
+				description:
+					'Renders the generated prompt variations as Markdown or collapsible JSON.',
+				readonly: false,
+				ports: [textInput],
+				config: { value: 'Run the workflow to populate prompt samples.' },
+			},
+		],
+		edges: [
+			{
+				id: 'seed-input->prompt-template',
+				from: 'seed-input',
+				fromPort: 'output',
+				to: 'prompt-template',
+				toPort: 'input',
+			},
+			{
+				id: 'prompt-template->llm',
+				from: 'prompt-template',
+				fromPort: 'output',
+				to: 'llm',
+				toPort: 'input',
+			},
+			{
+				id: 'llm->rich-output',
+				from: 'llm',
+				fromPort: 'output',
+				to: 'rich-output',
+				toPort: 'input',
+			},
+		],
+	}
+}
+
 export function buildMlflowWorkflowSpec(
 	id = `mlflow-workflow-${Date.now()}`
 ): WorkflowSpec {

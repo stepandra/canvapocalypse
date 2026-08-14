@@ -3,6 +3,7 @@ import {
 	buildCurrentFlowSpec,
 	buildEditableLlmWorkflowSpec,
 	buildMlflowWorkflowSpec,
+	buildPromptExperimentWorkflowSpec,
 	extractTemplateVariables,
 	getExecutionLayers,
 	getExecutionOrder,
@@ -145,6 +146,47 @@ describe('prompt template nodes', () => {
 	})
 })
 
+describe('buildPromptExperimentWorkflowSpec', () => {
+it('creates an editable SEED INPUT → PROMPT TEMPLATE → LLM → RICH OUTPUT workflow', () => {
+	const workflow = buildPromptExperimentWorkflowSpec('prompt-exp-1')
+
+	expect(workflow.id).toBe('prompt-exp-1')
+	expect(workflow.mode).toBe('editable')
+	expect(workflow.nodes.map((node) => node.kind)).toEqual([
+		'input',
+		'prompt-template',
+		'llm',
+		'rich-output',
+	])
+	expect(workflow.nodes.map((node) => node.id)).toEqual([
+		'seed-input',
+		'prompt-template',
+		'llm',
+		'rich-output',
+	])
+	expect(workflow.nodes.every((node) => !node.readonly)).toBe(true)
+
+	const input = workflow.nodes.find((node) => node.id === 'seed-input')!
+	expect(input.title.toLowerCase()).toContain('seed')
+
+	const prompt = workflow.nodes.find((node) => node.id === 'prompt-template')!
+	expect(prompt.config.template).toContain('{input}')
+	expect(prompt.config.inputVariable).toBe('input')
+
+	const llm = workflow.nodes.find((node) => node.id === 'llm')!
+	expect(llm.config).toMatchObject({
+		provider: 'builtin',
+		model: 'claude-sonnet-4-5',
+		sampleCount: '8',
+		sampleConcurrency: '4',
+		temperature: '0.8',
+		maxTokens: '2048',
+	})
+
+	expect(validateWorkflowSpec(workflow)).toEqual([])
+	expect(getExecutionOrder(workflow)).toEqual(['seed-input', 'prompt-template', 'llm', 'rich-output'])
+})
+})
 describe('parseWorkflowLlmRequest', () => {
 	it('accepts bounded text requests and rejects empty or oversized input', () => {
 		expect(

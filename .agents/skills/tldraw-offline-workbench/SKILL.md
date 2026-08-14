@@ -1,6 +1,6 @@
 ---
 name: tldraw-offline-workbench
-description: Gives the existing Ampcode architecture thread bounded live access to the currently open tldraw Offline workbench. Use when the Architect must inspect selected canvas artifacts, create or revise native tldraw diagrams, or return an undoable canvas mutation receipt.
+description: Gives the existing Ampcode architecture thread bounded live access to its workspace-scoped tldraw Offline workbench. Use when the Architect must inspect selected canvas artifacts, create or revise native tldraw diagrams, or return an undoable canvas mutation receipt.
 ---
 
 # tldraw Offline workbench
@@ -13,9 +13,12 @@ architecture conversation, judgment, and decision cycle in this thread.
 - Never launch `amp`, `amp -x`, or a second Architect thread.
 - Never put an Amp thread ID, credential, full transcript, raw canvas dump, or
   unrestricted filesystem content into a tool call, prompt, or canvas metadata.
-- Treat the currently open tldraw Offline document as the only canvas target.
-  The resident client resolves it through its short-lived live binding.
-  Discovery never downgrades to a web preview.
+- Treat the Amp workspace's sole regular, non-symlink `.canvas/*.tldraw` file as
+  the only canvas target. That canonical document must be open in exactly one
+  tldraw Offline window. Other open documents are ignored and never closed.
+  The trusted local plugin resolves its resident binding; the model never
+  supplies or receives a document path or binding. Discovery never downgrades
+  to a web preview.
 
 ## Three-tool loop
 
@@ -29,9 +32,10 @@ Use exactly these loopback tools, in this order:
    receipt.
 
 Discover again after an expired binding. Do not cache or combine hydrated
-schemas. If there is no live Offline client, more than one active Offline
-client, no selection for a selection-only operation, an invalid area, or a
-receipt lease conflict, stop fail-closed and report the compact error.
+schemas. If the project canvas is missing, ambiguous, symlinked, outside the
+workspace, unopened, or open in duplicate windows; if there is no selection
+for a selection-only operation; or if an area or receipt lease is invalid,
+stop fail-closed and report the compact error.
 Use the tools from the local Amp process, never from a browser page; browser
 Origins are resident executors and cannot act as capability producers.
 

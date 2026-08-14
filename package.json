@@ -19,8 +19,11 @@
 		"offline:build-config": "node scripts/build-tldraw-desktop-eval-lab.mjs",
 		"template:build": "node scripts/build-tldraw-document-template.mjs",
 		"preview": "vite preview",
-		"test": "node --test scripts/isoflow-project-context.test.mjs scripts/workflow-llm-bridge.test.mjs scripts/local-html-mockup-service.test.mjs scripts/design-system-service.test.mjs scripts/tldraw-offline-config-target.test.mjs scripts/ml-intern-eval-lab.test.mjs scripts/ml-intern-canvas-tool.test.mjs scripts/amp-tldraw-companion-runtime.test.mjs scripts/terminal-session-monitor.test.mjs scripts/kanban-tracks-service.test.mjs scripts/grok-config-service.test.mjs scripts/agents-models-canvas-script.test.mjs scripts/build-tldraw-document-template.test.mjs && vitest run --config vitest.config.ts",
-		"workflow:bridge": "node scripts/workflow-llm-bridge.mjs"
+		"test": "node --test scripts/isoflow-project-context.test.mjs scripts/workflow-llm-bridge.test.mjs scripts/workbench-bridge-supervisor.test.mjs scripts/install-workbench-bridge-supervisor.test.mjs scripts/local-html-mockup-service.test.mjs scripts/design-system-service.test.mjs scripts/stitch-service.test.mjs scripts/tldraw-offline-config-target.test.mjs scripts/ml-intern-eval-lab.test.mjs scripts/ml-intern-canvas-tool.test.mjs scripts/amp-tldraw-companion-runtime.test.mjs scripts/grok-tldraw-companion-plugin.test.mjs scripts/terminal-session-monitor.test.mjs scripts/kanban-tracks-service.test.mjs scripts/grok-config-service.test.mjs scripts/agents-models-canvas-script.test.mjs scripts/build-tldraw-document-template.test.mjs && vitest run --config vitest.config.ts",
+		"workflow:bridge": "node scripts/workflow-llm-bridge.mjs",
+		"workbench:supervisor": "node scripts/workbench-bridge-supervisor.mjs",
+		"workbench:supervisor:install": "node scripts/install-workbench-bridge-supervisor.mjs",
+		"workbench:supervisor:uninstall": "node scripts/install-workbench-bridge-supervisor.mjs --uninstall"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^2.0.2",
@@ -28,6 +31,7 @@
 		"@ai-sdk/openai": "^2.0.24",
 		"@cloudflare/vite-plugin": "^1.29.1",
 		"@google/generative-ai": "^0.24.1",
+		"@google/stitch-sdk": "^0.3.5",
 		"@tldraw/tlschema": "^5.2.5",
 		"@worker-tools/json-stream": "^0.1.0-pre.12",
 		"ai": "^5.0.63",

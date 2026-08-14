@@ -28,7 +28,7 @@ import {
 } from './DesignSystemShape'
 import './design-system.css'
 
-export function DesignSystemOverlay() {
+export function DesignSystemOverlay({ docked = false }: { docked?: boolean }) {
 	const editor = useEditor()
 	const selected = useValue(
 		'selected Design System',
@@ -93,7 +93,7 @@ export function DesignSystemOverlay() {
 	return (
 		<>
 			<div
-				className="design-system-provider-toolbar"
+				className={`design-system-provider-toolbar${docked ? ' is-docked' : ''}`}
 				onPointerDown={(event) => event.stopPropagation()}
 				onClick={(event) => event.stopPropagation()}
 			>
@@ -103,7 +103,7 @@ export function DesignSystemOverlay() {
 					onOpenChange={setPickerOpen}
 				>
 					<TldrawUiTooltip
-						content="Design System"
+						content="DESIGN.md / Design System"
 						side="right"
 						sideOffset={8}
 						delayDuration={350}
@@ -112,11 +112,14 @@ export function DesignSystemOverlay() {
 							<TldrawUiButton
 								type="tool"
 								className="design-system-provider-button"
-								aria-label="Design System"
+								aria-label="DESIGN.md / Design System"
 								aria-expanded={pickerOpen}
 								isActive={pickerOpen || Boolean(selected)}
 							>
 								<TldrawUiButtonIcon icon="pack" />
+								{docked && (
+									<span className="uiux-provider-label">DESIGN.md</span>
+								)}
 							</TldrawUiButton>
 						</TldrawUiPopoverTrigger>
 					</TldrawUiTooltip>

@@ -12,14 +12,14 @@ import test from 'node:test'
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const BRIDGE_PATH = fileURLToPath(new URL('./workflow-llm-bridge.mjs', import.meta.url))
 
-test('the retired Isoflow agent route is a no-subprocess 410 tombstone', { timeout: 15_000 }, async (t) => {
-	const port = await reserveLoopbackPort()
+function startBridge(t, port, extraEnv = {}) {
 	const child = spawn(process.execPath, [BRIDGE_PATH], {
 		cwd: REPO_ROOT,
 		env: {
 			...process.env,
 			WORKFLOW_LLM_PORT: String(port),
 			AMP_BIN: '/definitely-missing-amp-binary',
+			...extraEnv,
 		},
 		stdio: ['ignore', 'pipe', 'pipe'],
 	})
@@ -35,8 +35,22 @@ test('the retired Isoflow agent route is a no-subprocess 410 tombstone', { timeo
 		child.kill('SIGTERM')
 		await Promise.race([once(child, 'exit'), delay(1_000)])
 	})
+	return { child, getOutput: () => output }
+}
 
-	await waitForBridge(port, child, () => output)
+async function postWorkflowLlm(port, body) {
+	return fetch(`http://127.0.0.1:${port}/workflow/llm`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+	})
+}
+
+test('the retired Isoflow agent route is a no-subprocess 410 tombstone', { timeout: 15_000 }, async (t) => {
+	const port = await reserveLoopbackPort()
+	const { child, getOutput } = startBridge(t, port)
+
+	await waitForBridge(port, child, getOutput)
 
 	const legacyPayload = JSON.stringify({
 		projectId: 'autorecruit-contours',
@@ -85,6 +99,52 @@ test('the retired Isoflow agent route is a no-subprocess 410 tombstone', { timeo
 	assert.equal(unknown.status, 404)
 })
 
+test('workflow/llm normalizes and rejects out-of-range inference controls', { timeout: 15_000 }, async (t) => {
+	const port = await reserveLoopbackPort()
+	const { child, getOutput } = startBridge(t, port)
+	await waitForBridge(port, child, getOutput)
+
+	const base = {
+		provider: 'openrouter',
+		model: 'openai/gpt-4o',
+		instructions: 'Return JSON.',
+		input: 'hello',
+	}
+
+	const badTemperature = await postWorkflowLlm(port, { ...base, temperature: 2.5 })
+	assert.equal(badTemperature.status, 400)
+	assert.match(await badTemperature.text(), /temperature/)
+
+	const badMaxTokens = await postWorkflowLlm(port, { ...base, maxTokens: 100 })
+	assert.equal(badMaxTokens.status, 400)
+	assert.match(await badMaxTokens.text(), /maxTokens/)
+
+	const badSeed = await postWorkflowLlm(port, { ...base, seed: 'not-a-number' })
+	assert.equal(badSeed.status, 400)
+	assert.match(await badSeed.text(), /seed/)
+
+	const valid = await postWorkflowLlm(port, { ...base, temperature: 1.5, maxTokens: 512, seed: 42 })
+	assert.equal(valid.status, 401)
+})
+
+test('workflow/llm for compatible provider normalizes controls and returns 400 for missing baseUrl', { timeout: 15_000 }, async (t) => {
+	const port = await reserveLoopbackPort()
+	const { child, getOutput } = startBridge(t, port)
+	await waitForBridge(port, child, getOutput)
+
+	const response = await postWorkflowLlm(port, {
+		provider: 'compatible',
+		model: 'local-model',
+		instructions: 'Return JSON.',
+		input: 'hello',
+		temperature: 0.7,
+		maxTokens: 1024,
+		seed: 7,
+	})
+	assert.equal(response.status, 400)
+	assert.match(await response.text(), /Base URL/)
+})
+
 test('the workflow bridge exposes only registered local HTML mockups', { timeout: 15_000 }, async (t) => {
 	const root = await mkdtemp(join(tmpdir(), 'canvapocalypse-bridge-html-'))
 	await writeFile(join(root, 'screen.html'), '<main><h1>Bridge screen</h1></main>')
@@ -97,6 +157,9 @@ test('the workflow bridge exposes only registered local HTML mockups', { timeout
 			WORKFLOW_LLM_PORT: String(port),
 			TLDRAW_HTML_MOCKUP_ROOTS: root,
 			TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY_FILE: capabilityFile,
+			STITCH_API_KEY: '',
+			STITCH_ACCESS_TOKEN: '',
+			GOOGLE_CLOUD_PROJECT: '',
 			AMP_BIN: '/definitely-missing-amp-binary',
 		},
 		stdio: ['ignore', 'pipe', 'pipe'],
@@ -140,6 +203,22 @@ test('the workflow bridge exposes only registered local HTML mockups', { timeout
 		origin,
 		'x-tldraw-html-capability': bootstrap.capability,
 	}
+	const stitchStatusResponse = await fetch(
+		`http://127.0.0.1:${port}/stitch/status`,
+		{ headers: residentHeaders }
+	)
+	assert.equal(stitchStatusResponse.status, 200)
+	assert.deepEqual(await stitchStatusResponse.json(), {
+		configured: false,
+		authMode: 'missing',
+		provider: 'google-stitch',
+		surface: 'native-tldraw',
+	})
+	const unauthorizedStitchStatus = await fetch(
+		`http://127.0.0.1:${port}/stitch/status`,
+		{ headers: { origin } }
+	)
+	assert.equal(unauthorizedStitchStatus.status, 401)
 	const listResponse = await fetch(`http://127.0.0.1:${port}/html-mockups`, {
 		headers: residentHeaders,
 	})
@@ -224,6 +303,9 @@ test('the workflow bridge exposes only registered local HTML mockups', { timeout
 			WORKFLOW_LLM_PORT: String(restartPort),
 			TLDRAW_HTML_MOCKUP_ROOTS: root,
 			TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY_FILE: capabilityFile,
+			STITCH_API_KEY: '',
+			STITCH_ACCESS_TOKEN: '',
+			GOOGLE_CLOUD_PROJECT: '',
 			AMP_BIN: '/definitely-missing-amp-binary',
 		},
 		stdio: ['ignore', 'pipe', 'pipe'],

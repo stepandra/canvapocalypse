@@ -20,3 +20,19 @@ describe('parseOutputPresentation', () => {
 		})
 	})
 })
+
+describe('buildWorkflowRunJsonlFilename', () => {
+	it('produces a safe deterministic filename with run id prefix', async () => {
+		const mod = await import('./RichOutputShape')
+		expect(mod.buildWorkflowRunJsonlFilename('wf-1', 'run-2026-08-09_abc123', 'rich-out')).toBe(
+			'wf-1_run-2026-08-09_abc123_rich-out.jsonl'
+		)
+	})
+
+	it('sanitizes unsafe filename characters', async () => {
+		const mod = await import('./RichOutputShape')
+		expect(mod.buildWorkflowRunJsonlFilename('wf/one', 'run:bad', 'node name')).toBe(
+			'wf-one_run-bad_node-name.jsonl'
+		)
+	})
+})

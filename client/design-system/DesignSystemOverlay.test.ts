@@ -6,6 +6,10 @@ const shellSource = readFileSync(
 	new URL('../workbench/WorkbenchShell.tsx', import.meta.url),
 	'utf8'
 )
+const providerDockSource = readFileSync(
+	new URL('../workbench/UiuxProviderDock.tsx', import.meta.url),
+	'utf8'
+)
 const overlaySource = readFileSync(
 	new URL('./DesignSystemOverlay.tsx', import.meta.url),
 	'utf8'
@@ -16,14 +20,12 @@ const shapeSource = readFileSync(
 )
 
 describe('Design System native UI/UX surface', () => {
-	it('registers one native shape and mounts its overlay only for UI/UX', () => {
+	it('registers one native shape and mounts it through the UI/UX provider dock', () => {
 		expect(appSource).toContain('DesignSystemShapeUtil')
-		expect(shellSource).toContain(
-			"{activeDomain === 'uiux' && <DesignSystemOverlay />}"
-		)
-		expect(shellSource).not.toContain(
-			'activePack.overlays.designSystem'
-		)
+		expect(shellSource).toContain('<UiuxProviderDock />')
+		expect(providerDockSource).toContain('<DesignSystemOverlay docked />')
+		expect(overlaySource).toContain('DESIGN.md / Design System')
+		expect(overlaySource).toContain('uiux-provider-label">DESIGN.md')
 	})
 
 	it('uses public tldraw controls and exposes read-only drift inspection', () => {

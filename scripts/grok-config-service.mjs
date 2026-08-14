@@ -1,8 +1,10 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import https from "node:https";
 import {
   copyFile,
+  chmod,
+  lstat,
   mkdir,
   readdir,
   readFile,
@@ -27,8 +29,11 @@ const MAX_AGENTS = 200;
 const MAX_PERSONAS = 100;
 const MAX_WORKFLOWS = 200;
 const MAX_ROLES = 200;
+const MAX_SKILLS = 200;
+const MAX_MODULES = 100;
 const MAX_MODEL_SLOTS = 64;
 const MAX_DESCRIPTION_CHARS = 320;
+const MAX_PERSONA_INSTRUCTIONS_CHARS = 12_000;
 const MAX_HEADING_CHARS = 180;
 const MAX_CHANGES = 40;
 const WORKFLOW_NAME_RE = /^[A-Za-z0-9_-]+$/;
@@ -54,6 +59,8 @@ export function createGrokConfigService(options = {}) {
   const readFileImpl = options.readFile ?? readFile;
   const readdirImpl = options.readdir ?? readdir;
   const statImpl = options.stat ?? stat;
+  const lstatImpl = options.lstat ?? lstat;
+  const chmodImpl = options.chmod ?? chmod;
 
   const io = {
     paths,
@@ -67,6 +74,8 @@ export function createGrokConfigService(options = {}) {
     readFile: readFileImpl,
     readdir: readdirImpl,
     stat: statImpl,
+    lstat: lstatImpl,
+    chmod: chmodImpl,
   };
 
   return async function handleGrokConfigRequest(
@@ -105,12 +114,66 @@ export function createGrokConfigService(options = {}) {
         return sendJson(response, send, 200, { personas });
       }
 
+      if (request.method === "GET" && url.pathname === "/api/grok/skills") {
+        const skills = await loadProjectSkills(io);
+        return sendJson(response, send, 200, { skills });
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/grok/modules") {
+        const modules = await loadWorkflowModules(io);
+        return sendJson(response, send, 200, { modules });
+      }
+
+      if (
+        request.method === "GET" &&
+        url.pathname.startsWith("/api/grok/modules/")
+      ) {
+        const id = decodeURIComponent(
+          url.pathname.slice("/api/grok/modules/".length),
+        );
+        const module = await loadWorkflowModuleById(
+          io,
+          id,
+          url.searchParams.get("version"),
+        );
+        return sendJson(response, send, 200, { module });
+      }
+
+      if (
+        request.method === "GET" &&
+        url.pathname.startsWith("/api/grok/personas/")
+      ) {
+        const id = decodeURIComponent(
+          url.pathname.slice("/api/grok/personas/".length),
+        );
+        const persona = await loadPersonaById(io, id);
+        return sendJson(response, send, 200, { persona });
+      }
+
       if (
         request.method === "GET" &&
         url.pathname === "/api/grok/assignments"
       ) {
         const assignments = await loadAssignments(io);
         return sendJson(response, send, 200, assignments);
+      }
+
+      if (
+        request.method === "GET" &&
+        url.pathname === "/api/grok/config-snapshot"
+      ) {
+        const snapshot = await loadConfigSnapshot(io);
+        return sendJson(response, send, 200, snapshot);
+      }
+
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/grok/config-sync"
+      ) {
+        const raw = await readBody(request, MAX_BODY_BYTES);
+        const payload = parseJson(raw);
+        const receipt = await syncConfigAssignments(io, payload);
+        return sendJson(response, send, 200, receipt);
       }
 
       if (request.method === "POST" && url.pathname === "/api/grok/apply") {
@@ -191,11 +254,13 @@ export function createGrokConfigService(options = {}) {
 
 export async function buildGrokCatalog(options = {}) {
   const io = normalizeIo(options);
-  const [models, agents, personas, assignments, workflows, roles] =
+  const [models, agents, personas, skills, modules, assignments, workflows, roles] =
     await Promise.all([
       loadModelsCatalog(io),
       loadAgents(io),
       loadPersonas(io),
+      loadProjectSkills(io),
+      loadWorkflowModules(io),
       loadAssignments(io),
       loadWorkflows(io),
       loadRoles(io),
@@ -207,6 +272,8 @@ export async function buildGrokCatalog(options = {}) {
     models,
     agents,
     personas,
+    skills,
+    modules,
     assignments,
     workflows,
     presets: listWorkflowPresets().map((preset) => preset.id),
@@ -232,6 +299,13 @@ export function resolveGrokPaths(options = {}) {
     ),
     projectWorkflowsDir: resolve(
       options.projectWorkflowsDir ?? join(projectCwd, ".grok", "workflows"),
+    ),
+    projectSkillsDir: resolve(
+      options.projectSkillsDir ?? join(projectCwd, ".agents", "skills"),
+    ),
+    projectModulesDir: resolve(
+      options.projectModulesDir ??
+        join(projectCwd, ".grok", "workflow-modules"),
     ),
     rolesDir: resolve(
       options.rolesDir ?? join(grokHome, "bundled", "roles"),
@@ -424,6 +498,146 @@ export function parseAgentMarkdown(source, fileName) {
   };
 }
 
+export function parseSkillMarkdown(source, directoryName) {
+  const id = String(directoryName ?? "").trim();
+  if (!id || !WORKFLOW_NAME_RE.test(id)) {
+    throw httpError(
+      400,
+      "invalid_skill_id",
+      "Skill directory id must match [A-Za-z0-9_-]+.",
+    );
+  }
+  const frontmatter = extractYamlFrontmatter(String(source));
+  const body = frontmatter ? source.slice(frontmatter.endIndex) : source;
+  const fm = frontmatter?.data ?? {};
+  const name =
+    typeof fm.name === "string" && fm.name.trim() ? fm.name.trim() : id;
+  const description =
+    typeof fm.description === "string"
+      ? clip(fm.description, MAX_DESCRIPTION_CHARS)
+      : descriptionFromBody(body);
+  return {
+    id,
+    name,
+    description: description ?? null,
+    sourceRef: `.agents/skills/${id}/SKILL.md`,
+  };
+}
+
+export function parseWorkflowModule(source, fileName) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(source));
+  } catch {
+    throw httpError(
+      422,
+      "invalid_module_json",
+      `Workflow module "${fileName}" is not valid JSON.`,
+    );
+  }
+  const fileId = basename(fileName, ".json");
+  const id = String(parsed?.id ?? fileId).trim();
+  const version = String(parsed?.version ?? "").trim();
+  if (!WORKFLOW_NAME_RE.test(id) || id !== fileId) {
+    throw httpError(
+      422,
+      "invalid_module_id",
+      "Workflow module id must match its [A-Za-z0-9_-]+ filename.",
+    );
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(version)) {
+    throw httpError(
+      422,
+      "invalid_module_version",
+      `Workflow module "${id}" needs a bounded version.`,
+    );
+  }
+  const nodes = Array.isArray(parsed?.nodes) ? parsed.nodes : [];
+  const edges = Array.isArray(parsed?.edges) ? parsed.edges : [];
+  if (!nodes.length || nodes.length > 64 || edges.length > 128) {
+    throw httpError(
+      422,
+      "invalid_module_graph",
+      `Workflow module "${id}" must contain 1-64 nodes and at most 128 edges.`,
+    );
+  }
+  const allowedRoles = new Set([
+    "stage",
+    "agent",
+    "persona",
+    "capability",
+    "skill",
+    "gate",
+    "input",
+    "artifact",
+    "result",
+  ]);
+  const normalizedNodes = nodes.map((node, index) => {
+    const nodeId = String(node?.id ?? "").trim();
+    const role = String(node?.role ?? node?.meta?.am?.role ?? "").trim();
+    if (!WORKFLOW_NAME_RE.test(nodeId) || !allowedRoles.has(role)) {
+      throw httpError(
+        422,
+        "invalid_module_node",
+        `Workflow module "${id}" has an invalid node at index ${index}.`,
+      );
+    }
+    return {
+      id: nodeId,
+      role,
+      meta: {
+        am: {
+          ...(node?.meta?.am && typeof node.meta.am === "object"
+            ? node.meta.am
+            : {}),
+          role,
+        },
+      },
+    };
+  });
+  const nodeIds = new Set(normalizedNodes.map((node) => node.id));
+  const normalizedEdges = edges.map((edge, index) => {
+    const from = String(edge?.from ?? "").trim();
+    const to = String(edge?.to ?? "").trim();
+    if (!nodeIds.has(from) || !nodeIds.has(to) || from === to) {
+      throw httpError(
+        422,
+        "invalid_module_edge",
+        `Workflow module "${id}" has an invalid edge at index ${index}.`,
+      );
+    }
+    return { from, to };
+  });
+  const entry = String(parsed?.entry ?? "").trim();
+  const exit = String(parsed?.exit ?? "").trim();
+  if (!nodeIds.has(entry) || !nodeIds.has(exit)) {
+    throw httpError(
+      422,
+      "invalid_module_boundary",
+      `Workflow module "${id}" entry and exit must reference module nodes.`,
+    );
+  }
+  return {
+    id,
+    version,
+    description:
+      typeof parsed.description === "string"
+        ? clip(parsed.description, MAX_DESCRIPTION_CHARS)
+        : null,
+    entry,
+    exit,
+    params: Array.isArray(parsed.params)
+      ? parsed.params
+          .map((value) => String(value).trim())
+          .filter((value) => WORKFLOW_NAME_RE.test(value))
+          .slice(0, 32)
+      : [],
+    nodes: normalizedNodes,
+    edges: normalizedEdges,
+    sourceRef: `.grok/workflow-modules/${id}.json`,
+  };
+}
+
 export function rewriteAgentModel(source, modelId) {
   const fm = extractYamlFrontmatter(source);
   if (!fm) {
@@ -536,6 +750,8 @@ function normalizeIo(options = {}) {
       readFile: options.readFile ?? readFile,
       readdir: options.readdir ?? readdir,
       stat: options.stat ?? stat,
+      lstat: options.lstat ?? lstat,
+      chmod: options.chmod ?? chmod,
     };
   }
   const paths = resolveGrokPaths(options);
@@ -554,6 +770,8 @@ function normalizeIo(options = {}) {
     readFile: options.readFile ?? readFile,
     readdir: options.readdir ?? readdir,
     stat: options.stat ?? stat,
+    lstat: options.lstat ?? lstat,
+    chmod: options.chmod ?? chmod,
   };
 }
 
@@ -633,6 +851,126 @@ async function loadPersonas(io) {
   }
   personas.sort((a, b) => a.id.localeCompare(b.id));
   return personas;
+}
+
+async function loadProjectSkills(io) {
+  let entries;
+  try {
+    entries = await io.readdir(io.paths.projectSkillsDir, {
+      withFileTypes: true,
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const directories = entries
+    .filter(
+      (entry) =>
+        entry?.isDirectory?.() &&
+        !entry.isSymbolicLink?.() &&
+        !entry.name.startsWith(".") &&
+        WORKFLOW_NAME_RE.test(entry.name),
+    )
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .slice(0, MAX_SKILLS);
+  const skills = [];
+  for (const directory of directories) {
+    const skillPath = join(
+      io.paths.projectSkillsDir,
+      directory.name,
+      "SKILL.md",
+    );
+    const fileStat = await lstatFile(io, skillPath);
+    if (!fileStat?.isFile?.() || fileStat.isSymbolicLink?.()) continue;
+    const text = await readTextFile(io, skillPath, true);
+    if (text == null) continue;
+    skills.push(parseSkillMarkdown(text, directory.name));
+  }
+  return skills;
+}
+
+async function loadWorkflowModules(io) {
+  const files = await listFiles(
+    io,
+    io.paths.projectModulesDir,
+    ".json",
+    MAX_MODULES,
+  );
+  const modules = [];
+  for (const file of files) {
+    const fileStat = await lstatFile(io, file.path);
+    if (!fileStat?.isFile?.() || fileStat.isSymbolicLink?.()) continue;
+    const text = await readTextFile(io, file.path, true);
+    if (text == null) continue;
+    const module = parseWorkflowModule(text, file.name);
+    modules.push({
+      id: module.id,
+      version: module.version,
+      description: module.description,
+      params: module.params,
+      nodeCount: module.nodes.length,
+      edgeCount: module.edges.length,
+      sourceRef: module.sourceRef,
+    });
+  }
+  modules.sort((left, right) => left.id.localeCompare(right.id));
+  return modules;
+}
+
+async function loadWorkflowModuleById(io, rawId, rawVersion) {
+  const id = String(rawId ?? "").trim();
+  if (!id || !WORKFLOW_NAME_RE.test(id)) {
+    throw httpError(
+      400,
+      "invalid_module_id",
+      "Workflow module id must match [A-Za-z0-9_-]+.",
+    );
+  }
+  const path = join(io.paths.projectModulesDir, `${id}.json`);
+  const fileStat = await lstatFile(io, path);
+  if (!fileStat?.isFile?.() || fileStat.isSymbolicLink?.()) {
+    throw httpError(
+      404,
+      "module_not_found",
+      `Workflow module "${id}" was not found.`,
+    );
+  }
+  const text = await readTextFile(io, path, true);
+  if (text == null) {
+    throw httpError(
+      404,
+      "module_not_found",
+      `Workflow module "${id}" was not found.`,
+    );
+  }
+  const module = parseWorkflowModule(text, `${id}.json`);
+  const version = String(rawVersion ?? "").trim();
+  if (version && version !== module.version) {
+    throw httpError(
+      409,
+      "module_version_mismatch",
+      `Workflow module "${id}" is ${module.version}, not ${version}.`,
+      { requestedVersion: version, currentVersion: module.version },
+    );
+  }
+  return module;
+}
+
+async function loadPersonaById(io, rawId) {
+  const id = String(rawId ?? "").trim();
+  if (!id || !WORKFLOW_NAME_RE.test(id)) {
+    throw httpError(
+      400,
+      "invalid_persona_id",
+      "Persona id must match [A-Za-z0-9_-]+.",
+    );
+  }
+  const path = join(io.paths.personasDir, `${id}.toml`);
+  const source = await readTextFile(io, path, false);
+  if (source == null) {
+    throw httpError(404, "persona_not_found", `Persona "${id}" was not found.`);
+  }
+  return parsePersonaTomlDetail(source, `${id}.toml`);
 }
 
 async function loadWorkflows(io) {
@@ -857,6 +1195,15 @@ async function statFile(io, path) {
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     return null;
+  }
+}
+
+async function lstatFile(io, path) {
+  try {
+    return await io.lstat(path);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
   }
 }
 
@@ -1110,6 +1457,16 @@ function parsePersonaTomlFull(source, fileName) {
   };
 }
 
+export function parsePersonaTomlDetail(source, fileName) {
+  return {
+    ...parsePersonaTomlFull(source, fileName),
+    instructions: clip(
+      extractTopLevelTomlMultilineString(source, "instructions") ?? "",
+      MAX_PERSONA_INSTRUCTIONS_CHARS,
+    ),
+  };
+}
+
 async function loadAssignments(io) {
   const configText = await readTextFile(io, io.paths.configPath, true);
   const slots = configText ? listModelSlotsFromConfig(configText) : [];
@@ -1165,6 +1522,235 @@ async function loadAssignments(io) {
     agents: agentAssignments,
     personas: personaAssignments,
     subagentModels,
+  };
+}
+
+export function configRevision(source) {
+  return createHash("sha256").update(String(source), "utf8").digest("hex");
+}
+
+export function rewriteSubagentModelAssignments(source, assignments) {
+  const requested =
+    assignments instanceof Map
+      ? new Map(assignments)
+      : new Map(
+          Object.entries(assignments ?? {}).map(([agentId, modelRef]) => [
+            String(agentId),
+            String(modelRef),
+          ]),
+        );
+  if (!requested.size) return String(source);
+
+  const lines = String(source).split(/\r?\n/);
+  let sectionStart = -1;
+  let sectionEnd = lines.length;
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = stripTomlComment(lines[index]).trim();
+    const header = /^\[([^\]]+)\]$/.exec(trimmed);
+    if (!header) continue;
+    const path = splitTomlKeyPath(header[1].trim());
+    if (
+      path.length === 2 &&
+      path[0] === "subagents" &&
+      path[1] === "models"
+    ) {
+      sectionStart = index;
+      continue;
+    }
+    if (sectionStart >= 0) {
+      sectionEnd = index;
+      break;
+    }
+  }
+
+  if (sectionStart < 0) {
+    const separator =
+      lines.length && lines.at(-1) !== "" ? [""] : [];
+    return [
+      ...lines,
+      ...separator,
+      "[subagents.models]",
+      ...[...requested.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(
+          ([agentId, modelRef]) =>
+            `${formatTomlKey(agentId)} = ${formatTomlString(modelRef)}`,
+        ),
+    ].join("\n");
+  }
+
+  const consumed = new Set();
+  for (let index = sectionStart + 1; index < sectionEnd; index += 1) {
+    const raw = lines[index];
+    const match =
+      /^(\s*)([A-Za-z0-9_.-]+|"[^"]+"|'[^']+')\s*=\s*(.*)$/.exec(raw);
+    if (!match) continue;
+    const agentId = unquoteTomlKey(match[2]);
+    if (!requested.has(agentId)) continue;
+    const comment = /(\s+#.*)$/.exec(match[3])?.[1] ?? "";
+    lines[index] = `${match[1]}${match[2]} = ${formatTomlString(
+      requested.get(agentId),
+    )}${comment}`;
+    consumed.add(agentId);
+  }
+
+  const additions = [...requested.entries()]
+    .filter(([agentId]) => !consumed.has(agentId))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([agentId, modelRef]) =>
+        `${formatTomlKey(agentId)} = ${formatTomlString(modelRef)}`,
+    );
+  lines.splice(sectionEnd, 0, ...additions);
+  return lines.join("\n");
+}
+
+async function loadConfigSnapshot(io) {
+  const configText = await readTextFile(io, io.paths.configPath, false);
+  if (configText == null) {
+    throw httpError(500, "config_missing", "config.toml is not readable.");
+  }
+  const parsed = parseSimpleToml(configText).root;
+  return {
+    schemaVersion: 1,
+    revision: configRevision(configText),
+    writable: {
+      defaultModel:
+        typeof parsed.models?.default === "string"
+          ? parsed.models.default
+          : null,
+      subagentModels: parseSubagentModels(configText),
+    },
+  };
+}
+
+async function syncConfigAssignments(io, payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw httpError(400, "invalid_body", "Body must be a JSON object.");
+  }
+  const expectedRevision =
+    typeof payload.expectedRevision === "string"
+      ? payload.expectedRevision.trim()
+      : "";
+  const requestId =
+    typeof payload.requestId === "string" ? payload.requestId.trim() : "";
+  const dryRun = payload.dryRun === true;
+  if (!/^[a-f0-9]{64}$/.test(expectedRevision)) {
+    throw httpError(
+      400,
+      "invalid_revision",
+      "expectedRevision must be a SHA-256 revision from config-snapshot.",
+    );
+  }
+  if (!/^[A-Za-z0-9_.:-]{6,120}$/.test(requestId)) {
+    throw httpError(
+      400,
+      "invalid_request_id",
+      "requestId must be 6-120 safe characters.",
+    );
+  }
+  if (
+    !Array.isArray(payload.assignments) ||
+    payload.assignments.length === 0 ||
+    payload.assignments.length > MAX_CHANGES
+  ) {
+    throw httpError(
+      400,
+      "invalid_assignments",
+      `assignments must contain 1-${MAX_CHANGES} explicit agent assignments.`,
+    );
+  }
+
+  const configText = await readTextFile(io, io.paths.configPath, false);
+  if (configText == null) {
+    throw httpError(500, "config_missing", "config.toml is not readable.");
+  }
+  const beforeRevision = configRevision(configText);
+  if (beforeRevision !== expectedRevision) {
+    throw httpError(
+      409,
+      "revision_conflict",
+      "config.toml changed after the canvas snapshot; refresh before syncing.",
+      { currentRevision: beforeRevision },
+    );
+  }
+
+  const knownAgents = new Set((await loadAgents(io)).map((agent) => agent.id));
+  const slots = listModelSlotsFromConfig(configText);
+  const knownModelRefs = new Set(
+    slots.flatMap((slot) => [slot.id, slot.model]).filter(Boolean),
+  );
+  const normalized = new Map();
+  const errors = [];
+  for (let index = 0; index < payload.assignments.length; index += 1) {
+    const assignment = payload.assignments[index];
+    const agentId =
+      typeof assignment?.agentId === "string"
+        ? assignment.agentId.trim()
+        : "";
+    const modelRef =
+      typeof assignment?.modelRef === "string"
+        ? assignment.modelRef.trim()
+        : "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/.test(agentId)) {
+      errors.push({ index, error: "invalid_agent_id" });
+      continue;
+    }
+    if (!knownAgents.has(agentId)) {
+      errors.push({ index, error: "unknown_agent", agentId });
+      continue;
+    }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$/.test(modelRef)) {
+      errors.push({ index, error: "invalid_model_ref", agentId });
+      continue;
+    }
+    if (!knownModelRefs.has(modelRef)) {
+      errors.push({
+        index,
+        error: "unknown_model_ref",
+        agentId,
+        modelRef,
+      });
+      continue;
+    }
+    normalized.set(agentId, modelRef);
+  }
+  if (errors.length) {
+    throw httpError(
+      422,
+      "config_sync_validation_failed",
+      "One or more explicit agent assignments failed validation.",
+      { errors },
+    );
+  }
+
+  const beforeAssignments = parseSubagentModels(configText);
+  const nextConfig = rewriteSubagentModelAssignments(configText, normalized);
+  assertPreservedUnrelatedSections(configText, nextConfig);
+  const diff = [...normalized.entries()].flatMap(([agentId, modelRef]) => {
+    const before = beforeAssignments[agentId] ?? null;
+    if (before === modelRef) return [];
+    return [{ agentId, before, after: modelRef }];
+  });
+  const afterRevision = configRevision(nextConfig);
+  if (!dryRun && diff.length) {
+    const timestamp = new Date(io.now()).toISOString().replace(/[:.]/g, "-");
+    await io.copyFile(
+      io.paths.configPath,
+      `${io.paths.configPath}.bak-canvas-${timestamp}`,
+    );
+    await atomicWrite(io, io.paths.configPath, nextConfig);
+  }
+
+  return {
+    operation: "config-sync",
+    requestId,
+    dryRun,
+    changeCount: diff.length,
+    beforeRevision,
+    afterRevision,
+    diff,
+    applies: "next-session",
   };
 }
 
@@ -1522,6 +2108,14 @@ async function atomicWrite(io, path, content) {
   await io.mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.tmp-${randomBytes(6).toString("hex")}`;
   await io.writeFile(tmp, content, "utf8");
+  try {
+    const current = await io.stat(path);
+    if (current?.mode != null && typeof io.chmod === "function") {
+      await io.chmod(tmp, current.mode & 0o777);
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
   await io.rename(tmp, path);
 }
 
@@ -1789,6 +2383,13 @@ function formatTomlString(value) {
   return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+function formatTomlKey(value) {
+  const key = String(value);
+  return /^[A-Za-z0-9_-]+$/.test(key)
+    ? key
+    : `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
 function extractYamlFrontmatter(source) {
   if (!source.startsWith("---")) return null;
   const end = source.indexOf("\n---", 3);
@@ -1846,6 +2447,21 @@ function extractTopLevelTomlString(source, key) {
     if (match) return match[1] ?? match[2] ?? null;
   }
   return null;
+}
+
+function extractTopLevelTomlMultilineString(source, key) {
+  const escaped = String(key).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tripleDouble = new RegExp(
+    `^\\s*${escaped}\\s*=\\s*"""([\\s\\S]*?)"""`,
+    "m",
+  ).exec(source);
+  if (tripleDouble) return tripleDouble[1].replace(/^\r?\n/, "").trimEnd();
+  const tripleSingle = new RegExp(
+    `^\\s*${escaped}\\s*=\\s*'''([\\s\\S]*?)'''`,
+    "m",
+  ).exec(source);
+  if (tripleSingle) return tripleSingle[1].replace(/^\r?\n/, "").trimEnd();
+  return extractTopLevelTomlString(source, key);
 }
 
 function extractArrayTables(source, name) {
@@ -2016,6 +2632,25 @@ export function createGrokConfigServer(options = {}) {
   });
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${host}:${port}`);
+    const requestOrigin =
+      typeof request.headers.origin === "string"
+        ? request.headers.origin
+        : "*";
+    response.setHeader("Access-Control-Allow-Origin", requestOrigin);
+    response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    response.setHeader(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type",
+    );
+    response.setHeader("Access-Control-Max-Age", "600");
+    if (requestOrigin !== "*") {
+      response.setHeader("Vary", "Origin");
+    }
+    if (request.method === "OPTIONS") {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     try {
       const handled = await handle(url, request, response, readBody, send);
       if (!handled) {
@@ -2096,20 +2731,27 @@ async function main(argv = process.argv.slice(2)) {
         "GET /api/grok/models",
         "GET /api/grok/agents",
         "GET /api/grok/personas",
+        "GET /api/grok/personas/:id",
         "GET /api/grok/assignments",
+        "GET /api/grok/config-snapshot",
+        "POST /api/grok/config-sync",
         "GET /api/grok/workflows",
         "GET /api/grok/workflows/:name",
         "POST /api/grok/workflows/save",
         "GET /api/grok/workflow-presets",
         "GET /api/grok/roles",
+        "GET /api/grok/skills",
+        "GET /api/grok/modules",
+        "GET /api/grok/modules/:id",
         "GET /api/grok/catalog",
         "POST /api/grok/apply",
       ],
     }) + "\n",
   );
-  // Print token once on stderr so operators can copy it without polluting JSON stdout consumers.
+  // Never print the bearer value. Desktop integrations receive it through
+  // their local bridge config, and service logs may be retained or shared.
   process.stderr.write(
-    `grok-config bearer token: ${address.authToken}\nAuthorization: Bearer ${address.authToken}\n`,
+    `grok-config bearer configured (${address.authToken.slice(0, 6)}…)\n`,
   );
 }
 

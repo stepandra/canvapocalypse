@@ -22,6 +22,85 @@ export interface WorkflowRunRecord {
 	nodeResults: Record<string, WorkflowRunNodeResult>
 }
 
+export interface WorkflowRunJsonlRow {
+	workflowId: string
+	runId: string
+	nodeId: string
+	provider: string | undefined
+	model: string | undefined
+	sampleIndex: number
+	status: WorkflowRunNodeResult['status']
+	output: string | undefined
+	error: string | undefined
+}
+
+function isPromptExperimentBatch(value: unknown): value is {
+	schema: 'prompt-experiment-batch/v1'
+	status: 'succeeded' | 'partial' | 'failed'
+	samples: Array<{ index: number; status: 'succeeded' | 'failed'; output?: string; error?: string }>
+} {
+	if (typeof value !== 'object' || value === null) return false
+	const candidate = value as Record<string, unknown>
+	return (
+		candidate.schema === 'prompt-experiment-batch/v1' &&
+		Array.isArray(candidate.samples) &&
+		candidate.samples.every(
+			(sample) =>
+				typeof sample === 'object' &&
+				sample !== null &&
+				typeof (sample as Record<string, unknown>).index === 'number' &&
+				['succeeded', 'failed'].includes((sample as Record<string, unknown>).status as string)
+		)
+	)
+}
+
+export function exportWorkflowRunJsonl(run: WorkflowRunRecord): string {
+	const rows: WorkflowRunJsonlRow[] = []
+	const llmResults = Object.values(run.nodeResults)
+		.filter((result) => result.kind === 'llm')
+		.sort((a, b) => a.nodeId.localeCompare(b.nodeId))
+
+	for (const result of llmResults) {
+		let parsed: unknown
+		try {
+			parsed = JSON.parse(result.output)
+		} catch {
+			parsed = undefined
+		}
+
+		if (isPromptExperimentBatch(parsed)) {
+			const orderedSamples = [...parsed.samples].sort((a, b) => a.index - b.index)
+			for (const sample of orderedSamples) {
+				rows.push({
+					workflowId: run.workflowId,
+					runId: run.id,
+					nodeId: result.nodeId,
+					provider: result.provider,
+					model: result.model,
+					sampleIndex: sample.index,
+					status: sample.status,
+					output: sample.output,
+					error: sample.error,
+				})
+			}
+		} else {
+			rows.push({
+				workflowId: run.workflowId,
+				runId: run.id,
+				nodeId: result.nodeId,
+				provider: result.provider,
+				model: result.model,
+				sampleIndex: 0,
+				status: result.status,
+				output: result.output,
+				error: result.error,
+			})
+		}
+	}
+
+	return rows.map((row) => JSON.stringify(row)).join('\n')
+}
+
 const DATABASE_NAME = 'canvapocalypse-workflow-runs'
 const DATABASE_VERSION = 1
 const STORE_NAME = 'runs'

@@ -10,6 +10,7 @@ import {
 	buildCurrentFlowSpec,
 	buildEditableLlmWorkflowSpec,
 	buildMlflowWorkflowSpec,
+	buildPromptExperimentWorkflowSpec,
 	WorkflowEdgeSpec,
 	WorkflowNodeKind,
 	WorkflowNodeSpec,
@@ -54,6 +55,9 @@ export interface WorkflowEdgeMeta {
 const NODE_WIDTH = 300
 const NODE_HEIGHT = 220
 const NODE_GAP = 120
+const LAYOUT_ROW_GAP = 70
+const RICH_OUTPUT_WIDTH = 420
+const RICH_OUTPUT_HEIGHT = 300
 
 const KIND_STYLE: Record<WorkflowNodeKind, { geo: TLGeoShape['props']['geo']; color: TLGeoShape['props']['color'] }> = {
 	input: { geo: 'rectangle', color: 'light-blue' },
@@ -116,6 +120,96 @@ export function installMlflowWorkflow(editor: Editor) {
 		x: bounds.x + bounds.w / 2 - workflowWidth / 2,
 		y: bounds.y + bounds.h / 2 - NODE_HEIGHT / 2,
 	})
+}
+
+export function installPromptExperimentWorkflow(editor: Editor) {
+	const bounds = editor.getViewportPageBounds()
+	const spec = buildPromptExperimentWorkflowSpec(`prompt-experiment-${Date.now()}`)
+	const workflowWidth =
+		spec.nodes.reduce((width, node) => width + (node.kind === 'rich-output' ? 420 : NODE_WIDTH), 0) +
+		Math.max(0, spec.nodes.length - 1) * NODE_GAP
+	const result = createWorkflowOnCanvas(editor, spec, {
+		x: bounds.x + bounds.w / 2 - workflowWidth / 2,
+		y: bounds.y + bounds.h / 2 - NODE_HEIGHT / 2,
+	})
+	layoutWorkflowOnCanvas(editor, spec.id)
+	editor.select(...result.shapeIds)
+	editor.zoomToSelection({ animation: { duration: 200 } })
+	return result
+}
+
+export interface LlmModelSetTarget {
+	provider: string
+	model: string
+	baseUrl?: string
+}
+
+export interface ConfigureLlmModelSetResult {
+	branchIds: TLShapeId[]
+	branchCount: number
+}
+
+export function configureLlmModelSet(
+	editor: Editor,
+	sourceShape: WorkflowNodeShape,
+	targets: LlmModelSetTarget[]
+): ConfigureLlmModelSetResult {
+	const meta = getWorkflowNodeMeta(sourceShape)
+	if (meta.kind !== 'llm' || meta.readonly) {
+		throw new Error('Select an editable LLM node')
+	}
+	const uniqueTargets = Array.from(
+		new Map(
+			targets.map((target) => {
+				const normalized = {
+					provider: target.provider.trim(),
+					model: target.model.trim(),
+					...(target.baseUrl ? { baseUrl: target.baseUrl.trim().replace(/\/+$/, '') } : {}),
+				}
+				return [`${normalized.provider}\u0000${normalized.model}\u0000${normalized.baseUrl ?? ''}`, normalized]
+			})
+		).values()
+	)
+	if (uniqueTargets.length === 0) {
+		throw new Error('At least one model target is required')
+	}
+
+	const [firstTarget, ...restTargets] = uniqueTargets
+
+	updateWorkflowNode(editor, sourceShape, {
+		status: 'idle',
+		error: undefined,
+		config: {
+			...meta.config,
+			provider: firstTarget.provider,
+			model: firstTarget.model,
+			baseUrl: firstTarget.baseUrl ?? '',
+		},
+	})
+
+	const branchIds: TLShapeId[] = [sourceShape.id]
+	let lastShape = sourceShape
+
+	for (const target of restTargets) {
+		const { llmId } = duplicateLlmBranch(editor, lastShape)
+		const created = editor.getShape(llmId)
+		if (!created || !isWorkflowNode(created)) continue
+		const createdMeta = getWorkflowNodeMeta(created)
+		updateWorkflowNode(editor, created, {
+			status: 'idle',
+			error: undefined,
+			config: {
+				...createdMeta.config,
+				provider: target.provider,
+				model: target.model,
+				baseUrl: target.baseUrl ?? '',
+			},
+		})
+		branchIds.push(created.id)
+		lastShape = created
+	}
+
+	return { branchIds, branchCount: branchIds.length }
 }
 
 export function bootstrapMlInternWorkflows(editor: Editor) {
@@ -216,6 +310,134 @@ function ensurePromptTemplateInDraft(editor: Editor) {
 	)
 }
 
+export interface WorkflowLayoutResult {
+	positions: Map<string, { x: number; y: number }>
+	requiredWidth: number
+	requiredHeight: number
+}
+
+export function computeWorkflowLayout(
+	spec: WorkflowSpec,
+	origin: { x: number; y: number }
+): WorkflowLayoutResult {
+	const rank = new Map(spec.nodes.map((node, index) => [node.id, index]))
+	const byId = new Map(spec.nodes.map((node) => [node.id, node]))
+	const outgoing = new Map(spec.nodes.map((node) => [node.id, [] as string[]]))
+	const indegree = new Map(spec.nodes.map((node) => [node.id, 0]))
+	for (const edge of spec.edges) {
+		if (!byId.has(edge.from) || !byId.has(edge.to) || edge.from === edge.to) continue
+		outgoing.get(edge.from)!.push(edge.to)
+		indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1)
+	}
+	for (const targets of outgoing.values()) {
+		targets.sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0) || a.localeCompare(b))
+	}
+
+	let ready = spec.nodes
+		.filter((node) => indegree.get(node.id) === 0)
+		.map((node) => node.id)
+	const visited = new Set<string>()
+	const layers: string[][] = []
+	while (ready.length) {
+		ready.sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0) || a.localeCompare(b))
+		const layer = ready.filter((id) => !visited.has(id))
+		if (!layer.length) break
+		layers.push(layer)
+		const next: string[] = []
+		for (const id of layer) {
+			visited.add(id)
+			for (const target of outgoing.get(id) ?? []) {
+				indegree.set(target, (indegree.get(target) ?? 0) - 1)
+				if (indegree.get(target) === 0) next.push(target)
+			}
+		}
+		ready = next
+	}
+	const cyclic = spec.nodes.map((node) => node.id).filter((id) => !visited.has(id))
+	if (cyclic.length) layers.push(cyclic)
+
+	const dimensions = (nodeId: string) => {
+		const node = byId.get(nodeId)
+		return node?.kind === 'rich-output'
+			? { w: RICH_OUTPUT_WIDTH, h: RICH_OUTPUT_HEIGHT, baselineOffset: 75 }
+			: { w: NODE_WIDTH, h: NODE_HEIGHT, baselineOffset: 0 }
+	}
+	const layerWidths = layers.map((layer) => Math.max(...layer.map((id) => dimensions(id).w)))
+	const layerHeights = layers.map((layer) =>
+		layer.reduce((sum, id) => sum + dimensions(id).h, 0) +
+		Math.max(0, layer.length - 1) * LAYOUT_ROW_GAP
+	)
+	const requiredWidth =
+		layerWidths.reduce((sum, width) => sum + width, 0) +
+		Math.max(0, layers.length - 1) * NODE_GAP
+	const requiredHeight = Math.max(NODE_HEIGHT, ...layerHeights)
+	const positions = new Map<string, { x: number; y: number }>()
+	let x = origin.x
+	for (let index = 0; index < layers.length; index++) {
+		const layer = layers[index]
+		let y = origin.y + (requiredHeight - layerHeights[index]) / 2
+		for (const nodeId of layer) {
+			const size = dimensions(nodeId)
+			positions.set(nodeId, {
+				x: x + (layerWidths[index] - size.w) / 2,
+				y: y + size.baselineOffset,
+			})
+			y += size.h + LAYOUT_ROW_GAP
+		}
+		x += layerWidths[index] + NODE_GAP
+	}
+	return { positions, requiredWidth, requiredHeight }
+}
+
+export function layoutWorkflowOnCanvas(editor: Editor, workflowId: string) {
+	const shapes = editor
+		.getCurrentPageShapes()
+		.filter(isWorkflowNode)
+		.filter((shape) => getWorkflowNodeMeta(shape).workflowId === workflowId)
+	if (!shapes.length) return null
+	const progressFrame = workflowId.startsWith('prompt-experiment-')
+		? editor
+				.getCurrentPageShapes()
+				.find((shape) => shape.type === 'frame' && /in progress/i.test(String((shape.props as any).name ?? '')))
+		: undefined
+	const spec = readWorkflowSpec(editor, workflowId)
+	const zeroLayout = computeWorkflowLayout(spec, { x: 0, y: 0 })
+	const anchorNode = spec.nodes[0]
+	const anchorShape = shapes.find((shape) => getWorkflowNodeMeta(shape).nodeId === anchorNode?.id)
+	const anchorBounds = anchorShape ? editor.getShapePageBounds(anchorShape.id) : null
+	const anchorPosition = anchorNode ? zeroLayout.positions.get(anchorNode.id) : null
+	const anchorTopOffset = anchorNode?.kind === 'rich-output' ? 75 : 0
+	const origin = progressFrame
+		? { x: progressFrame.x + 60, y: progressFrame.y + 90 }
+		: anchorBounds && anchorPosition
+			? {
+				x: anchorBounds.x - anchorPosition.x,
+				y: anchorBounds.y - (anchorPosition.y - anchorTopOffset),
+			}
+			: { x: 120, y: 160 }
+	const layout = computeWorkflowLayout(spec, origin)
+	const pageId = editor.getCurrentPageId()
+	editor.reparentShapes(shapes.map((shape) => shape.id), pageId)
+	editor.updateShapes(
+		shapes.map((shape) => {
+			const nodeId = getWorkflowNodeMeta(shape).nodeId
+			const position = layout.positions.get(nodeId)!
+			return { id: shape.id, type: shape.type as any, x: position.x, y: position.y }
+		}) as any
+	)
+	if (progressFrame) {
+		editor.updateShape({
+			id: progressFrame.id,
+			type: progressFrame.type as any,
+			props: {
+				w: Math.max(Number((progressFrame.props as any).w ?? 0), layout.requiredWidth + 120),
+				h: Math.max(Number((progressFrame.props as any).h ?? 0), layout.requiredHeight + 180),
+			},
+		} as any)
+	}
+	return layout
+}
+
 export function createWorkflowOnCanvas(
 	editor: Editor,
 	spec: WorkflowSpec,
@@ -231,10 +453,15 @@ export function createWorkflowOnCanvas(
 	}
 
 	const shapeIds = new Map<string, TLShapeId>()
-	const nodeShapes = spec.nodes.map((node, index) => {
+	const layout = computeWorkflowLayout(spec, origin)
+	const nodeShapes = spec.nodes.map((node) => {
 		const id = createShapeId(`${spec.id}-${node.id}`)
 		shapeIds.set(node.id, id)
-		return buildNodeShape(spec, node, id, origin.x + index * (NODE_WIDTH + NODE_GAP), origin.y)
+		const position = layout.positions.get(node.id) ?? origin
+		return {
+			...buildNodeShape(spec, node, id, position.x, position.y),
+			parentId: editor.getCurrentPageId(),
+		}
 	})
 
 	editor.createShapes(nodeShapes as any)
@@ -295,10 +522,21 @@ export function duplicateLlmBranch(editor: Editor, shape: WorkflowNodeShape) {
 		edges: [],
 	}
 	const id = createShapeId(`${meta.workflowId}-${nodeId}`)
-	editor.createShape(buildNodeShape(spec, node, id, shape.x, shape.y + NODE_HEIGHT + 70) as any)
+	const sourceBounds = editor.getShapePageBounds(shape.id)
+	editor.createShape({
+		...buildNodeShape(
+			spec,
+			node,
+			id,
+			sourceBounds?.x ?? shape.x,
+			(sourceBounds?.y ?? shape.y) + NODE_HEIGHT + LAYOUT_ROW_GAP
+		),
+		parentId: editor.getCurrentPageId(),
+	} as any)
 	const created = editor.getShape(id)
 	if (!created || !isWorkflowNode(created)) throw new Error('Could not duplicate the LLM node')
 	const result = attachOutputBranch(editor, created, meta.nodeId, suffix)
+	layoutWorkflowOnCanvas(editor, meta.workflowId)
 	editor.select(created.id, result.outputId)
 	editor.zoomToSelection({ animation: { duration: 200 } })
 	return { llmId: created.id, ...result }
@@ -337,6 +575,7 @@ export function adoptDuplicatedLlmBranch(editor: Editor, shape: WorkflowNodeShap
 	const updated = editor.getShape(shape.id)
 	if (!updated || !isWorkflowNode(updated)) return null
 	const result = attachOutputBranch(editor, updated, meta.nodeId, suffix)
+	layoutWorkflowOnCanvas(editor, meta.workflowId)
 	editor.select(updated.id, result.outputId)
 	return { llmId: updated.id, ...result }
 }
@@ -444,14 +683,18 @@ function attachOutputBranch(
 		edges: [],
 	}
 	const outputId = createShapeId(`${meta.workflowId}-${outputNodeId}`)
+	const llmBounds = editor.getShapePageBounds(llmShape.id)
 	editor.createShape(
-		buildNodeShape(
+		{
+			...buildNodeShape(
 			spec,
 			outputNode,
 			outputId,
-			llmShape.x + NODE_WIDTH + NODE_GAP,
-			llmShape.y
-		) as any
+			(llmBounds?.x ?? llmShape.x) + NODE_WIDTH + NODE_GAP,
+			llmBounds?.y ?? llmShape.y
+			),
+			parentId: editor.getCurrentPageId(),
+		} as any
 	)
 
 	const shapesByNodeId = new Map<string, TLShapeId>()
@@ -497,7 +740,7 @@ function attachOutputBranch(
 }
 
 function createBranchSuffix() {
-	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+	return crypto.randomUUID().slice(0, 12)
 }
 
 function buildNodeShape(

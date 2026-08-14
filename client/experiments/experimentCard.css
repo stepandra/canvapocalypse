@@ -1,0 +1,214 @@
+.experiment-card-shell {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: all;
+  border: 1px solid color-mix(in srgb, var(--experiment-accent) 52%, #263244);
+  border-radius: 2px;
+  background: #0b111a;
+  color: #e5edf6;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.experiment-card-shell.is-missing {
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  border-color: #fb7185;
+}
+
+.experiment-card-header {
+  display: flex;
+  min-height: 74px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #263244;
+  background: #0e1722;
+}
+
+.experiment-card-shell.is-collapsed .experiment-card-header {
+  min-height: 76px;
+  border-bottom: 0;
+}
+
+.experiment-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.experiment-card-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--experiment-accent);
+}
+
+.experiment-card-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.experiment-card-heading span,
+.experiment-card-section > span,
+.experiment-card-outcomes section > span,
+.experiment-card-footer,
+.experiment-card-collapse {
+  color: #8da0b8;
+  font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.experiment-card-heading strong {
+  overflow: hidden;
+  color: #f3f7fb;
+  font: 700 14px/1.2 Inter, ui-sans-serif, system-ui, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experiment-card-collapse {
+  display: inline-flex;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid #334155;
+  border-radius: 2px;
+  background: #111c29;
+  color: #b8c4d3;
+  cursor: pointer;
+}
+
+.experiment-card-collapse:hover {
+  border-color: var(--experiment-accent);
+  color: #f8fafc;
+}
+
+.experiment-card-collapse svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.5;
+}
+
+.experiment-card-content {
+  display: grid;
+  min-height: 0;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  overflow: auto;
+}
+
+.experiment-card-subtitle {
+  margin: 0;
+  color: #9fb0c4;
+  font: 500 12px/1.35 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.experiment-card-schematic {
+  display: block;
+  width: 100%;
+  height: 154px;
+  flex: none;
+}
+
+.experiment-card-schematic-bg {
+  fill: #090f17;
+  stroke: #263244;
+}
+
+.experiment-card-edge {
+  fill: none;
+  stroke: #52667f;
+  stroke-width: 1.25;
+}
+
+.experiment-card-arrow-head {
+  fill: #52667f;
+}
+
+.experiment-card-node rect {
+  fill: #101b28;
+  stroke: #3a4b61;
+  stroke-width: 1;
+}
+
+.experiment-card-node circle {
+  fill: currentColor;
+}
+
+.experiment-card-node text {
+  fill: #d9e4ef;
+  font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+}
+
+.experiment-card-node.tone-cyan { color: #22d3ee; }
+.experiment-card-node.tone-violet { color: #a78bfa; }
+.experiment-card-node.tone-amber { color: #fbbf24; }
+.experiment-card-node.tone-green { color: #34d399; }
+.experiment-card-node.tone-red { color: #fb7185; }
+
+.experiment-card-section {
+  display: grid;
+  gap: 5px;
+  padding-left: 10px;
+  border-left: 2px solid var(--experiment-accent);
+}
+
+.experiment-card-section p,
+.experiment-card-outcomes p {
+  margin: 0;
+  color: #ced8e4;
+  font: 500 11px/1.45 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.experiment-card-outcomes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.experiment-card-outcomes section {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid #263244;
+  border-radius: 2px;
+  background: #0e1722;
+}
+
+.experiment-card-outcomes section:last-child {
+  border-color: color-mix(in srgb, #fb7185 45%, #263244);
+}
+
+.experiment-card-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 9px;
+  border-top: 1px solid #263244;
+  color: #66778c;
+  font-size: 9px;
+}
+
+@media (max-width: 560px) {
+  .experiment-card-outcomes {
+    grid-template-columns: 1fr;
+  }
+
+  .experiment-card-collapse span {
+    display: none;
+  }
+}

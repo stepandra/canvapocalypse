@@ -21,6 +21,13 @@ import {
 	updateWorkflowNode,
 	WorkflowNodeShape,
 } from './workflowCanvas'
+import {
+	createCanvasOutputPreview,
+	ExperimentBatchControls,
+	ExperimentBatchResult,
+	runExperimentBatch,
+	validateExperimentControls,
+} from './experimentBatch'
 
 const runningControllers = new WeakMap<Editor, AbortController>()
 
@@ -67,32 +74,43 @@ export async function runWorkflow(editor: Editor, workflowId: string) {
 							? incoming.map((edge) => values.get(edge.from) ?? '').filter(Boolean).join('\n\n')
 							: node.config.value ?? ''
 						let output = input
-						if (node.kind === 'llm') {
-							output = await streamLlmNode(
-								editor,
-								workflow,
-								shape,
-								input,
-								node.config.instructions,
-								node.config.model,
-								node.config.provider,
-								node.config.baseUrl,
-								runId,
-								controller.signal
-							)
-						} else if (node.kind === 'agent') {
-							output = await streamLlmNode(
-								editor,
-								workflow,
-								shape,
-								input,
-								node.config.instructions,
-								node.config.model || 'amp-medium',
-								'amp',
-								undefined,
-								runId,
-								controller.signal
-							)
+						let nodeExecutionStatus: WorkflowRunNodeResult['status'] = 'succeeded'
+						if (node.kind === 'llm' || node.kind === 'agent') {
+							const controls = validateExperimentControls(node.config)
+							if (controls.sampleCount > 1) {
+								const batch = await runLlmExperimentBatch(
+									editor,
+									workflow,
+									shape,
+									input,
+									node.config.instructions,
+									node.config.model,
+									node.config.provider,
+									node.config.baseUrl,
+									runId,
+									controls,
+									controller.signal
+								)
+								output = JSON.stringify(batch)
+								if (batch.status === 'failed') {
+									nodeExecutionStatus = 'failed'
+									runStatus = 'failed'
+								}
+							} else {
+								output = await streamLlmNode(
+									editor,
+									workflow,
+									shape,
+									input,
+									node.config.instructions,
+									node.config.model,
+									node.config.provider,
+									node.config.baseUrl,
+									runId,
+									controller.signal,
+									controls
+								)
+							}
 						} else if (node.kind === 'context') {
 							const contextItems =
 								AgentAppAgentsManager.getAgent(editor)?.context.getItems() ?? []
@@ -106,7 +124,10 @@ export async function runWorkflow(editor: Editor, workflowId: string) {
 								.join('\n\n')
 						} else if (node.kind === 'output' || node.kind === 'rich-output') {
 							updateWorkflowNode(editor, shape, {
-								config: { ...getWorkflowNodeMeta(shape).config, value: input },
+								config: {
+									...getWorkflowNodeMeta(shape).config,
+									value: createCanvasOutputPreview(input),
+								},
 							})
 						} else if (node.kind === 'input') {
 							output = node.config.value ?? ''
@@ -120,11 +141,11 @@ export async function runWorkflow(editor: Editor, workflowId: string) {
 							)
 						}
 						values.set(nodeId, output)
-						updateWorkflowNode(editor, shape, { status: 'succeeded' })
+						updateWorkflowNode(editor, shape, { status: nodeExecutionStatus })
 						nodeResults[nodeId] = buildNodeResult({
 							nodeId,
 							kind: node.kind,
-							status: 'succeeded',
+							status: nodeExecutionStatus,
 							startedAt: nodeStartedAt,
 							output,
 							provider: node.config.provider,
@@ -230,6 +251,50 @@ export function stopWorkflow(editor: Editor) {
 	runningControllers.delete(editor)
 }
 
+async function runLlmExperimentBatch(
+	editor: Editor,
+	workflow: WorkflowSpec,
+	shape: WorkflowNodeShape,
+	input: string,
+	instructions: string | undefined,
+	model: string | undefined,
+	provider: string | undefined,
+	baseUrl: string | undefined,
+	runId: string,
+	controls: ExperimentBatchControls,
+	signal: AbortSignal
+) {
+	const batch = await runExperimentBatch({
+		sampleCount: controls.sampleCount,
+		sampleConcurrency: controls.sampleConcurrency,
+		signal,
+		executeSample: async ({ index }) => {
+			const sampleControls: ExperimentBatchControls = {
+				...controls,
+				samplingSeed:
+					controls.samplingSeed !== undefined
+						? controls.samplingSeed + index
+						: undefined,
+			}
+			return await streamLlmNode(
+				editor,
+				workflow,
+				shape,
+				input,
+				instructions,
+				model,
+				provider,
+				baseUrl,
+				runId,
+				signal,
+				sampleControls,
+				false
+			)
+		},
+	})
+	return batch
+}
+
 async function streamLlmNode(
 	editor: Editor,
 	workflow: WorkflowSpec,
@@ -240,10 +305,19 @@ async function streamLlmNode(
 	provider: string | undefined,
 	baseUrl: string | undefined,
 	runId: string,
-	signal: AbortSignal
+	signal: AbortSignal,
+	controls: ExperimentBatchControls,
+	streamToCanvas = true
 ) {
 	const isOpenRouter = provider === 'openrouter'
 	const isCompatible = provider === 'compatible'
+	const resolvedProvider = isOpenRouter
+		? 'openrouter'
+		: isCompatible
+			? 'compatible'
+			: model?.startsWith('amp-')
+				? 'amp'
+				: 'builtin'
 	const requestInit: RequestInit = {
 		method: 'POST',
 		headers: {
@@ -260,14 +334,11 @@ async function streamLlmNode(
 			input,
 			instructions: instructions || 'Transform the input into one executable next step.',
 			model,
-			provider: isOpenRouter
-				? 'openrouter'
-				: isCompatible
-					? 'compatible'
-					: model?.startsWith('amp-')
-						? 'amp'
-						: 'builtin',
+			provider: resolvedProvider,
 			...(isCompatible ? { baseUrl } : {}),
+			temperature: controls.temperature,
+			maxTokens: controls.maxTokens,
+			...(controls.samplingSeed !== undefined ? { seed: controls.samplingSeed } : {}),
 			runId,
 		}),
 		signal,
@@ -294,25 +365,36 @@ async function streamLlmNode(
 	const reader = response.body.getReader()
 	const decoder = new TextDecoder()
 	let output = ''
+	const shapeMeta = getWorkflowNodeMeta(shape)
+	const downstreamOutputIds = streamToCanvas
+		? workflow.edges
+				.filter(
+					(edge) =>
+						edge.from === shapeMeta.nodeId &&
+						workflow.edges.filter((candidate) => candidate.to === edge.to).length === 1
+				)
+				.map((edge) => edge.to)
+		: []
+	const downstreamOutputs = streamToCanvas
+		? findWorkflowNodes(editor, shapeMeta.workflowId, downstreamOutputIds).filter((candidate) => {
+				const kind = getWorkflowNodeMeta(candidate).kind
+				return kind === 'output' || kind === 'rich-output'
+			})
+		: []
 	while (true) {
 		const { done, value } = await reader.read()
 		if (done) break
 		output += decoder.decode(value, { stream: true })
-		updateWorkflowNode(editor, shape, {
-			config: { ...getWorkflowNodeMeta(shape).config, lastOutput: output },
-		})
-		const downstreamOutputIds = workflow.edges
-			.filter((edge) => edge.from === getWorkflowNodeMeta(shape).nodeId)
-			.map((edge) => edge.to)
-		for (const outputShape of findWorkflowNodes(
-			editor,
-			getWorkflowNodeMeta(shape).workflowId,
-			downstreamOutputIds
-		)) {
-			updateWorkflowNode(editor, outputShape, {
-				status: 'running',
-				config: { ...getWorkflowNodeMeta(outputShape).config, value: output },
+		if (streamToCanvas) {
+			updateWorkflowNode(editor, shape, {
+				config: { ...getWorkflowNodeMeta(shape).config, lastOutput: output },
 			})
+			for (const outputShape of downstreamOutputs) {
+				updateWorkflowNode(editor, outputShape, {
+					status: 'running',
+					config: { ...getWorkflowNodeMeta(outputShape).config, value: output },
+				})
+			}
 		}
 	}
 	return output

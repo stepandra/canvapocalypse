@@ -179,17 +179,20 @@ three-tool loopback plugin rather than dispatching another diagram agent:
 2. `tldraw_describe_capability` hydrates exactly one smallest suitable schema;
 3. `tldraw_execute` sends one selection- or explicit-area-bounded request.
 
-The resident tldraw Offline client resolves the currently open document from
-its short-lived live binding, applies validated native actions, and returns a
-compact inspectable/undoable receipt. Unqualified companion discovery targets
-exactly one active Offline desktop and never falls back to a web preview.
-Every lease rotates a receipt token; only that exact resident canvas can close
-the request. Browser Origins may poll/lease/receipt only as bound residents;
-producer discovery, description, execution, request status, and legacy invoke
-reject browser Origins. The plugin does not accept a thread ID, document path,
-credential, full history, raw whole-canvas state, arbitrary URL, client
-binding, lease token, or filesystem root. No provider prompt or canvas metadata
-stores those values. A missing or ambiguous Offline binding fails closed.
+The Amp plugin resolves the workspace's sole regular, non-symlink
+`.canvas/*.tldraw` file to exactly one open tldraw Offline document, then uses
+that resident's opaque binding only as an internal discovery selector. Other
+open Offline documents are ignored and never closed. Missing, ambiguous,
+escaped, symlinked, unopened, or duplicate project targets fail closed, and
+discovery never falls back to a web preview. Every lease rotates a receipt
+token; only that exact resident canvas can close the request. Browser Origins
+may poll/lease/receipt only as bound residents; producer discovery,
+description, execution, request status, and legacy invoke reject browser
+Origins. The plugin tool schema does not accept a thread ID, document path,
+workspace root, credential, full history, raw whole-canvas state, arbitrary
+URL, client binding, or lease token. No provider prompt or canvas metadata
+stores those values. Unqualified non-project callers retain the
+exactly-one-active-Offline-client fail-closed rule.
 
 The worker dispatcher and artifact resolver remain later slices. The first
 ML-Intern integration seam is deliberately smaller: the already-running

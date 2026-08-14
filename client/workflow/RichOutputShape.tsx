@@ -9,6 +9,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import Markdown from 'react-markdown'
 import {
+	exportWorkflowRunJsonl,
 	listWorkflowRuns,
 	subscribeToWorkflowRuns,
 	WorkflowRunRecord,
@@ -139,6 +140,32 @@ function RichOutputCard({ shape }: { shape: WorkflowRichOutputShape }) {
 						))}
 					</select>
 				</label>
+				<button
+					type="button"
+					disabled={!selectedRun}
+					onPointerDown={stopEventPropagation}
+					onClick={(event) => {
+						stopEventPropagation(event)
+						if (!selectedRun) return
+						const jsonl = exportWorkflowRunJsonl(selectedRun)
+						if (!jsonl) return
+						const blob = new Blob([jsonl], { type: 'application/jsonlines' })
+						const url = URL.createObjectURL(blob)
+						const link = document.createElement('a')
+						link.href = url
+						link.download = buildWorkflowRunJsonlFilename(
+							meta.workflowId,
+							selectedRun.id,
+							meta.nodeId
+						)
+						document.body.appendChild(link)
+						link.click()
+						link.remove()
+						URL.revokeObjectURL(url)
+					}}
+				>
+					EXPORT JSONL
+				</button>
 				<small>{runs.length ? `${runs.length} saved run${runs.length === 1 ? '' : 's'}` : 'Not saved yet'}</small>
 			</div>
 			<div
@@ -280,4 +307,9 @@ function formatRunLabel(run: WorkflowRunRecord) {
 		second: '2-digit',
 	})
 	return `${time} · ${run.status} · ${run.id.slice(0, 8)}`
+}
+
+export function buildWorkflowRunJsonlFilename(workflowId: string, runId: string, nodeId: string): string {
+	const sanitize = (value: string) => value.replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '')
+	return `${sanitize(workflowId)}_${sanitize(runId)}_${sanitize(nodeId)}.jsonl`
 }

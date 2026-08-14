@@ -12,12 +12,78 @@ const workbenchShellSource = readFileSync(
 	'utf8'
 )
 
+describe('WorkflowOverlay Prompt Experiment Lab', () => {
+	it('adds a toolbar action to open the Prompt Experiment Lab', () => {
+		expect(overlaySource).toContain('Prompt Experiment Lab')
+		expect(overlaySource).toContain('installPromptExperimentWorkflow')
+		expect(overlaySource).toContain('configureLlmModelSet')
+		expect(overlaySource).toContain('icon="experiment"')
+	})
+
+	it('adds a toolbar action to materialize C1-style lead experiment cards', () => {
+		expect(overlaySource).toContain('Lead Acquisition Experiment Cards')
+		expect(overlaySource).toContain('installLeadAcquisitionExperimentCards')
+	})
+
+	it('renders numeric batch controls for editable LLM nodes', () => {
+		expect(overlaySource).toMatch(/SAMPLES\s*\/\s*MODEL/)
+		expect(overlaySource).toMatch(/PARALLEL\s*\/\s*MODEL/)
+		expect(overlaySource).toContain('TEMPERATURE')
+		expect(overlaySource).toContain('MAX TOKENS')
+		expect(overlaySource).toContain('SEED BASE')
+		expect(overlaySource).toContain("updateConfig('sampleCount'")
+		expect(overlaySource).toContain("updateConfig('sampleConcurrency'")
+		expect(overlaySource).toContain("updateConfig('temperature'")
+		expect(overlaySource).toContain("updateConfig('maxTokens'")
+		expect(overlaySource).toContain("'samplingSeed'")
+	})
+
+	it('keeps numeric batch control values within documented ranges', () => {
+		expect(overlaySource).toContain('Math.max(1, Math.min(100,')
+		expect(overlaySource).toContain('Math.max(1, Math.min(8,')
+		expect(overlaySource).toContain('Math.max(0, Math.min(2,')
+		expect(overlaySource).toContain('Math.max(256, Math.min(8192,')
+	})
+
+	it('shows a searchable multi-model checkbox picker for the selected provider', () => {
+		expect(overlaySource).toContain('experimentModelSearch')
+		expect(overlaySource).toContain('type="checkbox"')
+		expect(overlaySource).toContain('checked={isSelected}')
+		expect(overlaySource).toContain('builtinModels')
+		expect(overlaySource).toContain('models.map((model)')
+		expect(overlaySource).toContain('compatibleModels')
+	})
+
+	it('keeps OpenRouter and OpenAI-compatible connection controls available', () => {
+		expect(overlaySource).toContain('OPENROUTER API KEY')
+		expect(overlaySource).toContain('BASE URL')
+		expect(overlaySource).toContain('CONNECT + LOAD MODELS')
+		expect(overlaySource).toContain('loadOpenRouterModels')
+		expect(overlaySource).toContain('loadCompatibleModels')
+	})
+
+	it('calls configureLlmModelSet when applying the selected model set', () => {
+		expect(overlaySource).toContain('onClick={applyModelSet}')
+		expect(overlaySource).toContain('configureLlmModelSet(')
+		expect(overlaySource).toContain('selectedExperimentModels.map((model)')
+	})
+
+	it('does not store API keys inside shape metadata', () => {
+		expect(overlaySource).not.toContain('apiKey:')
+		expect(overlaySource).not.toContain('meta.config.apiKey')
+		expect(overlaySource).not.toContain('sessionStorage.setItem')
+	})
+})
+
 describe('WorkflowOverlay native tldraw chrome', () => {
-	it('uses the public toolbar controls as an icon-first 48px tool rail', () => {
+	it('uses the public toolbar controls as a horizontal top-center tool strip', () => {
 		expect(overlaySource).toContain('TldrawUiPopover')
 		expect(overlaySource).toContain('className="workflow-palette-toggle"')
 		expect(overlaySource).toContain('TldrawUiToolbar')
-		expect(overlaySource).toContain('orientation="grid"')
+		expect(overlaySource).toContain('orientation="horizontal"')
+		expect(overlaySource).toContain('side="bottom"')
+		expect(overlaySource).toContain('align="center"')
+
 		expect(overlaySource).toContain('TldrawUiToolbarButton')
 		expect(overlaySource).toContain('type="tool"')
 		expect(overlaySource).toContain('tooltip={label}')
