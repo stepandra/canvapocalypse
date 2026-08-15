@@ -5,6 +5,7 @@ import {
 	IndexKey,
 	reverseRecordsDiff,
 	TLArrowShape,
+	TLArrowBinding,
 	TLBindingCreate,
 	TLDefaultShape,
 	TLDefaultSizeStyle,
@@ -49,7 +50,7 @@ export function convertFocusedShapeToTldrawShape(
 	editor: Editor,
 	focusedShape: FocusedShape,
 	{ defaultShape }: { defaultShape: Partial<TLShape> }
-): { shape: TLShape; bindings?: TLBindingCreate[] } {
+): { shape: TLShape; bindings?: TLBindingCreate<TLArrowBinding>[] } {
 	switch (focusedShape._type) {
 		case 'text': {
 			return convertTextShapeToTldrawShape(editor, focusedShape, { defaultShape })
@@ -353,7 +354,7 @@ function convertArrowShapeToTldrawShape(
 	editor: Editor,
 	focusedShape: FocusedArrowShape,
 	{ defaultShape }: { defaultShape: Partial<TLShape> }
-): { shape: TLShape; bindings?: TLBindingCreate[] } {
+): { shape: TLShape; bindings?: TLBindingCreate<TLArrowBinding>[] } {
 	const shapeId = convertSimpleIdToTldrawId(focusedShape.shapeId)
 	const defaultArrowShape = defaultShape as TLArrowShape
 
@@ -410,7 +411,7 @@ function convertArrowShapeToTldrawShape(
 	}
 
 	// Handle arrow bindings if fromId or toId are provided
-	const bindings: TLBindingCreate[] = []
+	const bindings: TLBindingCreate<TLArrowBinding>[] = []
 
 	if (focusedShape.fromId) {
 		const fromId = convertSimpleIdToTldrawId(focusedShape.fromId)
@@ -758,7 +759,11 @@ export function convertPartialFocusedShapeToTldrawShape(
 	editor: Editor,
 	focusedShape: FocusedShapePartial,
 	{ defaultShape, complete }: { defaultShape: Partial<TLShape>; complete: boolean }
-): { shape: TLShape | null; bindings: TLBindingCreate[] | null; position: VecLike | null } {
+): {
+	shape: TLShape | null
+	bindings: TLBindingCreate<TLArrowBinding>[] | null
+	position: VecLike | null
+} {
 	// For text shapes, require: x, y, text
 	if (focusedShape._type === 'text') {
 		const partial = focusedShape as FocusedTextShapePartial
