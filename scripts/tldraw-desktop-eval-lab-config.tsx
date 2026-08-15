@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { DEFAULT_EMBED_DEFINITIONS, EmbedShapeUtil, useEditor } from 'tldraw'
 import { TldrawAgentApp } from '../client/agent/TldrawAgentApp'
 import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'
+import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../client/canvas-studio/host'
 import { installBridgeSupervisorResidentCapability } from '../client/bridges/bridgeSupervisorClient'
 import { DesignSystemShapeUtil } from '../client/design-system/DesignSystemShape'
 import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'
@@ -97,6 +98,7 @@ export default function ({ config }: { config: any }) {
 		shapeUtils: mergeUniqueRegistrations(
 			config.shapeUtils,
 			[
+				...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.shapeUtils,
 				AgentsModelsShapeUtil,
 				ExperimentCardShapeUtil,
 				WorkflowNodeShapeUtil,
@@ -107,9 +109,19 @@ export default function ({ config }: { config: any }) {
 			],
 			'type'
 		),
+		bindingUtils: mergeUniqueRegistrations(
+			config.bindingUtils,
+			CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils,
+			'type'
+		),
 		tools: mergeUniqueRegistrations(
 			config.tools,
-			[TargetShapeTool, TargetAreaTool, ...WORKFLOW_TOOLS],
+			[
+				...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.tools,
+				TargetShapeTool,
+				TargetAreaTool,
+				...WORKFLOW_TOOLS,
+			],
 			'id'
 		),
 		overlayUtils: mergeUniqueRegistrations(

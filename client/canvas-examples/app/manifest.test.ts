@@ -73,10 +73,10 @@ describe('Canvas Examples search', () => {
 			CANVAS_EXAMPLE_STORIES[0],
 		])
 		expect(searchCanvasExamples(CANVAS_EXAMPLE_STORIES, 'signals binding')).toEqual([
-			CANVAS_EXAMPLE_STORIES[1],
+			CANVAS_EXAMPLE_STORIES[2],
 		])
 		expect(searchCanvasExamples(CANVAS_EXAMPLE_STORIES, 'the panel')).toEqual([
-			CANVAS_EXAMPLE_STORIES[1],
+			CANVAS_EXAMPLE_STORIES[2],
 		])
 		expect(searchCanvasExamples(CANVAS_EXAMPLE_STORIES, 'missing')).toEqual([])
 	})

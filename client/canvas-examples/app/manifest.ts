@@ -142,6 +142,28 @@ const stories = [
 		load: () => import('../foundations/connected-shape/ConnectedShapeStory'),
 	},
 	{
+		id: 'canvas-studio-catalog',
+		category: 'getting-started',
+		title: 'Canvas Studio catalog',
+		description:
+			'Searches an embedded serializable catalog, dispatches through statically composed kit contributions, creates native records, and confirms one-step undo.',
+		keywords: ['catalog', 'kit', 'preset', 'search', 'dispatch', 'native', 'undo'],
+		source: {
+			label: 'CanvasStudioCatalogStory.tsx',
+			path: 'client/canvas-examples/foundations/canvas-studio-catalog/CanvasStudioCatalogStory.tsx',
+		},
+		runtimeRequirements: ['Browser DOM', 'React', 'tldraw editor runtime'],
+		contributions: {
+			kits: ['workbench.architecture'],
+			runtime: ['CanvasKitContribution composition', 'Embedded Canvas Studio catalog', 'Editor history'],
+		},
+		shapeTypes: ['geo', 'arrow'],
+		bindingTypes: ['arrow'],
+		toolTypes: ['select'],
+		requiredServiceIds: [],
+		load: () => import('../foundations/canvas-studio-catalog/CanvasStudioCatalogStory'),
+	},
+	{
 		id: 'inspector-panel',
 		category: 'inspectors',
 		title: 'Inspector panel',

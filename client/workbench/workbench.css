@@ -5,7 +5,7 @@
   left: var(--tl-space-4);
   display: flex;
   width: 48px;
-  height: 96px;
+  height: 144px;
   flex-direction: column;
   gap: 0;
   padding: 0;
@@ -24,6 +24,14 @@
 }
 
 .workbench-pack-options {
+  pointer-events: auto;
+}
+
+.canvas-studio-trigger {
+  pointer-events: auto;
+}
+
+.canvas-studio-palette {
   pointer-events: auto;
 }
 
@@ -106,7 +114,8 @@
 }
 
 .workbench-domain-center,
-.workbench-bridge-center {
+.workbench-bridge-center,
+.canvas-studio-palette {
   box-sizing: border-box;
   width: min(344px, calc(100vw - 24px));
   max-height: min(640px, calc(100vh - 24px));
@@ -520,6 +529,149 @@
   padding: var(--tl-space-2) var(--tl-space-4);
 }
 
+.canvas-studio-search {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-2);
+  margin: var(--tl-space-3);
+  padding: 0 var(--tl-space-3);
+  min-height: 38px;
+  border: 1px solid var(--tl-color-divider);
+  border-radius: var(--tl-radius-3);
+  background: var(--tl-color-panel);
+  color: var(--tl-color-text-3);
+}
+
+.canvas-studio-search:focus-within {
+  border-color: var(--tl-color-focus);
+  box-shadow: 0 0 0 1px var(--tl-color-focus);
+}
+
+.canvas-studio-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--tl-color-text-1);
+  font: 12px/1.4 var(--tl-font-sans);
+}
+
+.canvas-studio-results {
+  display: grid;
+  max-height: 420px;
+  overflow-y: auto;
+  border-top: 1px solid var(--tl-color-divider);
+}
+
+.canvas-studio-kit {
+  border-bottom: 1px solid var(--tl-color-divider);
+}
+
+.canvas-studio-kit > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tl-space-3);
+  padding: var(--tl-space-3) var(--tl-space-4) var(--tl-space-2);
+}
+
+.canvas-studio-kit > header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.canvas-studio-kit > header strong {
+  color: var(--tl-color-text-1);
+  font-size: 12px;
+}
+
+.canvas-studio-kit code,
+.canvas-studio-preset code {
+  overflow: hidden;
+  color: var(--tl-color-text-3);
+  font: 10px/1.3 var(--tl-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-studio-kit > header > span {
+  color: var(--tl-color-text-3);
+  font-size: 11px;
+  text-align: right;
+}
+
+.canvas-studio-kit[data-availability="available"] > header > span {
+  color: var(--tl-color-success);
+}
+
+.canvas-studio-kit[data-availability="unavailable"] > header > span {
+  color: var(--tl-color-danger);
+}
+
+.canvas-studio-presets {
+  display: grid;
+  gap: var(--tl-space-1);
+  padding: 0 var(--tl-space-2) var(--tl-space-2);
+}
+
+.canvas-studio-preset {
+  width: 100%;
+  min-height: 48px;
+  height: auto;
+  justify-content: space-between;
+  padding: var(--tl-space-2) var(--tl-space-3);
+  border-radius: var(--tl-radius-3);
+  pointer-events: auto;
+}
+
+.canvas-studio-preset .tlui-button__label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--tl-color-text-1);
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.canvas-studio-preset[data-availability="unbound"],
+.canvas-studio-preset[data-availability="unavailable"] {
+  color: var(--tl-color-text-3);
+}
+
+.canvas-studio-empty {
+  display: grid;
+  gap: var(--tl-space-2);
+  padding: var(--tl-space-5) var(--tl-space-4);
+  color: var(--tl-color-text-3);
+  font-size: 11px;
+}
+
+.canvas-studio-empty strong {
+  color: var(--tl-color-text-1);
+  font-size: 12px;
+}
+
+.canvas-studio-empty[data-state="unavailable"] strong {
+  color: var(--tl-color-danger);
+}
+
+.canvas-studio-status {
+  min-height: 36px;
+  padding: var(--tl-space-2) var(--tl-space-4);
+  color: var(--tl-color-text-3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (hover: hover) {
+  .canvas-studio-preset:hover {
+    background: var(--tl-color-muted-1);
+  }
+}
+
 @media (max-width: 760px) {
   .workbench-aux-rail {
     width: min(96px, calc(100vw - 24px));
@@ -531,7 +683,8 @@
   }
 
   .workbench-domain-center,
-  .workbench-bridge-center {
+  .workbench-bridge-center,
+  .canvas-studio-palette {
     width: min(320px, calc(100vw - 16px));
     max-height: calc(100vh - 96px);
   }

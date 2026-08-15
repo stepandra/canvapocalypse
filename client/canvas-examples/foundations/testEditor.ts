@@ -21,6 +21,7 @@ export class CanvasExamplesTestEditor extends Editor {
 		super({
 			shapeUtils,
 			bindingUtils,
+			textOptions: {},
 			tools: [...defaultTools, ...defaultShapeTools, ...tools],
 			store: createTLStore({ shapeUtils, bindingUtils }),
 			getContainer: () => document.createElement('div'),
@@ -31,26 +32,62 @@ export class CanvasExamplesTestEditor extends Editor {
 
 export function installCanvasExamplesTestDom() {
 	class FakeElement {
-		constructor(public ownerDocument: typeof document) {}
+		constructor(
+			public ownerDocument: typeof document,
+			public tagName = 'div',
+			public textContent = ''
+		) {}
 
+		nodeType = 1
 		tabIndex = 0
+		children: FakeElement[] = []
+		attributes = new Map<string, string>()
 		classList = { add() {}, remove() {} }
 		style = {
+			cssText: '',
 			setProperty() {},
 			removeProperty() {},
 			getPropertyValue() {
 				return ''
 			},
 		}
+		private rawInnerHtml: string | null = null
+		get innerHTML() {
+			if (this.rawInnerHtml !== null) return this.rawInnerHtml
+			return this.children
+				.map((child) =>
+					child.nodeType === 3
+						? child.textContent
+						: `<${child.tagName}>${child.innerHTML}</${child.tagName}>`
+				)
+				.join('')
+		}
+		set innerHTML(value: string) {
+			this.rawInnerHtml = value
+			this.children = []
+		}
+		get scrollWidth() {
+			return this.getBoundingClientRect().width
+		}
 		addEventListener() {}
 		removeEventListener() {}
-		setAttribute() {}
-		removeAttribute() {}
-		appendChild() {
-			return this
+		setAttribute(name: string, value: string) {
+			this.attributes.set(name, String(value))
 		}
-		removeChild() {
-			return this
+		setAttributeNS(_namespace: string, name: string, value: string) {
+			this.setAttribute(name, value)
+		}
+		removeAttribute(name: string) {
+			this.attributes.delete(name)
+		}
+		appendChild(child: FakeElement) {
+			this.rawInnerHtml = null
+			this.children.push(child)
+			return child
+		}
+		removeChild(child: FakeElement) {
+			this.children = this.children.filter((candidate) => candidate !== child)
+			return child
 		}
 		remove() {}
 		focus() {}
@@ -77,7 +114,24 @@ export function installCanvasExamplesTestDom() {
 		activeElement: null,
 		body: null as unknown as FakeElement,
 		documentElement: null as unknown as FakeElement,
-		createElement: () => new FakeElement(fakeDocument as unknown as typeof document),
+		createElement: (tagName = 'div') =>
+			new FakeElement(fakeDocument as unknown as typeof document, tagName),
+		createElementNS: (_namespace: string, tagName: string) =>
+			new FakeElement(fakeDocument as unknown as typeof document, tagName),
+		createTextNode: (text: string) => {
+			const node = new FakeElement(
+				fakeDocument as unknown as typeof document,
+				'#text',
+				text
+			)
+			node.nodeType = 3
+			return node
+		},
+		createDocumentFragment: () =>
+			new FakeElement(fakeDocument as unknown as typeof document, '#fragment'),
+		implementation: {
+			createHTMLDocument: () => fakeDocument,
+		},
 	}
 	const body = new FakeElement(fakeDocument as unknown as typeof document)
 	fakeDocument.body = body
@@ -95,6 +149,7 @@ export function installCanvasExamplesTestDom() {
 	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: {
+			document: fakeDocument,
 			devicePixelRatio: 1,
 			addEventListener() {},
 			removeEventListener() {},

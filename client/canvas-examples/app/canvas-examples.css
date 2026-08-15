@@ -479,6 +479,108 @@ input {
 	color: var(--canvas-examples-muted);
 }
 
+.canvas-studio-story-panel {
+	position: absolute;
+	top: 20px;
+	left: 20px;
+	z-index: 350;
+	box-sizing: border-box;
+	width: min(360px, calc(100% - 40px));
+	display: grid;
+	gap: 10px;
+	padding: 18px;
+	border: 1px solid rgba(24, 24, 27, 0.1);
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.96);
+	box-shadow: 0 16px 42px rgba(24, 24, 27, 0.11);
+	backdrop-filter: blur(16px);
+	pointer-events: all;
+}
+
+.canvas-studio-story-panel h1,
+.canvas-studio-story-panel p {
+	margin: 0;
+}
+
+.canvas-studio-story-panel h1 {
+	font-size: 20px;
+	letter-spacing: -0.025em;
+}
+
+.canvas-studio-story-panel p {
+	color: var(--canvas-examples-muted);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.canvas-studio-story-panel > input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 38px;
+	border: 1px solid var(--canvas-examples-line);
+	border-radius: 8px;
+	outline: 0;
+	padding: 0 10px;
+	background: #fff;
+	font-size: 12px;
+}
+
+.canvas-studio-story-panel > input:focus {
+	border-color: var(--canvas-examples-blue);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--canvas-examples-blue), transparent 78%);
+}
+
+.canvas-studio-story-results {
+	display: grid;
+	gap: 6px;
+}
+
+.canvas-studio-story-results button {
+	display: grid;
+	gap: 2px;
+	padding: 10px;
+	border: 1px solid var(--canvas-examples-line);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--canvas-examples-ink);
+	cursor: pointer;
+	text-align: left;
+}
+
+.canvas-studio-story-results button:hover {
+	border-color: var(--canvas-examples-blue);
+}
+
+.canvas-studio-story-results code {
+	color: var(--canvas-examples-muted);
+	font-size: 10px;
+}
+
+.canvas-studio-story-receipt {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+	color: var(--canvas-examples-muted);
+	font-size: 10px;
+}
+
+.canvas-studio-story-receipt button {
+	border: 0;
+	border-radius: 7px;
+	padding: 7px 9px;
+	background: var(--canvas-examples-ink);
+	color: #fff;
+	cursor: pointer;
+	font-size: 10px;
+	font-weight: 700;
+}
+
+.canvas-studio-story-receipt b {
+	color: #15803d;
+}
+
 .canvas-example-info-backdrop {
 	position: fixed;
 	inset: 0;
@@ -691,8 +793,11 @@ input {
 		white-space: nowrap;
 	}
 
-	.canvas-example-story-card {
+	.canvas-example-story-card,
+	.canvas-studio-story-panel {
 		top: 66px;
+		left: 10px;
+		width: calc(100% - 20px);
 	}
 
 	.canvas-example-inspector-story {

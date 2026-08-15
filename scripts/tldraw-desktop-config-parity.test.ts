@@ -15,7 +15,7 @@ describe('tldraw Offline config parity', () => {
 			"import { TargetShapeTool } from '../client/tools/TargetShapeTool'"
 		)
 		expect(desktopConfigSource).toMatch(
-			/tools:\s*mergeUniqueRegistrations\(\s*config\.tools,\s*\[TargetShapeTool,\s*TargetAreaTool,\s*\.\.\.WORKFLOW_TOOLS\],\s*'id'/
+			/tools:\s*mergeUniqueRegistrations\(\s*config\.tools,\s*\[[\s\S]*TargetShapeTool,[\s\S]*TargetAreaTool,[\s\S]*\.\.\.WORKFLOW_TOOLS,[\s\S]*\],\s*'id'/
 		)
 	})
 

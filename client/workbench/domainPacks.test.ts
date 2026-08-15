@@ -139,6 +139,8 @@ describe('workbench domain packs', () => {
 			'workbench-template-trigger',
 			'workbench-template-palette',
 			'workbench-template-option',
+			'canvas-studio-trigger',
+			'canvas-studio-palette',
 		]) {
 			expect(css).toMatch(
 				new RegExp(`\\.${selector}\\s*\\{[^}]*pointer-events:\\s*auto`, 's')

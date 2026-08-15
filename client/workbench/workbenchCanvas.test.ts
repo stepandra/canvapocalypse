@@ -182,6 +182,25 @@ describe('Workbench native template render plans', () => {
 })
 
 describe('Workbench template editor transaction', () => {
+	it('validates the target page before starting an editor transaction', () => {
+		let runCount = 0
+		const editor = {
+			getCurrentPageId: () => TEST_PAGE_ID,
+			getPage: () => undefined,
+			run: () => {
+				runCount += 1
+			},
+		} as unknown as Editor
+
+		expect(() =>
+			insertWorkbenchTemplate(editor, 'architecture', 'system-context', {
+				pageId: TEST_PAGE_ID,
+				point: { x: 100, y: 100 },
+			})
+		).toThrow(/page page:workbench-test does not exist/)
+		expect(runCount).toBe(0)
+	})
+
 	it('creates shapes and bindings in one editor transaction, verifies them, and selects the result', () => {
 		const shapes = new Map<TLShapeId, TLCreateShapePartial<TLShape>>()
 		const bindings = new Map<string, TLBindingCreate<TLBinding>>()
@@ -192,6 +211,8 @@ describe('Workbench template editor transaction', () => {
 		const editor = {
 			getViewportPageBounds: () => ({ center: { x: 1000, y: 800 } }),
 			getCurrentPageId: () => TEST_PAGE_ID,
+			getPage: (pageId: TLPageId) =>
+				pageId === TEST_PAGE_ID ? { id: TEST_PAGE_ID } : undefined,
 			markHistoryStoppingPoint: (label: string) => {
 				historyLabel = label
 			},

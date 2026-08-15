@@ -13,6 +13,7 @@ import {
 	TLFrameShape,
 	TLGeoShape,
 	TLNoteShape,
+	TLPageId,
 	TLParentId,
 	TLShape,
 	TLShapeId,
@@ -159,6 +160,8 @@ export interface BuildWorkbenchTemplateRenderPlanOptions {
 export interface InsertWorkbenchTemplateOptions {
 	instanceId?: string
 	today?: string
+	pageId?: TLPageId
+	point?: { x: number; y: number }
 }
 
 export interface WorkbenchTemplateReceipt {
@@ -703,12 +706,16 @@ export function insertWorkbenchTemplate(
 	options: InsertWorkbenchTemplateOptions = {}
 ): WorkbenchTemplateReceipt {
 	const instanceId = options.instanceId ?? createInstanceId(pack, templateId)
+	const pageId = options.pageId ?? editor.getCurrentPageId()
+	if (!editor.getPage(pageId)) {
+		throw new Error(`Workbench insertion page ${pageId} does not exist`)
+	}
 	const plan = buildWorkbenchTemplateRenderPlan({
 		pack,
 		templateId,
 		instanceId,
-		center: editor.getViewportPageBounds().center,
-		parentId: editor.getCurrentPageId(),
+		center: options.point ?? editor.getViewportPageBounds().center,
+		parentId: pageId,
 		today: options.today,
 	})
 

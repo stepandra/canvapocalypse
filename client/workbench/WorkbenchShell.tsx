@@ -14,6 +14,7 @@ import {
 import { TldrawAgentApp } from '../agent/TldrawAgentApp'
 import { TldrawAgentAppContextProvider } from '../agent/TldrawAgentAppProvider'
 import { BridgeCenter } from '../bridges/BridgeCenter'
+import { CanvasStudioPalette } from '../canvas-studio/CanvasStudioPalette'
 import { MlInternEvalLabLauncher } from '../components/MlInternEvalLabLauncher'
 import { CompanionCanvasBridgeController } from '../components/CompanionCanvasBridgeController'
 import { IsoflowOverlay } from '../isoflow/IsoflowOverlay'
@@ -264,6 +265,7 @@ export function WorkbenchShell({ app }: WorkbenchShellProps) {
 						</section>
 					</TldrawUiPopoverContent>
 				</TldrawUiPopover>
+				<CanvasStudioPalette />
 				<BridgeCenter />
 			</TldrawUiToolbar>
 

@@ -54,12 +54,13 @@ describe('native tldraw workbench chrome', () => {
 		expect(emojiSource).not.toContain('<svg')
 	})
 
-	it('keeps mode and bridge as a vertical rail beside ML-intern', () => {
+	it('keeps domain, catalog, and bridge as a vertical rail beside ML-intern', () => {
 		expect(shellSource).toContain('workbench-aux-rail')
 		expect(shellSource).toContain('orientation="vertical"')
+		expect(shellSource).toContain('<CanvasStudioPalette />')
 		expect(shellSource).toContain('<BridgeCenter />')
 		expect(css).toMatch(
-			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*96px;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s
+			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*144px;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s
 		)
 		expect(css).toMatch(
 			/\.workbench-rail-trigger\s*\{[^}]*width:\s*48px;[^}]*min-width:\s*48px;[^}]*height:\s*48px;/s

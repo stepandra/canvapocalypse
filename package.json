@@ -11,6 +11,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "vite build",
+		"canvas-studio:build-kits": "node scripts/build-canvas-studio-kit-bundle.mjs",
 		"dev": "vite --host",
 		"isoflow:build": "npm --prefix isoflow-studio run build",
 		"isoflow:dev": "npm --prefix isoflow-studio run dev",
