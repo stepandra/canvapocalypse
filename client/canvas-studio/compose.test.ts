@@ -17,6 +17,7 @@ function contribution(
 		shapeUtils: overrides.shapeUtils ?? [],
 		bindingUtils: overrides.bindingUtils ?? [],
 		tools: overrides.tools ?? [],
+		onMount: overrides.onMount,
 		insertPreset:
 			overrides.insertPreset ??
 			((_editor, presetId) => ({
@@ -29,6 +30,79 @@ function contribution(
 }
 
 describe('Canvas Studio kit composition', () => {
+	it('mounts every live contribution once for an editor mount', () => {
+		const editor = {} as Editor
+		const firstOnMount = vi.fn()
+		const secondOnMount = vi.fn()
+		const composition = composeCanvasKitContributions([
+			contribution({ kitId: 'kit.alpha', onMount: firstOnMount }),
+			contribution({ kitId: 'kit.beta' }),
+			contribution({ kitId: 'kit.gamma', onMount: secondOnMount }),
+		])
+
+		composition.onMount(editor)
+
+		expect(firstOnMount).toHaveBeenCalledOnce()
+		expect(firstOnMount).toHaveBeenCalledWith(editor)
+		expect(secondOnMount).toHaveBeenCalledOnce()
+		expect(secondOnMount).toHaveBeenCalledWith(editor)
+	})
+
+	it('disposes every cleanup returned by a live contribution', () => {
+		const firstDispose = vi.fn()
+		const secondDispose = vi.fn()
+		const composition = composeCanvasKitContributions([
+			contribution({ kitId: 'kit.alpha', onMount: () => firstDispose }),
+			contribution({ kitId: 'kit.beta', onMount: () => undefined }),
+			contribution({ kitId: 'kit.gamma', onMount: () => secondDispose }),
+		])
+
+		const dispose = composition.onMount({} as Editor)
+		dispose?.()
+
+		expect(firstDispose).toHaveBeenCalledOnce()
+		expect(secondDispose).toHaveBeenCalledOnce()
+	})
+
+	it('unwinds mounted contributions when a later mount fails', () => {
+		const dispose = vi.fn()
+		const skippedOnMount = vi.fn()
+		const composition = composeCanvasKitContributions([
+			contribution({ kitId: 'kit.alpha', onMount: () => dispose }),
+			contribution({
+				kitId: 'kit.beta',
+				onMount: () => {
+					throw new Error('mount failed')
+				},
+			}),
+			contribution({ kitId: 'kit.gamma', onMount: skippedOnMount }),
+		])
+
+		expect(() => composition.onMount({} as Editor)).toThrow('mount failed')
+		expect(dispose).toHaveBeenCalledOnce()
+		expect(skippedOnMount).not.toHaveBeenCalled()
+	})
+
+	it('attempts every cleanup when one contribution disposer fails', () => {
+		const firstDispose = vi.fn()
+		const failingDispose = vi.fn(() => {
+			throw new Error('dispose failed')
+		})
+		const lastDispose = vi.fn()
+		const composition = composeCanvasKitContributions([
+			contribution({ kitId: 'kit.alpha', onMount: () => firstDispose }),
+			contribution({ kitId: 'kit.beta', onMount: () => failingDispose }),
+			contribution({ kitId: 'kit.gamma', onMount: () => lastDispose }),
+		])
+
+		const dispose = composition.onMount({} as Editor)
+
+		expect(() => dispose?.()).toThrow('dispose failed')
+		expect(firstDispose).toHaveBeenCalledOnce()
+		expect(failingDispose).toHaveBeenCalledOnce()
+		expect(lastDispose).toHaveBeenCalledOnce()
+	})
+
 	it('dispatches only through the statically composed preset owner', () => {
 		const insertPreset = vi.fn((_editor: Editor, presetId: string) => ({
 			kitId: 'kit.alpha',

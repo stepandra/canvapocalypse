@@ -102,6 +102,37 @@ export function composeCanvasKitContributions(
 		shapeUtils,
 		bindingUtils,
 		tools,
+		onMount(editor) {
+			const disposers: Array<() => void> = []
+			const dispose = () => {
+				let firstError: unknown
+				let failed = false
+				for (let index = disposers.length - 1; index >= 0; index -= 1) {
+					try {
+						disposers[index]()
+					} catch (error) {
+						if (!failed) firstError = error
+						failed = true
+					}
+				}
+				if (failed) throw firstError
+			}
+			try {
+				for (const contribution of stableContributions) {
+					const contributionDispose = contribution.onMount?.(editor)
+					if (contributionDispose) disposers.push(contributionDispose)
+				}
+			} catch (error) {
+				try {
+					dispose()
+				} catch {
+					// Preserve the mount error after attempting every collected cleanup.
+				}
+				throw error
+			}
+			if (disposers.length === 0) return
+			return dispose
+		},
 		getContribution: (kitId) => byKitId.get(kitId),
 		getPresetContribution: (presetId) => byPresetId.get(presetId),
 		insertPreset(editor, presetId, options) {

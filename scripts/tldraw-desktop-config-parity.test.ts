@@ -67,6 +67,12 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
+	it('mounts and disposes live contributions with the supplied composition', () => {
+		expect(desktopConfigSource).toContain(
+			'useEffect(() => composition.onMount(editor), [composition, editor])'
+		)
+	})
+
 	it('registers the C1-style experiment card shape used by both surfaces', () => {
 		expect(desktopConfigSource).toContain(
 			"import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'"

@@ -47,6 +47,8 @@ function WorkbenchDesktopLayer({
 	const editor = useEditor()
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
 
+	useEffect(() => composition.onMount(editor), [composition, editor])
+
 	useEffect(() => {
 		const instance = new TldrawAgentApp(editor, { onError: console.error })
 		instance.persistence.loadState()

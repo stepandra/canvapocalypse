@@ -33,6 +33,7 @@ export interface CanvasKitContribution {
 	readonly shapeUtils: readonly TLAnyShapeUtilConstructor[]
 	readonly bindingUtils: readonly TLAnyBindingUtilConstructor[]
 	readonly tools: readonly TLStateNodeConstructor[]
+	onMount?(editor: Editor): void | (() => void)
 	insertPreset(
 		editor: Editor,
 		presetId: string,
@@ -45,6 +46,7 @@ export interface CanvasKitComposition {
 	readonly shapeUtils: readonly TLAnyShapeUtilConstructor[]
 	readonly bindingUtils: readonly TLAnyBindingUtilConstructor[]
 	readonly tools: readonly TLStateNodeConstructor[]
+	onMount(editor: Editor): void | (() => void)
 	getContribution(kitId: string): CanvasKitContribution | undefined
 	getPresetContribution(presetId: string): CanvasKitContribution | undefined
 	insertPreset(
