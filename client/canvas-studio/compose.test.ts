@@ -17,6 +17,7 @@ function contribution(
 		shapeUtils: overrides.shapeUtils ?? [],
 		bindingUtils: overrides.bindingUtils ?? [],
 		tools: overrides.tools ?? [],
+		records: overrides.records,
 		onMount: overrides.onMount,
 		insertPreset:
 			overrides.insertPreset ??
@@ -188,5 +189,25 @@ describe('Canvas Studio kit composition', () => {
 				}),
 			])
 		).toThrow(/Duplicate Canvas Studio tool id tool.same/)
+	})
+
+	it('composes custom records and rejects duplicate type names', () => {
+		const firstRecord = {} as import('tldraw').CustomRecordInfo
+		const secondRecord = {} as import('tldraw').CustomRecordInfo
+		const first = contribution({
+			kitId: 'kit.one',
+			records: { 'comment-thread': firstRecord },
+		})
+		const second = contribution({
+			kitId: 'kit.two',
+			records: { 'comment-thread': secondRecord },
+		})
+
+		expect(composeCanvasKitContributions([first]).records).toEqual({
+			'comment-thread': firstRecord,
+		})
+		expect(() => composeCanvasKitContributions([first, second])).toThrow(
+			/Duplicate Canvas Studio record id comment-thread in kit.one and kit.two/
+		)
 	})
 })

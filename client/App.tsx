@@ -7,6 +7,9 @@ import {
 	Tldraw,
 	TldrawUiToastsProvider,
 	TLUiOverrides,
+	defaultAssetUtils,
+	defaultBindingUtils,
+	defaultShapeUtils,
 } from 'tldraw'
 import { TldrawAgentApp } from './agent/TldrawAgentApp'
 import {
@@ -14,6 +17,8 @@ import {
 	TldrawAgentAppProvider,
 } from './agent/TldrawAgentAppProvider'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from './canvas-studio/host'
+import { useCanvasStudioLocalStore } from './canvas-studio/useCanvasStudioLocalStore'
+import { CommentOverlay } from './comments/CommentOverlay'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { DesignSystemShapeUtil } from './design-system/DesignSystemShape'
 import { ExperimentCardShapeUtil } from './experiments/ExperimentCardShape'
@@ -55,6 +60,23 @@ const shapeUtils = [
 ]
 const bindingUtils = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils
 const overlayUtils = [AgentHighlightOverlayUtil]
+
+function mergeRegistrationsByType<
+	Default extends { type: string },
+	Custom extends { type: string },
+>(
+	defaults: readonly Default[],
+	custom: readonly Custom[]
+) {
+	const customTypes = new Set(custom.map((registration) => registration.type))
+	return [
+		...defaults.filter((registration) => !customTypes.has(registration.type)),
+		...custom,
+	]
+}
+
+const storeShapeUtils = mergeRegistrationsByType(defaultShapeUtils, shapeUtils)
+const storeBindingUtils = mergeRegistrationsByType(defaultBindingUtils, bindingUtils)
 const overrides: TLUiOverrides = {
 	tools: (editor, tools) => {
 		return {
@@ -85,6 +107,13 @@ function App() {
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
 	const disposeCanvasKits = useRef<(() => void) | undefined>(undefined)
 	const persistenceKey = resolveCanvasPersistenceKey(window.location.search)
+	const store = useCanvasStudioLocalStore({
+		persistenceKey,
+		shapeUtils: storeShapeUtils,
+		bindingUtils: storeBindingUtils,
+		assetUtils: defaultAssetUtils,
+		records: CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.records,
+	})
 
 	const handleUnmount = useCallback(() => {
 		disposeCanvasKits.current?.()
@@ -109,6 +138,7 @@ function App() {
 				<>
 					<WorkbenchShell app={app} />
 					<CanvasLayoutControls />
+					<CommentOverlay />
 				</>
 			),
 			HelperButtons: () =>
@@ -125,7 +155,7 @@ function App() {
 			<div className="tldraw-agent-container">
 				<div className="tldraw-canvas">
 					<Tldraw
-						persistenceKey={persistenceKey}
+						store={store}
 						tools={tools}
 						shapeUtils={shapeUtils}
 						bindingUtils={bindingUtils}

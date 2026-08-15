@@ -52,6 +52,7 @@ function assertValidCanvasKitContributions(contributions) {
 	const shapeIds = new Map()
 	const bindingIds = new Map()
 	const toolIds = new Map()
+	const recordIds = new Map()
 	for (const contribution of contributions) {
 		if (!contribution || typeof contribution !== 'object') {
 			throw new Error('Canvas Studio contribution must be an object.')
@@ -96,6 +97,29 @@ function assertValidCanvasKitContributions(contributions) {
 			toolIds,
 			contribution.kitId
 		)
+		if (
+			contribution.records !== undefined &&
+			(!contribution.records ||
+				typeof contribution.records !== 'object' ||
+				Array.isArray(contribution.records))
+		) {
+			throw new Error(
+				`Canvas Studio kit ${contribution.kitId} records must be an object.`
+			)
+		}
+		for (const [typeName, record] of Object.entries(contribution.records ?? {})) {
+			assertUniqueContributionId(
+				typeName,
+				'record',
+				recordIds,
+				contribution.kitId
+			)
+			if (!record || typeof record !== 'object') {
+				throw new Error(
+					`Canvas Studio record ${typeName} in ${contribution.kitId} must be an object.`
+				)
+			}
+		}
 	}
 }
 

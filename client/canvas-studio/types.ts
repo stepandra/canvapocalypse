@@ -1,4 +1,5 @@
 import type {
+	CustomRecordInfo,
 	Editor,
 	TLAnyBindingUtilConstructor,
 	TLAnyShapeUtilConstructor,
@@ -33,6 +34,8 @@ export interface CanvasKitContribution {
 	readonly shapeUtils: readonly TLAnyShapeUtilConstructor[]
 	readonly bindingUtils: readonly TLAnyBindingUtilConstructor[]
 	readonly tools: readonly TLStateNodeConstructor[]
+	/** Custom document records that must be registered before this kit can mount. */
+	readonly records?: Readonly<Record<string, CustomRecordInfo>>
 	onMount?(editor: Editor): void | (() => void)
 	insertPreset(
 		editor: Editor,
@@ -46,6 +49,7 @@ export interface CanvasKitComposition {
 	readonly shapeUtils: readonly TLAnyShapeUtilConstructor[]
 	readonly bindingUtils: readonly TLAnyBindingUtilConstructor[]
 	readonly tools: readonly TLStateNodeConstructor[]
+	readonly records: Readonly<Record<string, CustomRecordInfo>>
 	onMount(editor: Editor): void | (() => void)
 	getContribution(kitId: string): CanvasKitContribution | undefined
 	getPresetContribution(presetId: string): CanvasKitContribution | undefined

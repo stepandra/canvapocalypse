@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { DEFAULT_EMBED_DEFINITIONS, EmbedShapeUtil, useEditor } from 'tldraw'
 import { TldrawAgentApp } from '../client/agent/TldrawAgentApp'
 import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'
+import { composeCanvasKitContributions } from '../client/canvas-studio/compose'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../client/canvas-studio/host'
 import type { CanvasKitComposition } from '../client/canvas-studio/types'
 import { DesignSystemShapeUtil } from '../client/design-system/DesignSystemShape'
@@ -42,8 +43,10 @@ const desktopStylesheet = [
 
 function WorkbenchDesktopLayer({
 	composition,
+	unsupportedKitIds,
 }: {
 	composition: CanvasKitComposition
+	unsupportedKitIds: readonly string[]
 }) {
 	const editor = useEditor()
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
@@ -62,6 +65,26 @@ function WorkbenchDesktopLayer({
 	return (
 		<>
 			<style>{desktopStylesheet}</style>
+			{unsupportedKitIds.length > 0 && (
+				<div
+					role="status"
+					style={{
+						position: 'absolute',
+						right: 12,
+						bottom: 12,
+						zIndex: 500,
+						maxWidth: 320,
+						padding: '8px 10px',
+						borderRadius: 8,
+						background: 'var(--color-panel)',
+						boxShadow: 'var(--shadow-2)',
+						fontSize: 12,
+					}}
+				>
+					Unavailable in tldraw Offline: {unsupportedKitIds.join(', ')} requires custom
+					document records, which its document-script host cannot register.
+				</div>
+			)}
 			<WorkbenchShell app={app} canvasKitComposition={composition} />
 			<CanvasLayoutControls />
 		</>
@@ -71,6 +94,17 @@ function WorkbenchDesktopLayer({
 export function createTldrawDesktopEvalLabConfig(
 	composition: CanvasKitComposition = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION
 ) {
+	const unsupportedKitIds = composition.contributions
+		.filter((contribution) => Object.keys(contribution.records ?? {}).length > 0)
+		.map((contribution) => contribution.kitId)
+	const desktopComposition = unsupportedKitIds.length
+		? composeCanvasKitContributions(
+				composition.contributions.filter(
+					(contribution) => Object.keys(contribution.records ?? {}).length === 0
+				)
+			)
+		: composition
+
 	return function applyTldrawDesktopEvalLabConfig({ config }: { config: any }) {
 		const PreviousInFrontOfTheCanvas = unwrapWorkbenchDesktopLayer(
 			config.components.InFrontOfTheCanvas
@@ -80,7 +114,10 @@ export function createTldrawDesktopEvalLabConfig(
 			return (
 				<>
 					{PreviousInFrontOfTheCanvas && <PreviousInFrontOfTheCanvas />}
-					<WorkbenchDesktopLayer composition={composition} />
+					<WorkbenchDesktopLayer
+						composition={desktopComposition}
+						unsupportedKitIds={unsupportedKitIds}
+					/>
 				</>
 			)
 		}
@@ -94,7 +131,7 @@ export function createTldrawDesktopEvalLabConfig(
 			shapeUtils: mergeUniqueRegistrations(
 				config.shapeUtils,
 				[
-					...composition.shapeUtils,
+					...desktopComposition.shapeUtils,
 					AgentsModelsShapeUtil,
 					ExperimentCardShapeUtil,
 					WorkflowNodeShapeUtil,
@@ -107,13 +144,13 @@ export function createTldrawDesktopEvalLabConfig(
 			),
 			bindingUtils: mergeUniqueRegistrations(
 				config.bindingUtils,
-				composition.bindingUtils,
+				desktopComposition.bindingUtils,
 				'type'
 			),
 			tools: mergeUniqueRegistrations(
 				config.tools,
 				[
-					...composition.tools,
+					...desktopComposition.tools,
 					TargetShapeTool,
 					TargetAreaTool,
 					...WORKFLOW_TOOLS,

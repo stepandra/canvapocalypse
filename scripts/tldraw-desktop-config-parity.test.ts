@@ -47,23 +47,35 @@ describe('tldraw Offline config parity', () => {
 	})
 
 	it('keeps host-native registrations deduped after external registrations', () => {
-		expect(desktopConfigSource.indexOf('...composition.shapeUtils')).toBeLessThan(
+		expect(desktopConfigSource.indexOf('...desktopComposition.shapeUtils')).toBeLessThan(
 			desktopConfigSource.indexOf('AgentsModelsShapeUtil,')
 		)
-		expect(desktopConfigSource.indexOf('...composition.tools')).toBeLessThan(
+		expect(desktopConfigSource.indexOf('...desktopComposition.tools')).toBeLessThan(
 			desktopConfigSource.indexOf('TargetShapeTool,')
 		)
 	})
 
-	it('uses one supplied Canvas Kit composition for registrations and palette dispatch', () => {
+	it('uses the Offline-compatible slice of one supplied composition', () => {
 		expect(desktopConfigSource).toContain(
 			'export function createTldrawDesktopEvalLabConfig('
 		)
-		expect(desktopConfigSource).toContain('...composition.shapeUtils')
-		expect(desktopConfigSource).toContain('composition.bindingUtils')
-		expect(desktopConfigSource).toContain('...composition.tools')
+		expect(desktopConfigSource).toContain('...desktopComposition.shapeUtils')
+		expect(desktopConfigSource).toContain('desktopComposition.bindingUtils')
+		expect(desktopConfigSource).toContain('...desktopComposition.tools')
 		expect(desktopConfigSource).toContain(
-			'<WorkbenchDesktopLayer composition={composition} />'
+			'composition={desktopComposition}'
+		)
+	})
+
+	it('fails custom-record kits closed with an explicit diagnostic', () => {
+		expect(desktopConfigSource).toContain(
+			"Object.keys(contribution.records ?? {}).length > 0"
+		)
+		expect(desktopConfigSource).toContain(
+			'Unavailable in tldraw Offline:'
+		)
+		expect(desktopConfigSource).toContain(
+			'its document-script host cannot register.'
 		)
 	})
 

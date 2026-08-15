@@ -60,6 +60,11 @@ export function composeCanvasKitContributions(
 ): CanvasKitComposition {
 	const byKitId = new Map<string, CanvasKitContribution>()
 	const byPresetId = new Map<string, CanvasKitContribution>()
+	const recordOwners = new Map<string, string>()
+	const records: Record<
+		string,
+		NonNullable<CanvasKitContribution['records']>[string]
+	> = {}
 
 	for (const contribution of contributions) {
 		assertContributionId(contribution.kitId, 'kit')
@@ -79,6 +84,18 @@ export function composeCanvasKitContributions(
 			}
 			localPresetIds.add(presetId)
 			byPresetId.set(presetId, contribution)
+		}
+
+		for (const [typeName, record] of Object.entries(contribution.records ?? {})) {
+			assertContributionId(typeName, 'record')
+			const existingOwner = recordOwners.get(typeName)
+			if (existingOwner) {
+				throw new Error(
+					`Duplicate Canvas Studio record id ${typeName} in ${existingOwner} and ${contribution.kitId}`
+				)
+			}
+			recordOwners.set(typeName, contribution.kitId)
+			records[typeName] = record
 		}
 	}
 
@@ -102,6 +119,7 @@ export function composeCanvasKitContributions(
 		shapeUtils,
 		bindingUtils,
 		tools,
+		records,
 		onMount(editor) {
 			const disposers: Array<() => void> = []
 			const dispose = () => {
