@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const desktopConfigSource = readFileSync(
-	new URL('./tldraw-desktop-eval-lab-config.tsx', import.meta.url),
+	new URL('./tldraw-desktop-eval-lab-config-factory.tsx', import.meta.url),
 	'utf8'
 )
 
@@ -46,6 +46,27 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
+	it('keeps host-native registrations deduped after external registrations', () => {
+		expect(desktopConfigSource.indexOf('...composition.shapeUtils')).toBeLessThan(
+			desktopConfigSource.indexOf('AgentsModelsShapeUtil,')
+		)
+		expect(desktopConfigSource.indexOf('...composition.tools')).toBeLessThan(
+			desktopConfigSource.indexOf('TargetShapeTool,')
+		)
+	})
+
+	it('uses one supplied Canvas Kit composition for registrations and palette dispatch', () => {
+		expect(desktopConfigSource).toContain(
+			'export function createTldrawDesktopEvalLabConfig('
+		)
+		expect(desktopConfigSource).toContain('...composition.shapeUtils')
+		expect(desktopConfigSource).toContain('composition.bindingUtils')
+		expect(desktopConfigSource).toContain('...composition.tools')
+		expect(desktopConfigSource).toContain(
+			'<WorkbenchDesktopLayer composition={composition} />'
+		)
+	})
+
 	it('registers the C1-style experiment card shape used by both surfaces', () => {
 		expect(desktopConfigSource).toContain(
 			"import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'"
@@ -58,20 +79,28 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
-	it('requires the Offline bundle to install its resident HTML capability', () => {
-		expect(desktopConfigSource).toContain(
+	it('requires the Offline entry to install its resident HTML capability', () => {
+		const desktopEntrySource = readFileSync(
+			new URL('./tldraw-desktop-eval-lab-config.tsx', import.meta.url),
+			'utf8'
+		)
+		expect(desktopEntrySource).toContain(
 			'installHtmlMockupResidentCapability(\n\t__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__\n)'
 		)
-		expect(desktopConfigSource).not.toContain(
+		expect(desktopEntrySource).not.toContain(
 			"typeof __TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__"
 		)
 	})
 
 	it('installs the same resident capability for the bridge supervisor client', () => {
-		expect(desktopConfigSource).toContain(
+		const desktopEntrySource = readFileSync(
+			new URL('./tldraw-desktop-eval-lab-config.tsx', import.meta.url),
+			'utf8'
+		)
+		expect(desktopEntrySource).toContain(
 			"import { installBridgeSupervisorResidentCapability } from '../client/bridges/bridgeSupervisorClient'"
 		)
-		expect(desktopConfigSource).toContain(
+		expect(desktopEntrySource).toContain(
 			'installBridgeSupervisorResidentCapability(\n\t__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__\n)'
 		)
 	})
@@ -84,7 +113,7 @@ describe('tldraw Offline config parity', () => {
 			'const PreviousInFrontOfTheCanvas = unwrapWorkbenchDesktopLayer('
 		)
 		expect(desktopConfigSource).toContain(
-			'markWorkbenchDesktopLayer(\n\t\tInFrontOfTheCanvas,\n\t\tPreviousInFrontOfTheCanvas\n\t)'
+			'markWorkbenchDesktopLayer(\n\t\t\tInFrontOfTheCanvas,\n\t\t\tPreviousInFrontOfTheCanvas\n\t\t)'
 		)
 	})
 })

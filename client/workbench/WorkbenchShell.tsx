@@ -15,6 +15,8 @@ import { TldrawAgentApp } from '../agent/TldrawAgentApp'
 import { TldrawAgentAppContextProvider } from '../agent/TldrawAgentAppProvider'
 import { BridgeCenter } from '../bridges/BridgeCenter'
 import { CanvasStudioPalette } from '../canvas-studio/CanvasStudioPalette'
+import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../canvas-studio/host'
+import type { CanvasKitComposition } from '../canvas-studio/types'
 import { MlInternEvalLabLauncher } from '../components/MlInternEvalLabLauncher'
 import { CompanionCanvasBridgeController } from '../components/CompanionCanvasBridgeController'
 import { IsoflowOverlay } from '../isoflow/IsoflowOverlay'
@@ -41,9 +43,13 @@ import './workbench.css'
 
 interface WorkbenchShellProps {
 	app: TldrawAgentApp | null
+	canvasKitComposition?: CanvasKitComposition
 }
 
-export function WorkbenchShell({ app }: WorkbenchShellProps) {
+export function WorkbenchShell({
+	app,
+	canvasKitComposition = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+}: WorkbenchShellProps) {
 	const editor = useEditor()
 	const [activeDomain, setActiveDomain] = useState<WorkbenchDomain>(
 		readWorkbenchDomainSelection
@@ -265,7 +271,7 @@ export function WorkbenchShell({ app }: WorkbenchShellProps) {
 						</section>
 					</TldrawUiPopoverContent>
 				</TldrawUiPopover>
-				<CanvasStudioPalette />
+				<CanvasStudioPalette composition={canvasKitComposition} />
 				<BridgeCenter />
 			</TldrawUiToolbar>
 

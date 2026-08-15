@@ -9,7 +9,10 @@ export type {
 	CanvasStudioPalettePreset,
 } from './catalog'
 export { composeCanvasKitContributions } from './compose'
-export { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from './host'
+export {
+	CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+	createCanvapocalypseCanvasKitComposition,
+} from './host'
 export type {
 	CanvasKitComposition,
 	CanvasKitContribution,

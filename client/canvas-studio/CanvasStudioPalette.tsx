@@ -16,9 +16,10 @@ import {
 	type CanvasStudioCatalogKitAvailability,
 } from './catalog'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from './host'
+import type { CanvasKitComposition } from './types'
 
 interface CanvasStudioPaletteProps {
-	composition?: typeof CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION
+	composition?: CanvasKitComposition
 }
 
 function availabilityLabel(availability: CanvasStudioCatalogKitAvailability) {

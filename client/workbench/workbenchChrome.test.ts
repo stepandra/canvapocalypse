@@ -57,7 +57,9 @@ describe('native tldraw workbench chrome', () => {
 	it('keeps domain, catalog, and bridge as a vertical rail beside ML-intern', () => {
 		expect(shellSource).toContain('workbench-aux-rail')
 		expect(shellSource).toContain('orientation="vertical"')
-		expect(shellSource).toContain('<CanvasStudioPalette />')
+		expect(shellSource).toContain(
+			'<CanvasStudioPalette composition={canvasKitComposition} />'
+		)
 		expect(shellSource).toContain('<BridgeCenter />')
 		expect(css).toMatch(
 			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*144px;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s

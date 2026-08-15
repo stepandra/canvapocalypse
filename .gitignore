@@ -4,6 +4,8 @@ node_modules
 .dev.vars
 *.dev.vars
 .tldraw-html-mockups/
+.brave-profile/
+.browser-profile/
 .DS_Store
 .tsbuild/
 .wrangler/

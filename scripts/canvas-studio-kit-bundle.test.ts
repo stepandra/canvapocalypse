@@ -5,8 +5,12 @@ const builder = readFileSync(
 	new URL('./build-canvas-studio-kit-bundle.mjs', import.meta.url),
 	'utf8'
 )
-const offlineConfig = readFileSync(
-	new URL('./tldraw-desktop-eval-lab-config.tsx', import.meta.url),
+const offlineConfigFactory = readFileSync(
+	new URL('./tldraw-desktop-eval-lab-config-factory.tsx', import.meta.url),
+	'utf8'
+)
+const offlineBuilder = readFileSync(
+	new URL('./build-tldraw-desktop-eval-lab.mjs', import.meta.url),
 	'utf8'
 )
 
@@ -17,9 +21,22 @@ describe('Canvas Studio kit export boundary', () => {
 		expect(builder).not.toContain('/Users/')
 	})
 
-	it('wires contribution registrations into the Offline config', () => {
-		expect(offlineConfig).toContain('CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.shapeUtils')
-		expect(offlineConfig).toContain('CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils')
-		expect(offlineConfig).toContain('CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.tools')
+	it('wires one supplied composition into registrations and palette dispatch', () => {
+		expect(offlineConfigFactory).toContain('...composition.shapeUtils')
+		expect(offlineConfigFactory).toContain('composition.bindingUtils')
+		expect(offlineConfigFactory).toContain('...composition.tools')
+		expect(offlineConfigFactory).toContain(
+			'<WorkbenchShell app={app} canvasKitComposition={composition} />'
+		)
+	})
+
+	it('builds a static wrapper from repeatable trusted local contribution modules', () => {
+		expect(offlineBuilder).toContain("readArguments('--contribution')")
+		expect(offlineBuilder).toContain('CANVAS_KIT_CONTRIBUTIONS as contribution')
+		expect(offlineBuilder).toContain(
+			'createCanvapocalypseCanvasKitComposition(externalContributions)'
+		)
+		expect(offlineBuilder).toContain('await import(moduleUrl.href)')
+		expect(offlineBuilder).not.toContain('/Users/')
 	})
 })

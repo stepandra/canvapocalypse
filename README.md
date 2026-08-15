@@ -18,6 +18,46 @@ Each pack inserts editable native tldraw templates:
 - **UI / UX:** User Flow, Wireframe Screen Set, Component Anatomy.
 - **Product / PM:** Product Roadmap, Delivery Timeline, Opportunity Decision.
 
+### Canvas Studio Offline composition
+
+Trusted local kit modules export a named `CANVAS_KIT_CONTRIBUTIONS` array. The
+tldraw Offline builder accepts the module path repeatedly and bundles one static
+composition before the document loads:
+
+```sh
+npm run offline:build-config -- \
+  --outfile /path/to/tldraw/working/<document-id>/script/config.js \
+  --contribution /absolute/path/to/grok-canvas-kit.js \
+  --contribution /absolute/path/to/structurizr-canvas-kit.js
+```
+
+`--contribution` accepts an absolute path to an existing regular local module,
+may be repeated up to 16 times, and never performs a runtime or network import.
+With no contribution arguments, the builder preserves the Workbench-only
+composition used by existing callers. Canvas Studio Go code must pass its
+trusted module paths as repeated `--contribution` arguments; it must not copy
+or patch Canvapocalypse host source.
+
+The public browser bundle built by `npm run canvas-studio:build-kits --
+--outfile /path/to/canvapocalypse-canvas-kits.js` exports:
+
+- `createCanvapocalypseCanvasKitComposition(externalContributions?)`, which
+  composes the four Workbench contributions with supplied external
+  contributions and validates duplicate kit, preset, shape, binding, and tool
+  identifiers.
+- `CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION`, the existing Workbench-only default.
+- `composeCanvasKitContributions`, the lower-level composition validator.
+
+The Offline host factory is
+`createTldrawDesktopEvalLabConfig(composition)` from
+`scripts/tldraw-desktop-eval-lab-config-factory.tsx`. The builder calls this
+factory with the single static composition that also drives `WorkbenchShell`
+and `CanvasStudioPalette`, so custom shape, binding, and tool registrations are
+installed before document load and palette dispatch uses the same route table.
+Host-native registrations still use last-registration-wins deduplication; this
+preserves production registrations already owned by Canvapocalypse, including
+the Agents / Models shape and workflow tools.
+
 Native tldraw is the default surface for every pack. Isoflow is used only for an
 explicit DevOps, DevSecOps, deployment, or infrastructure-contour request that
 targets a selected native Isoflow embed. ML/MLOps, UI/UX, product work, and

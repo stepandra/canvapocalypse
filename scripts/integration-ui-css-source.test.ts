@@ -20,7 +20,7 @@ describe('integration UI stylesheet ownership', () => {
 
 	it('uses the same integration stylesheet in the offline desktop bundle', () => {
 		const desktopEntry = readRepoFile(
-			'scripts/tldraw-desktop-eval-lab-config.tsx'
+			'scripts/tldraw-desktop-eval-lab-config-factory.tsx'
 		)
 
 		expect(desktopEntry).toContain(
