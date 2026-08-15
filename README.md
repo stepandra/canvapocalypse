@@ -31,12 +31,18 @@ npm run offline:build-config -- \
   --contribution /absolute/path/to/structurizr-canvas-kit.js
 ```
 
-`--contribution` accepts an absolute path to an existing regular local module,
-may be repeated up to 16 times, and never performs a runtime or network import.
-With no contribution arguments, the builder preserves the Workbench-only
-composition used by existing callers. Canvas Studio Go code must pass its
-trusted module paths as repeated `--contribution` arguments; it must not copy
-or patch Canvapocalypse host source.
+`--contribution` accepts an absolute path to an existing regular local module
+and may be repeated up to 16 times. Before writing the config, the builder runs
+a bounded child-process preflight that imports trusted modules against the
+composer-owned `tldraw`, `@tldraw/*`, React, and React DOM packages, validates duplicate
+kit, preset, shape, binding, and tool identifiers, and exits explicitly even
+when a kit installs module-level timers. The long-lived builder process never
+imports contribution code. The final browser config still statically imports
+each contribution and leaves the shared runtime external. With no contribution
+arguments, the builder preserves the Workbench-only composition used by
+existing callers. Canvas Studio Go code must pass its trusted module paths as
+repeated `--contribution` arguments; it must not copy or patch Canvapocalypse
+host source.
 
 The public browser bundle built by `npm run canvas-studio:build-kits --
 --outfile /path/to/canvapocalypse-canvas-kits.js` exports:

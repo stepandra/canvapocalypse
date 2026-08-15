@@ -36,7 +36,10 @@ describe('Canvas Studio kit export boundary', () => {
 		expect(offlineBuilder).toContain(
 			'createCanvapocalypseCanvasKitComposition(externalContributions)'
 		)
-		expect(offlineBuilder).toContain('await import(moduleUrl.href)')
+		expect(offlineBuilder).toContain('contributionPreflightModule')
+		expect(offlineBuilder).toContain('contributionLoaderModule')
+		expect(offlineBuilder).toContain('execFileAsync(')
+		expect(offlineBuilder).not.toContain('await import(moduleUrl.href)')
 		expect(offlineBuilder).not.toContain('/Users/')
 	})
 })

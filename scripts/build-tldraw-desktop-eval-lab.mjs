@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import { build } from 'esbuild'
 import {
 	chmod,
@@ -18,48 +19,22 @@ import {
 	resolve,
 	sep,
 } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import { loadOrCreateHtmlMockupResidentCapability } from './html-mockup-resident-capability.mjs'
 import { resolveOfflineConfigDocument } from './tldraw-offline-config-target.mjs'
 
+const execFileAsync = promisify(execFile)
 const MAX_CONTRIBUTION_MODULES = 16
 const MAX_CONTRIBUTION_PATH_CHARS = 4096
-const WORKBENCH_CONTRIBUTIONS = [
-	{
-		kitId: 'workbench.architecture',
-		presetIds: [
-			'workbench.system-context',
-			'workbench.decision-graph',
-			'workbench.change-radar',
-		],
-	},
-	{
-		kitId: 'workbench.ml',
-		presetIds: [
-			'workbench.experiment-loop',
-			'workbench.eval-pipeline',
-			'workbench.model-delivery',
-		],
-	},
-	{
-		kitId: 'workbench.uiux',
-		presetIds: [
-			'workbench.user-flow',
-			'workbench.wireframe-set',
-			'workbench.component-anatomy',
-		],
-	},
-	{
-		kitId: 'workbench.product',
-		presetIds: [
-			'workbench.roadmap',
-			'workbench.timeline',
-			'workbench.opportunity-map',
-		],
-	},
-]
-const contributionIdPattern = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/
+const CONTRIBUTION_PREFLIGHT_TIMEOUT_MS = 15_000
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+const contributionPreflightModule = fileURLToPath(
+	new URL('./tldraw-desktop-contribution-preflight.mjs', import.meta.url)
+)
+const contributionLoaderModule = fileURLToPath(
+	new URL('./tldraw-desktop-contribution-loader.mjs', import.meta.url)
+)
 const configFactoryModule = fileURLToPath(
 	new URL('./tldraw-desktop-eval-lab-config-factory.tsx', import.meta.url)
 )
@@ -130,7 +105,14 @@ const buildResult = await build({
 	platform: 'browser',
 	target: 'es2022',
 	jsx: 'automatic',
-	external: ['react', 'react/*', 'tldraw'],
+	external: [
+		'react',
+		'react/*',
+		'react-dom',
+		'react-dom/*',
+		'tldraw',
+		'@tldraw/*',
+	],
 	loader: {
 		'.css': 'text',
 		'.png': 'dataurl',
@@ -260,119 +242,44 @@ async function resolveContributionModules(moduleArguments) {
 
 async function validateContributionModules(modulePaths) {
 	if (modulePaths.length === 0) return
-	const buildNonce = `${process.pid}-${Date.now()}`
-	const contributionGroups = await Promise.all(
-		modulePaths.map(async (modulePath, index) => {
-			const moduleUrl = pathToFileURL(modulePath)
-			moduleUrl.searchParams.set('canvasStudioBuild', `${buildNonce}-${index}`)
-			const module = await import(moduleUrl.href)
-			if (!Array.isArray(module.CANVAS_KIT_CONTRIBUTIONS)) {
-				throw new Error(
-					`Contribution module must export a CANVAS_KIT_CONTRIBUTIONS array: ${modulePath}`
-				)
+	try {
+		await execFileAsync(
+			process.execPath,
+			[
+				'--no-warnings=ExperimentalWarning',
+				'--experimental-loader',
+				contributionLoaderModule,
+				contributionPreflightModule,
+				...modulePaths,
+			],
+			{
+				cwd: repoRoot,
+				env: {
+					PATH: process.env.PATH,
+					HOME: process.env.HOME,
+					TMPDIR: process.env.TMPDIR,
+				},
+				timeout: CONTRIBUTION_PREFLIGHT_TIMEOUT_MS,
+				killSignal: 'SIGKILL',
+				maxBuffer: 1024 * 1024,
 			}
-			return module.CANVAS_KIT_CONTRIBUTIONS
-		})
-	)
-	assertValidCanvasKitContributions([
-		...WORKBENCH_CONTRIBUTIONS.map((contribution) => ({
-			...contribution,
-			shapeUtils: [],
-			bindingUtils: [],
-			tools: [],
-		})),
-		...contributionGroups.flat(),
-	])
-}
-
-function assertValidCanvasKitContributions(contributions) {
-	const kitIds = new Map()
-	const presetIds = new Map()
-	const shapeIds = new Map()
-	const bindingIds = new Map()
-	const toolIds = new Map()
-	for (const contribution of contributions) {
-		if (!contribution || typeof contribution !== 'object') {
-			throw new Error('Canvas Studio contribution must be an object.')
-		}
-		assertUniqueContributionId(
-			contribution.kitId,
-			'kit',
-			kitIds,
-			contribution.kitId
 		)
-		if (!Array.isArray(contribution.presetIds)) {
-			throw new Error(`Canvas Studio kit ${contribution.kitId} presetIds must be an array.`)
-		}
-		for (const presetId of contribution.presetIds) {
-			assertUniqueContributionId(
-				presetId,
-				'preset',
-				presetIds,
-				contribution.kitId
+	} catch (error) {
+		if (error && typeof error === 'object' && 'killed' in error && error.killed) {
+			throw new Error(
+				`Canvas Studio contribution preflight exceeded ${CONTRIBUTION_PREFLIGHT_TIMEOUT_MS}ms.`
 			)
 		}
-		assertUniqueRegistrations(
-			contribution.shapeUtils,
-			'type',
-			'shape',
-			shapeIds,
-			contribution.kitId
-		)
-		assertUniqueRegistrations(
-			contribution.bindingUtils,
-			'type',
-			'binding',
-			bindingIds,
-			contribution.kitId
-		)
-		assertUniqueRegistrations(
-			contribution.tools,
-			'id',
-			'tool',
-			toolIds,
-			contribution.kitId
-		)
-	}
-}
-
-function assertUniqueContributionId(value, kind, owners, owner) {
-	if (typeof value !== 'string' || !contributionIdPattern.test(value)) {
-		throw new Error(`Invalid Canvas Studio ${kind} id: ${value}`)
-	}
-	const existingOwner = owners.get(value)
-	if (existingOwner) {
-		if (kind === 'kit') {
-			throw new Error(`Duplicate Canvas Studio kit id ${value}`)
-		}
+		const stderr =
+			error && typeof error === 'object' && 'stderr' in error
+				? String(error.stderr).trim()
+				: ''
+		const message = stderr || (error instanceof Error ? error.message : '')
 		throw new Error(
-			`Duplicate Canvas Studio ${kind} id ${value} in ${existingOwner} and ${owner}`
+			message
+				? `Canvas Studio contribution preflight failed: ${message}`
+				: 'Canvas Studio contribution preflight failed.'
 		)
-	}
-	owners.set(value, owner)
-}
-
-function assertUniqueRegistrations(registrations, key, kind, owners, owner) {
-	if (!Array.isArray(registrations)) {
-		throw new Error(`Canvas Studio kit ${owner} ${kind} registrations must be an array.`)
-	}
-	for (const registration of registrations) {
-		const value = registration?.[key]
-		if (typeof value !== 'string' || !value) {
-			throw new Error(
-				`Canvas Studio ${kind} registration is missing static ${key}`
-			)
-		}
-		if (!contributionIdPattern.test(value)) {
-			throw new Error(`Invalid Canvas Studio ${kind} id: ${value}`)
-		}
-		const existingOwner = owners.get(value)
-		if (existingOwner) {
-			throw new Error(
-				`Duplicate Canvas Studio ${kind} id ${value} in ${existingOwner} and ${owner}`
-			)
-		}
-		owners.set(value, owner)
 	}
 }
 
