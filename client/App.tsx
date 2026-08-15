@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
 	DEFAULT_EMBED_DEFINITIONS,
 	DefaultSizeStyle,
@@ -13,12 +13,14 @@ import {
 	TldrawAgentAppContextProvider,
 	TldrawAgentAppProvider,
 } from './agent/TldrawAgentAppProvider'
+import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from './canvas-studio/host'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
 import { DesignSystemShapeUtil } from './design-system/DesignSystemShape'
 import { ExperimentCardShapeUtil } from './experiments/ExperimentCardShape'
 import './experiments/experimentCard.css'
 import { LocalHtmlMockupShapeUtil } from './html-mockup/LocalHtmlMockupShape'
 import { ISOFLOW_EMBED_DEFINITION } from './isoflow/isoflowProvider'
+import { CanvasLayoutControls } from './layout/components'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { TargetAreaTool } from './tools/TargetAreaTool'
 import { TargetShapeTool } from './tools/TargetShapeTool'
@@ -33,7 +35,12 @@ import { resolveCanvasPersistenceKey } from './workbench/workbenchPersistence'
 DefaultSizeStyle.setDefaultValue('s')
 
 // Custom tools for picking context items
-const tools = [TargetShapeTool, TargetAreaTool, ...WORKFLOW_TOOLS]
+const tools = [
+	TargetShapeTool,
+	TargetAreaTool,
+	...WORKFLOW_TOOLS,
+	...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.tools,
+]
 const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
 	embedDefinitions: [ISOFLOW_EMBED_DEFINITION, ...DEFAULT_EMBED_DEFINITIONS],
 })
@@ -44,7 +51,9 @@ const shapeUtils = [
 	DesignSystemShapeUtil,
 	LocalHtmlMockupShapeUtil,
 	IsoflowEmbedShapeUtil,
+	...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.shapeUtils,
 ]
+const bindingUtils = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils
 const overlayUtils = [AgentHighlightOverlayUtil]
 const overrides: TLUiOverrides = {
 	tools: (editor, tools) => {
@@ -74,12 +83,18 @@ const overrides: TLUiOverrides = {
 
 function App() {
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
+	const disposeCanvasKits = useRef<(() => void) | undefined>(undefined)
 	const persistenceKey = resolveCanvasPersistenceKey(window.location.search)
 
 	const handleUnmount = useCallback(() => {
+		disposeCanvasKits.current?.()
+		disposeCanvasKits.current = undefined
 		setApp(null)
 	}, [])
 	const handleMount = useCallback((nextApp: TldrawAgentApp) => {
+		disposeCanvasKits.current?.()
+		disposeCanvasKits.current =
+			CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.onMount(nextApp.editor) ?? undefined
 		setApp(nextApp)
 		const search = new URLSearchParams(window.location.search)
 		if (search.get('workflow') === 'ml-intern') {
@@ -91,7 +106,10 @@ function App() {
 	const components: TLComponents = useMemo(() => {
 		return {
 			InFrontOfTheCanvas: () => (
-				<WorkbenchShell app={app} />
+				<>
+					<WorkbenchShell app={app} />
+					<CanvasLayoutControls />
+				</>
 			),
 			HelperButtons: () =>
 				app && (
@@ -110,6 +128,7 @@ function App() {
 						persistenceKey={persistenceKey}
 						tools={tools}
 						shapeUtils={shapeUtils}
+						bindingUtils={bindingUtils}
 						overlayUtils={overlayUtils}
 						overrides={overrides}
 						components={components}

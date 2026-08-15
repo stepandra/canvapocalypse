@@ -190,9 +190,17 @@ export function insertShapesIntoFlexLayout(
 
 	const movingIds = new Set(shapes.map((shape) => shape.id))
 	const remaining = getFlexChildren(editor, container.id, movingIds)
+	const insertionIndex = Math.max(0, Math.min(dropIndex, remaining.length))
 	const next = [...remaining]
-	next.splice(Math.max(0, Math.min(dropIndex, remaining.length)), 0, ...shapes)
-	const indices = getIndicesBetween(undefined, undefined, next.length)
+	next.splice(insertionIndex, 0, ...shapes)
+	const movingIndices = getIndicesBetween(
+		remaining[insertionIndex - 1]?.index,
+		remaining[insertionIndex]?.index,
+		shapes.length
+	)
+	const movingIndexById = new Map(
+		shapes.map((shape, index) => [shape.id, movingIndices[index]] as const)
+	)
 	const plan = planLayout(
 		next.map((child) => getShapeLayoutSize(editor, child)),
 		{ w: container.props.w, h: container.props.h },
@@ -214,7 +222,9 @@ export function insertShapesIntoFlexLayout(
 				return {
 					id: current.id,
 					type: current.type,
-					index: indices[index],
+					...(movingIndexById.has(current.id)
+						? { index: movingIndexById.get(current.id) }
+						: {}),
 					x: plan.positions[index].x - geometryBounds.x,
 					y: plan.positions[index].y - geometryBounds.y,
 				}

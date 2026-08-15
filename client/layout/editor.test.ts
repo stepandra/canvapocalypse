@@ -171,6 +171,31 @@ describe('canvas layout editor behavior', () => {
 		expect(editor.getSortedChildIdsForParent(container)).toEqual([])
 	})
 
+	it('assigns fractional indices only to the flex children being inserted or reordered', () => {
+		const container = createShapeId('flex-stable-indices')
+		const a = createShapeId('flex-stable-a')
+		const b = createShapeId('flex-stable-b')
+		const c = createShapeId('flex-stable-c')
+		editor.createShapes([
+			{ id: container, type: FLEX_LAYOUT_SHAPE_TYPE, x: 0, y: 0 },
+			geo(a, 500, 0),
+			geo(b, 600, 0),
+			geo(c, 700, 0),
+		])
+		insertShapesIntoFlexLayout(editor, container, [a, c], 0)
+		const aIndex = editor.getShape(a)!.index
+		const cIndex = editor.getShape(c)!.index
+
+		insertShapesIntoFlexLayout(editor, container, [b], 1)
+		expect(editor.getSortedChildIdsForParent(container)).toEqual([a, b, c])
+		expect(editor.getShape(a)!.index).toBe(aIndex)
+		expect(editor.getShape(c)!.index).toBe(cIndex)
+
+		insertShapesIntoFlexLayout(editor, container, [c], 0)
+		expect(editor.getSortedChildIdsForParent(container)).toEqual([c, a, b])
+		expect(editor.getShape(a)!.index).toBe(aIndex)
+	})
+
 	it('starts, moves, ends, cancels, detaches, and rebinds placeholder layout bindings', () => {
 		const left = createConstraintLayout(editor, new Vec(180, 160))
 		const right = createConstraintLayout(editor, new Vec(700, 160))
@@ -422,6 +447,27 @@ describe('canvas layout editor behavior', () => {
 		expect(bindingOrder(editor, left)).toEqual([a, b, c])
 		expect(bindingOrder(editor, right)).toEqual([])
 		expect(getConstraintBindingsForShape(editor, c)[0].id).toBe(cBindingId)
+	})
+
+	it('keeps unaffected constraint binding indices and reuses moved binding ids', () => {
+		const container = createConstraintLayout(editor, new Vec(240, 180))
+		const a = createShapeId('constraint-stable-a')
+		const b = createShapeId('constraint-stable-b')
+		const c = createShapeId('constraint-stable-c')
+		editor.createShapes([geo(a, 600, 400), geo(b, 700, 400), geo(c, 800, 400)])
+		bindShapesToConstraintLayout(editor, container, [a, c])
+		const aBinding = getConstraintBindingsForShape(editor, a)[0]
+		const cBinding = getConstraintBindingsForShape(editor, c)[0]
+
+		bindShapesToConstraintLayout(editor, container, [b], 1)
+		expect(bindingOrder(editor, container)).toEqual([a, b, c])
+		expect(getConstraintBindingsForShape(editor, a)[0].props.index).toBe(aBinding.props.index)
+		expect(getConstraintBindingsForShape(editor, c)[0].props.index).toBe(cBinding.props.index)
+
+		bindShapesToConstraintLayout(editor, container, [c], 0)
+		expect(bindingOrder(editor, container)).toEqual([c, a, b])
+		expect(getConstraintBindingsForShape(editor, c)[0].id).toBe(cBinding.id)
+		expect(getConstraintBindingsForShape(editor, a)[0].props.index).toBe(aBinding.props.index)
 	})
 
 	it('admits only explicit container-to-element endpoints and versioned props', () => {

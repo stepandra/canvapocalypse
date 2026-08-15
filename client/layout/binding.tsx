@@ -11,6 +11,7 @@ import {
 	createShapeId,
 	Editor,
 	getIndexBetween,
+	getIndicesBetween,
 	HTMLContainer,
 	IndexKey,
 	RecordProps,
@@ -388,25 +389,32 @@ export function bindShapesToConstraintLayout(
 	const existing = getConstraintBindingsForContainer(editor, container.id).filter(
 		(binding) => !shapeIdsSet.has(binding.toId)
 	)
-	const order = existing.map((binding) => binding.toId)
-	order.splice(Math.max(0, Math.min(insertAt, order.length)), 0, ...shapes.map((shape) => shape.id))
+	const insertionIndex = Math.max(0, Math.min(insertAt, existing.length))
+	const indices = getIndicesBetween(
+		existing[insertionIndex - 1]?.props.index,
+		existing[insertionIndex]?.props.index,
+		shapes.length
+	)
 	const created: TLBindingId[] = []
 
 	editor.run(() => {
-		for (const shape of shapes) {
-			const stale = getConstraintBindingsForShape(editor, shape.id)
+		for (let index = 0; index < shapes.length; index += 1) {
+			const shape = shapes[index]
+			const currentBindings = getConstraintBindingsForShape(editor, shape.id)
+			const reusable = currentBindings[0]
+			const stale = currentBindings.slice(1)
 			if (stale.length) editor.deleteBindings(stale)
-		}
-		let previous: IndexKey | undefined
-		for (const shapeId of order) {
-			const nextIndex = getIndexBetween(previous, undefined)
-			previous = nextIndex
-			const current = existing.find((binding) => binding.toId === shapeId)
-			if (current) {
+			if (reusable) {
 				editor.updateBinding<ConstraintLayoutBinding>({
-					id: current.id,
-					type: current.type,
-					props: { ...current.props, index: nextIndex, placeholder: false },
+					id: reusable.id,
+					type: reusable.type,
+					fromId: container.id,
+					props: {
+						...reusable.props,
+						index: indices[index],
+						placeholder: false,
+						version: CONSTRAINT_LAYOUT_BINDING_VERSION,
+					},
 				})
 				continue
 			}
@@ -416,9 +424,9 @@ export function bindShapesToConstraintLayout(
 				id,
 				type: CONSTRAINT_LAYOUT_BINDING_TYPE,
 				fromId: container.id,
-				toId: shapeId,
+				toId: shape.id,
 				props: {
-					index: nextIndex,
+					index: indices[index],
 					placeholder: false,
 					version: CONSTRAINT_LAYOUT_BINDING_VERSION,
 				},

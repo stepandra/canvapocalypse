@@ -8,6 +8,7 @@ import { DesignSystemShapeUtil } from '../client/design-system/DesignSystemShape
 import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'
 import { LocalHtmlMockupShapeUtil } from '../client/html-mockup/LocalHtmlMockupShape'
 import { ISOFLOW_EMBED_DEFINITION } from '../client/isoflow/isoflowProvider'
+import { CanvasLayoutControls } from '../client/layout/components'
 import { AgentHighlightOverlayUtil } from '../client/overlays/AgentHighlightOverlayUtil'
 import { TargetAreaTool } from '../client/tools/TargetAreaTool'
 import { TargetShapeTool } from '../client/tools/TargetShapeTool'
@@ -62,6 +63,7 @@ function WorkbenchDesktopLayer({
 		<>
 			<style>{desktopStylesheet}</style>
 			<WorkbenchShell app={app} canvasKitComposition={composition} />
+			<CanvasLayoutControls />
 		</>
 	)
 }
