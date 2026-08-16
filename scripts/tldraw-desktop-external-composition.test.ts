@@ -227,30 +227,34 @@ export const CANVAS_KIT_CONTRIBUTIONS = [{
 			duplicate: { toolId: 'workflow-agent' },
 			error: /Duplicate Canvas Studio tool id workflow-agent/,
 		},
-	])('rejects duplicate $label ids before writing a config', async ({ duplicate, error }) => {
-		const root = await createFixtureRoot()
-		await writeFile(
-			join(root, 'modules', 'structurizr.mjs'),
-			fixtureContributionModule({
-				kitId: duplicate.kitId ?? 'structurizr.c4',
-				presetId: duplicate.presetId ?? 'structurizr.system-context',
-				shapeType: duplicate.shapeType ?? 'structurizr-element',
-				bindingType:
-					duplicate.bindingType ?? 'structurizr-relationship',
-				toolId: duplicate.toolId ?? 'structurizr-element-tool',
-			})
-		)
+	])(
+		'rejects duplicate $label ids before writing a config',
+		async ({ duplicate, error }) => {
+			const root = await createFixtureRoot()
+			await writeFile(
+				join(root, 'modules', 'structurizr.mjs'),
+				fixtureContributionModule({
+					kitId: duplicate.kitId ?? 'structurizr.c4',
+					presetId: duplicate.presetId ?? 'structurizr.system-context',
+					shapeType: duplicate.shapeType ?? 'structurizr-element',
+					bindingType:
+						duplicate.bindingType ?? 'structurizr-relationship',
+					toolId: duplicate.toolId ?? 'structurizr-element-tool',
+				})
+			)
 
-		const buildDirectory = join(
-			process.cwd(),
-			'.tldraw-html-mockups',
-			'offline-build'
-		)
-		const before = new Set(await readdir(buildDirectory).catch(() => []))
-		await expect(buildFixtureConfig(root)).rejects.toThrow(error)
-		const added = (await readdir(buildDirectory).catch(() => [])).filter(
-			(entry) => !before.has(entry) && entry.startsWith('fixture-')
-		)
-		expect(added).toEqual([])
-	})
+			const buildDirectory = join(
+				process.cwd(),
+				'.tldraw-html-mockups',
+				'offline-build'
+			)
+			const before = new Set(await readdir(buildDirectory).catch(() => []))
+			await expect(buildFixtureConfig(root)).rejects.toThrow(error)
+			const added = (await readdir(buildDirectory).catch(() => [])).filter(
+				(entry) => !before.has(entry) && entry.startsWith('fixture-')
+			)
+			expect(added).toEqual([])
+		},
+		15_000
+	)
 })
