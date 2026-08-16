@@ -14,10 +14,15 @@ export async function resolve(specifier, context, nextResolve) {
 				specifier === packageName || specifier.startsWith(`${packageName}/`)
 		)
 	if (!sharedRuntime) return nextResolve(specifier, context)
-	return nextResolve(specifier, {
-		...context,
-		parentURL: import.meta.url,
-	})
+	try {
+		return await nextResolve(specifier, context)
+	} catch (error) {
+		if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error
+		return nextResolve(specifier, {
+			...context,
+			parentURL: import.meta.url,
+		})
+	}
 }
 
 export async function load(url, context, nextLoad) {

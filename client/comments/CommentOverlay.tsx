@@ -56,6 +56,19 @@ function anchorPanelPosition(editor: Editor, anchor: TLCommentAnchor) {
 	return editor.pageToViewport(pagePoint)
 }
 
+function anchoredCardStyle(
+	editor: Editor,
+	point: { x: number; y: number } | null,
+	reservedHeight: number
+) {
+	if (!point) return undefined
+	const viewport = editor.getViewportScreenBounds()
+	return {
+		left: Math.max(16, Math.min(point.x + 16, viewport.w - 316)),
+		top: Math.max(72, Math.min(point.y + 16, viewport.h - reservedHeight)),
+	}
+}
+
 function regionStyle(editor: Editor, anchor: Extract<TLCommentAnchor, { type: 'region' }>) {
 	const topLeft = editor.pageToViewport({ x: anchor.x, y: anchor.y })
 	const bottomRight = editor.pageToViewport({
@@ -210,6 +223,7 @@ function CommentComposer({
 	onCancel(): void
 	onSubmit(body: string): void
 }) {
+	const editor = useEditor()
 	const [body, setBody] = useState('')
 	const submit = (event: FormEvent) => {
 		event.preventDefault()
@@ -220,7 +234,7 @@ function CommentComposer({
 		<form
 			className="canvas-comments__card canvas-comments__composer"
 			data-page-anchor={!point}
-			style={point ? { left: point.x + 16, top: point.y + 16 } : undefined}
+			style={anchoredCardStyle(editor, point, 210)}
 			onSubmit={submit}
 		>
 			<strong>New {anchor.type} comment</strong>
@@ -270,7 +284,7 @@ function CommentThreadPanel({
 		<section
 			className="canvas-comments__card canvas-comments__thread"
 			data-page-anchor={!point}
-			style={point ? { left: point.x + 16, top: point.y + 16 } : undefined}
+			style={anchoredCardStyle(editor, point, 500)}
 		>
 			<header>
 				<strong>{thread.resolved ? 'Resolved thread' : 'Comment thread'}</strong>

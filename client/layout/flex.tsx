@@ -363,9 +363,9 @@ export class FlexLayoutShapeUtil extends BaseFrameLikeShapeUtil<FlexLayoutShape>
 				style={{
 					width: shape.props.w,
 					height: shape.props.h,
-					border: '2px solid var(--color-text-3, #64748b)',
+					border: '2px solid var(--tl-color-text-3, #64748b)',
 					borderRadius: 12,
-					background: 'color-mix(in srgb, var(--color-panel, #fff) 88%, transparent)',
+					background: 'color-mix(in srgb, var(--tl-color-panel, #fff) 88%, transparent)',
 					boxSizing: 'border-box',
 					pointerEvents: 'none',
 				}}
@@ -378,10 +378,10 @@ export class FlexLayoutShapeUtil extends BaseFrameLikeShapeUtil<FlexLayoutShape>
 						height: 24,
 						padding: '3px 9px',
 						borderRadius: 6,
-						background: 'var(--color-panel, #fff)',
-						border: '1px solid var(--color-muted-1, #cbd5e1)',
+						background: 'var(--tl-color-panel, #fff)',
+						border: '1px solid var(--tl-color-muted-1, #cbd5e1)',
 						font: '600 12px/16px Inter, sans-serif',
-						color: 'var(--color-text-1, #0f172a)',
+						color: 'var(--tl-color-text-1, #0f172a)',
 						boxSizing: 'border-box',
 					}}
 				>
@@ -501,15 +501,16 @@ export const FlexLayoutControls = track(function FlexLayoutControls() {
 			onPointerDown={stopEventPropagation}
 			style={{
 				position: 'absolute',
-				left: 12,
-				bottom: 12,
+				left: '50%',
+				bottom: 120,
+				transform: 'translateX(-50%)',
 				display: 'flex',
 				alignItems: 'center',
 				gap: 6,
 				padding: 8,
 				borderRadius: 10,
-				background: 'var(--color-panel, #fff)',
-				border: '1px solid var(--color-muted-1, #cbd5e1)',
+				background: 'var(--tl-color-panel, #fff)',
+				border: '1px solid var(--tl-color-muted-1, #cbd5e1)',
 				boxShadow: '0 4px 16px rgb(15 23 42 / 16%)',
 				pointerEvents: 'all',
 			}}

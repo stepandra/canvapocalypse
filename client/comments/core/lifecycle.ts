@@ -2,10 +2,17 @@ import { Editor, TLPageId, TLShape, TLShapeId } from 'tldraw'
 import { resolveCommentAnchorPagePoint } from './anchors'
 import {
 	TLComment,
+	TLCommentAnchor,
 	TLCommentReaction,
 	TLCommentThread,
 	TLCommentThreadId,
 } from './records'
+
+type ShapeCommentAnchor = Extract<TLCommentAnchor, { type: 'shape' }>
+type PendingShapeAnchor = {
+	anchor: ShapeCommentAnchor
+	point: { x: number; y: number }
+}
 
 function commentThreads(editor: Editor) {
 	return editor.store
@@ -44,15 +51,15 @@ function moveThreadToPage(
  * existing history transaction.
  */
 export function mountCommentLifecycle(editor: Editor) {
-	const deletionPoints = new Map<
+	const pendingShapeAnchors = new Map<
 		TLShapeId,
-		Map<TLCommentThreadId, { x: number; y: number }>
+		Map<TLCommentThreadId, PendingShapeAnchor>
 	>()
 
 	const disposeBeforeDelete = editor.sideEffects.registerBeforeDeleteHandler(
 		'shape',
 		(shape) => {
-			const points = new Map<TLCommentThreadId, { x: number; y: number }>()
+			const pending = new Map<TLCommentThreadId, PendingShapeAnchor>()
 			for (const thread of commentThreads(editor)) {
 				if (
 					thread.isDeleted ||
@@ -62,25 +69,46 @@ export function mountCommentLifecycle(editor: Editor) {
 					continue
 				}
 				const point = resolveCommentAnchorPagePoint(editor, thread.anchor)
-				if (point) points.set(thread.id, point)
+				if (point) {
+					pending.set(thread.id, {
+						anchor: thread.anchor,
+						point: { x: point.x, y: point.y },
+					})
+				}
 			}
-			if (points.size) deletionPoints.set(shape.id, points)
+			if (pending.size) pendingShapeAnchors.set(shape.id, pending)
 		}
 	)
 
 	const disposeAfterDelete = editor.sideEffects.registerAfterDeleteHandler(
 		'shape',
 		(shape) => {
-			const points = deletionPoints.get(shape.id)
-			deletionPoints.delete(shape.id)
-			if (!points) return
+			const pending = pendingShapeAnchors.get(shape.id)
+			if (!pending) return
 			const updates: TLCommentThread[] = []
-			for (const [threadId, point] of points) {
+			for (const [threadId, { point }] of pending) {
 				const record = editor.store.get(threadId)
 				if (record?.typeName !== 'comment-thread' || record.isDeleted) continue
 				updates.push({ ...record, anchor: { type: 'point', ...point } })
 			}
 			if (updates.length) editor.store.put(updates)
+			queueMicrotask(() => pendingShapeAnchors.delete(shape.id))
+		}
+	)
+
+	const disposeAfterCreate = editor.sideEffects.registerAfterCreateHandler(
+		'shape',
+		(shape) => {
+			const pending = pendingShapeAnchors.get(shape.id)
+			if (!pending) return
+			pendingShapeAnchors.delete(shape.id)
+			const pageId = editor.getAncestorPageId(shape.id)
+			if (!pageId) return
+			for (const [threadId, { anchor }] of pending) {
+				const record = editor.store.get(threadId)
+				if (record?.typeName !== 'comment-thread' || record.isDeleted) continue
+				moveThreadToPage(editor, { ...record, anchor }, pageId)
+			}
 		}
 	)
 
@@ -122,9 +150,10 @@ export function mountCommentLifecycle(editor: Editor) {
 	)
 
 	return () => {
-		deletionPoints.clear()
+		pendingShapeAnchors.clear()
 		disposeAfterPageDelete()
 		disposeAfterChange()
+		disposeAfterCreate()
 		disposeAfterDelete()
 		disposeBeforeDelete()
 	}

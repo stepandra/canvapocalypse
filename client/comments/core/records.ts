@@ -1,23 +1,21 @@
 import {
-	BaseRecord,
-	Migration,
-	MigrationSequence,
-	RecordId,
-	UnknownRecord,
-	createMigrationSequence,
-} from '@tldraw/store'
-import {
-	CustomRecordInfo,
-	TLPageId,
-	TLRichText,
-	TLShapeId,
+	type BaseRecord,
+	type CustomRecordInfo,
+	type JsonObject,
+	type Migration,
+	type MigrationSequence,
+	type RecordId,
+	T,
+	type TLPageId,
+	type TLRichText,
+	type TLShapeId,
+	type UnknownRecord,
 	createCustomRecordId,
+	createMigrationSequence,
 	idValidator,
 	isCustomRecordId,
 	richTextValidator,
-} from '@tldraw/tlschema'
-import { JsonObject } from '@tldraw/utils'
-import { T } from '@tldraw/validate'
+} from 'tldraw'
 
 export type TLCommentAnchor =
 	| { type: 'shape'; shapeId: TLShapeId; x: number; y: number; isPrecise: boolean }

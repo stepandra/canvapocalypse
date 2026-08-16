@@ -530,68 +530,14 @@
   --agents-models-accent: #687782;
 }
 
-.agents-models-catalog-body {
-  min-height: 0;
-  overflow: auto;
-  padding: 8px 10px;
-  pointer-events: all;
-  scrollbar-width: thin;
-}
-
-.agents-models-catalog-body section + section {
-  margin-top: 12px;
-}
-
-.agents-models-catalog-body section > header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 5px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid #2a353d;
-}
-
-.agents-models-catalog-body section > header small {
-  font: inherit;
-}
-
-.agents-models-catalog-row {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 0.8fr) minmax(0, 1.2fr);
-  align-items: center;
-  gap: 7px;
-  min-height: 25px;
-  border-bottom: 1px solid #202a30;
-}
-
-.agents-models-catalog-row strong,
-.agents-models-catalog-row small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agents-models-catalog-row strong {
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.agents-models-catalog-row small,
-.agents-models-catalog-more,
-.agents-models-catalog-empty {
+.agents-models-catalog-more {
+  padding: 6px 15px 2px;
   color: #81919c;
   font:
     500 9px/1.3 "JetBrains Mono",
     "SFMono-Regular",
     Consolas,
     monospace;
-}
-
-.agents-models-catalog-more {
-  padding: 6px 15px 2px;
-}
-
-.agents-models-catalog-empty {
-  padding: 14px 0;
 }
 
 .agents-models-stage {

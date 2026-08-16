@@ -22,9 +22,9 @@ describe('Canvas Studio kit export boundary', () => {
 	})
 
 	it('wires one supplied composition into registrations and palette dispatch', () => {
-		expect(offlineConfigFactory).toContain('...composition.shapeUtils')
-		expect(offlineConfigFactory).toContain('composition.bindingUtils')
-		expect(offlineConfigFactory).toContain('...composition.tools')
+		expect(offlineConfigFactory).toContain('...desktopComposition.shapeUtils')
+		expect(offlineConfigFactory).toContain('desktopComposition.bindingUtils')
+		expect(offlineConfigFactory).toContain('...desktopComposition.tools')
 		expect(offlineConfigFactory).toContain(
 			'<WorkbenchShell app={app} canvasKitComposition={composition} />'
 		)

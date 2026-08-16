@@ -47,11 +47,9 @@ describe('integration UI stylesheet ownership', () => {
 		expect(integrationStyles).not.toContain('Inter')
 		expect(integrationStyles).not.toContain('#172033')
 		expect(integrationStyles).not.toContain('backdrop-filter')
-		expect(integrationStyles).toContain(
-			'grid-template-columns: repeat(2, 48px)'
-		)
+		expect(integrationStyles).toContain('flex-flow: row wrap')
 		expect(integrationStyles).toContain('.workflow-palette-toggle {')
-		expect(integrationStyles).toContain('max-height: min(72vh, 592px)')
+		expect(integrationStyles).toContain('max-height: 104px')
 		expect(integrationStyles).toContain('background: var(--tl-color-panel)')
 		expect(integrationStyles).toContain('box-shadow: var(--tl-shadow-2)')
 		expect(integrationStyles).toContain('.workflow-rich-output-shell {')
