@@ -1,6 +1,12 @@
-import { Migration, MigrationSequence, UnknownRecord } from '@tldraw/store'
-import { TLPageId, createShapeId, toRichText } from '@tldraw/tlschema'
-import { createTLStore } from 'tldraw'
+import {
+	type Migration,
+	type MigrationSequence,
+	type TLPageId,
+	type UnknownRecord,
+	createShapeId,
+	createTLStore,
+	toRichText,
+} from 'tldraw'
 import { describe, expect, it } from 'vitest'
 import {
 	CANVAS_COMMENT_RECORDS,

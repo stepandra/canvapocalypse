@@ -9,14 +9,15 @@ function LayoutCreationControls() {
 			onPointerDown={stopEventPropagation}
 			style={{
 				position: 'absolute',
-				right: 12,
+				left: '50%',
 				top: 12,
+				transform: 'translateX(-50%)',
 				display: 'flex',
 				gap: 6,
 				padding: 8,
 				borderRadius: 10,
-				background: 'var(--color-panel, #fff)',
-				border: '1px solid var(--color-muted-1, #cbd5e1)',
+				background: 'var(--tl-color-panel, #fff)',
+				border: '1px solid var(--tl-color-muted-1, #cbd5e1)',
 				boxShadow: '0 4px 16px rgb(15 23 42 / 16%)',
 				pointerEvents: 'all',
 			}}

@@ -525,9 +525,9 @@ export class ConstraintLayoutShapeUtil extends BaseBoxShapeUtil<ConstraintLayout
 				style={{
 					width: shape.props.w,
 					height: shape.props.h,
-					border: '2px dashed var(--color-text-3, #64748b)',
+					border: '2px dashed var(--tl-color-text-3, #64748b)',
 					borderRadius: 12,
-					background: 'color-mix(in srgb, var(--color-panel, #fff) 72%, transparent)',
+					background: 'color-mix(in srgb, var(--tl-color-panel, #fff) 72%, transparent)',
 					boxSizing: 'border-box',
 					pointerEvents: 'none',
 				}}
@@ -755,14 +755,14 @@ export const ConstraintLayoutControls = track(function ConstraintLayoutControls(
 			style={{
 				position: 'absolute',
 				right: 12,
-				bottom: 12,
+				bottom: 120,
 				display: 'flex',
 				alignItems: 'center',
 				gap: 6,
 				padding: 8,
 				borderRadius: 10,
-				background: 'var(--color-panel, #fff)',
-				border: '1px solid var(--color-muted-1, #cbd5e1)',
+				background: 'var(--tl-color-panel, #fff)',
+				border: '1px solid var(--tl-color-muted-1, #cbd5e1)',
 				boxShadow: '0 4px 16px rgb(15 23 42 / 16%)',
 				pointerEvents: 'all',
 			}}

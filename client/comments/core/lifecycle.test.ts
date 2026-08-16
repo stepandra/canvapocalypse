@@ -139,7 +139,7 @@ describe('comment anchor lifecycle', () => {
 
 		expect(editor.getShape(shapeId)).toBeUndefined()
 		expect(editor.store.get(records.thread.id)).toMatchObject({
-			anchor: { type: 'point', ...expectedPoint },
+			anchor: { type: 'point', x: expectedPoint!.x, y: expectedPoint!.y },
 		})
 
 		editor.undo()
