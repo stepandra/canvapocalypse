@@ -16,6 +16,8 @@ describe('Bridge Center surface boundary', () => {
 		expect(source).toContain("'check'")
 		expect(source).toContain('canRunBridgeServiceAction(service, action)')
 		expect(source).toContain('service.capabilities.join')
+		expect(source).toContain('Amp Architect thread')
+		expect(source).toContain('ArchitectThreadBridgeRow')
 	})
 
 	it('uses a collision-aware public tldraw popover and one collapsed aggregate dot', () => {

@@ -97,7 +97,7 @@ export function WorkbenchShell({
 		[activeDomain, editor]
 	)
 
-	return (
+	const chrome = (
 		<>
 			<TldrawUiToolbar
 				className="workbench-aux-rail workbench-pack-switcher"
@@ -286,13 +286,19 @@ export function WorkbenchShell({
 				/>
 			)}
 			{app && (
-				<TldrawAgentAppContextProvider app={app}>
-					<CompanionCanvasBridgeController>
-						<WorkbenchAgentDock domainPack={activeDomain} />
-						{activePack.overlays.mlIntern && <MlInternEvalLabLauncher />}
-					</CompanionCanvasBridgeController>
-				</TldrawAgentAppContextProvider>
+				<>
+					<WorkbenchAgentDock domainPack={activeDomain} />
+					{activePack.overlays.mlIntern && <MlInternEvalLabLauncher />}
+				</>
 			)}
 		</>
+	)
+
+	if (!app) return chrome
+
+	return (
+		<TldrawAgentAppContextProvider app={app}>
+			<CompanionCanvasBridgeController>{chrome}</CompanionCanvasBridgeController>
+		</TldrawAgentAppContextProvider>
 	)
 }

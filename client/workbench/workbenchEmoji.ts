@@ -32,7 +32,7 @@ export const WORKBENCH_EMOJIS: readonly WorkbenchEmojiDefinition[] = Object.free
 	{ id: 'approved', label: 'Approved', glyph: '✅' },
 	{ id: 'risk', label: 'Risk', glyph: '⚠️' },
 	{ id: 'launch', label: 'Launch', glyph: '🚀' },
-	{ id: 'direction', label: 'Direction', glyph: '🧭' },
+	{ id: 'direction', label: 'Question', glyph: '❓' },
 	{ id: 'hot', label: 'Hot', glyph: '🔥' },
 	{ id: 'review', label: 'Review', glyph: '👀' },
 	{ id: 'love', label: 'Love', glyph: '❤️' },

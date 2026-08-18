@@ -365,8 +365,12 @@ export function CompanionCanvasBridgeController({
 	)
 }
 
+export function useOptionalCompanionCanvasBridge() {
+	return useContext(CompanionCanvasBridgeContext)
+}
+
 export function useCompanionCanvasBridge() {
-	const value = useContext(CompanionCanvasBridgeContext)
+	const value = useOptionalCompanionCanvasBridge()
 	if (!value) {
 		throw new Error(
 			'useCompanionCanvasBridge must be used inside CompanionCanvasBridgeController'

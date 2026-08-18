@@ -10,6 +10,14 @@ import {
 	TldrawUiToolbarButton,
 } from 'tldraw'
 import {
+	getWorkbenchAgentDockBridgeSourceState,
+	getWorkbenchAgentDockIndicator,
+} from '../workbench/WorkbenchAgentDock'
+import {
+	useCompanionCanvasBridge,
+	useOptionalCompanionCanvasBridge,
+} from '../components/CompanionCanvasBridgeController'
+import {
 	BridgeAggregateState,
 	BridgeService,
 	BridgeServiceAction,
@@ -27,14 +35,29 @@ const SERVICE_ACTIONS: readonly BridgeServiceAction[] = [
 ]
 
 export function BridgeCenter() {
+	const companionBridge = useOptionalCompanionCanvasBridge()
 	const [open, setOpen] = useState(false)
 	const [services, setServices] = useState<readonly BridgeService[]>([])
 	const [checkedAt, setCheckedAt] = useState<string | undefined>()
 	const [busyServiceId, setBusyServiceId] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	const architectureIndicator = companionBridge
+		? getWorkbenchAgentDockIndicator(
+				getWorkbenchAgentDockBridgeSourceState({
+					state: companionBridge.state,
+					latestReceiptStatus: companionBridge.latestReceipt?.status,
+					reportedLatestStatus: companionBridge.status?.latest?.status,
+					hasStatus: Boolean(companionBridge.status),
+				})
+			)
+		: null
+	const architectureNeedsAttention =
+		architectureIndicator === 'error' || architectureIndicator === 'running'
 	const aggregate = error && services.length === 0
 		? 'attention'
-		: summarizeBridgeServices(services)
+		: architectureNeedsAttention
+			? 'attention'
+			: summarizeBridgeServices(services)
 	const hasTransition = services.some(
 		(service) =>
 			service.state === 'starting' || service.state === 'stopping'
@@ -147,6 +170,12 @@ export function BridgeCenter() {
 					</header>
 
 					<div className="workbench-bridge-services">
+						{companionBridge && architectureIndicator && (
+							<ArchitectThreadBridgeRow
+								companionBridge={companionBridge}
+								indicator={architectureIndicator}
+							/>
+						)}
 						{services.map((service) => (
 							<BridgeServiceRow
 								key={service.id}
@@ -155,7 +184,7 @@ export function BridgeCenter() {
 								onAction={runAction}
 							/>
 						))}
-						{services.length === 0 && !error && (
+						{services.length === 0 && !error && !companionBridge && (
 							<p className="workbench-bridge-empty">
 								Reading the supervisor registry…
 							</p>
@@ -180,6 +209,72 @@ export function BridgeCenter() {
 				</section>
 			</TldrawUiPopoverContent>
 		</TldrawUiPopover>
+	)
+}
+
+function ArchitectThreadBridgeRow({
+	companionBridge,
+	indicator,
+}: {
+	companionBridge: ReturnType<typeof useCompanionCanvasBridge>
+	indicator: ReturnType<typeof getWorkbenchAgentDockIndicator>
+}) {
+	const statusLabel =
+		companionBridge.state === 'offline'
+			? 'Offline'
+			: companionBridge.state === 'applying'
+				? 'Applying'
+				: companionBridge.state === 'failed'
+					? 'Failed'
+					: companionBridge.state === 'connecting'
+						? 'Connecting'
+						: 'Ready'
+	const latest =
+		companionBridge.latestReceipt?.status.toUpperCase() ??
+		companionBridge.status?.latest?.status.toUpperCase() ??
+		'NONE'
+	const summary =
+		companionBridge.latestReceipt?.summary ??
+		companionBridge.status?.latest?.summary ??
+		'Ask the existing Ampcode Architect thread to inspect this selection.'
+
+	return (
+		<article
+			className="workbench-bridge-service workbench-architect-bridge"
+			data-state={indicator}
+		>
+			<div className="workbench-bridge-service-heading">
+				<div>
+					<strong>Amp Architect thread</strong>
+					<span>Existing thread canvas executor</span>
+				</div>
+				<b>{statusLabel}</b>
+			</div>
+			<p>
+				The Ampcode thread owns planning, conversation, history, and capability
+				discovery. Context is explicit selection or a bounded area.
+			</p>
+			<p className="workbench-bridge-capabilities">
+				Latest receipt {latest} · {summary}
+			</p>
+			{companionBridge.error && (
+				<p className="workbench-bridge-error" aria-live="polite">
+					<TldrawUiIcon icon="status-offline" label="" small />
+					{companionBridge.error}
+				</p>
+			)}
+			<div className="workbench-bridge-actions" aria-label="Amp Architect thread actions">
+				<TldrawUiButton
+					type="normal"
+					className="workbench-bridge-action"
+					disabled={companionBridge.state === 'applying'}
+					onClick={companionBridge.refresh}
+				>
+					<TldrawUiButtonIcon icon="check-circle" small />
+					<TldrawUiButtonLabel>Check now</TldrawUiButtonLabel>
+				</TldrawUiButton>
+			</div>
+		</article>
 	)
 }
 

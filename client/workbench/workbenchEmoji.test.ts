@@ -9,6 +9,11 @@ describe('workbench emoji palette contract', () => {
 		const angryPoop = WORKBENCH_EMOJIS.find((emoji) => emoji.id === 'angry-poop')
 		expect(angryPoop?.glyph).toBeUndefined()
 		expect(angryPoop?.customImageSrc).toMatch(/angry-poop-manga\.png/)
+		expect(WORKBENCH_EMOJIS.find((emoji) => emoji.id === 'direction')).toMatchObject({
+			label: 'Question',
+			glyph: '❓',
+		})
+		expect(WORKBENCH_EMOJIS.some((emoji) => emoji.glyph === '🧭')).toBe(false)
 	})
 
 	it('inserts a normal emoji as one selected native text shape in one undo step', () => {

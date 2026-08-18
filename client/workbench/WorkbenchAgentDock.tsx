@@ -9,10 +9,7 @@ import {
 } from 'tldraw'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { getCompletedNativeTldrawMutationActions } from '../agent/nativeMutationEvidence'
-import {
-	type CompanionBridgeState,
-	useCompanionCanvasBridge,
-} from '../components/CompanionCanvasBridgeController'
+import { type CompanionBridgeState } from '../components/CompanionCanvasBridgeController'
 import { resolveWorkbenchDomainPack, WorkbenchDomain } from './domainPacks'
 import {
 	buildWorkbenchAgentInput,
@@ -43,7 +40,7 @@ type WorkbenchAgentDockSourceState =
 	| 'ready'
 
 export function getWorkbenchAgentDockMode(domainPack: WorkbenchDomain) {
-	return domainPack === 'architecture' ? 'external-thread-status' : 'compact-composer'
+	return domainPack === 'architecture' ? 'hidden' : 'compact-composer'
 }
 
 export function getWorkbenchAgentDockIndicator(
@@ -88,7 +85,6 @@ export function getWorkbenchAgentDockBridgeSourceState({
 
 export function WorkbenchAgentDock({ domainPack }: WorkbenchAgentDockProps) {
 	const agent = useAgent()
-	const companionBridge = useCompanionCanvasBridge()
 	const pack = resolveWorkbenchDomainPack(domainPack)
 	const [expanded, setExpanded] = useState(false)
 	const [message, setMessage] = useState('')
@@ -173,23 +169,12 @@ export function WorkbenchAgentDock({ domainPack }: WorkbenchAgentDockProps) {
 		event.currentTarget.form?.requestSubmit()
 	}
 
-	const passiveArchitecture = getWorkbenchAgentDockMode(domainPack) === 'external-thread-status'
-	const architectureSourceState = getWorkbenchAgentDockBridgeSourceState({
-		state: companionBridge.state,
-		latestReceiptStatus: companionBridge.latestReceipt?.status,
-		reportedLatestStatus: companionBridge.status?.latest?.status,
-		hasStatus: Boolean(companionBridge.status),
-	})
-	const indicator = getWorkbenchAgentDockIndicator(
-		passiveArchitecture
-			? architectureSourceState
-			: isGenerating
-				? 'running'
-				: status
-	)
-	const triggerTitle = passiveArchitecture
-		? `Amp Architect canvas bridge: ${indicator}`
-		: `${pack.label} AI companion: ${indicator}`
+	if (getWorkbenchAgentDockMode(domainPack) === 'hidden') {
+		return null
+	}
+
+	const indicator = getWorkbenchAgentDockIndicator(isGenerating ? 'running' : status)
+	const triggerTitle = `${pack.label} AI companion: ${indicator}`
 
 	return (
 		<aside
@@ -236,90 +221,7 @@ export function WorkbenchAgentDock({ domainPack }: WorkbenchAgentDockProps) {
 					collisionPadding={8}
 					autoFocusFirstButton={false}
 				>
-					{passiveArchitecture ? (
-						<section
-							className="workbench-agent-dock-panel workbench-architect-thread"
-							aria-label="Amp Architect thread canvas connection"
-						>
-							<header className="workbench-agent-panel-header">
-								<div>
-									<span className="workbench-agent-kicker">AMP ARCHITECT</span>
-									<strong>Existing thread bridge</strong>
-								</div>
-								<span className="workbench-agent-selection">
-									{selectedShapeCount} selected
-								</span>
-							</header>
-
-							<div className="workbench-architect-connection">
-								<span
-									className="workbench-architect-connection-dot"
-									data-state={indicator}
-									aria-hidden="true"
-								/>
-								<div>
-									<strong>
-										{companionBridge.state === 'offline'
-											? 'Bridge offline'
-											: companionBridge.state === 'applying'
-												? 'Applying validated plan'
-												: companionBridge.state === 'failed'
-													? 'Latest operation failed'
-													: 'Live canvas executor ready'}
-									</strong>
-									<span>
-										The Ampcode thread owns planning, conversation, history, and
-										capability discovery.
-									</span>
-								</div>
-							</div>
-
-							<dl className="workbench-architect-facts">
-								<div>
-									<dt>Context</dt>
-									<dd>Explicit selection or bounded area</dd>
-								</div>
-								<div>
-									<dt>Mutation</dt>
-									<dd>Inspect first · validated native actions · undoable receipt</dd>
-								</div>
-								<div>
-									<dt>Latest receipt</dt>
-									<dd>
-										<strong>
-											{companionBridge.latestReceipt
-												? companionBridge.latestReceipt.status.toUpperCase()
-												: companionBridge.status?.latest?.status.toUpperCase() ??
-													'NONE'}
-										</strong>
-										<span>
-											{companionBridge.latestReceipt?.summary ??
-												companionBridge.status?.latest?.summary ??
-												'Ask the existing Ampcode Architect thread to inspect this selection.'}
-										</span>
-									</dd>
-								</div>
-							</dl>
-
-							{companionBridge.error && (
-								<p className="workbench-architect-error" aria-live="polite">
-									{companionBridge.error}
-								</p>
-							)}
-
-							<footer className="workbench-architect-actions">
-								<span>No embedded planner, terminal, transcript, or credentials</span>
-								<TldrawUiButton
-									type="low"
-									onClick={companionBridge.refresh}
-									disabled={companionBridge.state === 'applying'}
-								>
-									Check now
-								</TldrawUiButton>
-							</footer>
-						</section>
-					) : (
-						<form className="workbench-agent-dock-panel" onSubmit={submit}>
+					<form className="workbench-agent-dock-panel" onSubmit={submit}>
 							<header className="workbench-agent-panel-header">
 								<div>
 									<span className="workbench-agent-kicker">AI COMPANION</span>
@@ -408,7 +310,6 @@ export function WorkbenchAgentDock({ domainPack }: WorkbenchAgentDockProps) {
 								)}
 							</div>
 						</form>
-					)}
 				</TldrawUiPopoverContent>
 			</TldrawUiPopover>
 		</aside>

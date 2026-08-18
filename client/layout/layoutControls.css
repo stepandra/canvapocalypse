@@ -1,0 +1,72 @@
+.canvas-layout-launcher {
+	position: absolute;
+	left: var(--tl-space-4);
+	top: calc(var(--tl-space-10) + 152px);
+	z-index: var(--tl-layer-panels);
+	pointer-events: all;
+}
+
+.tl-container:has(.workbench-aux-rail[data-domain-control='true']) .canvas-layout-launcher {
+	top: calc(var(--tl-space-10) + 200px);
+}
+
+.canvas-layout-launcher > .tlui-popover,
+.canvas-layout-trigger {
+	width: 48px;
+	min-width: 48px;
+	height: 48px;
+}
+
+.canvas-layout-create-menu {
+	display: grid;
+	gap: var(--tl-space-2);
+	min-width: 196px;
+	padding: var(--tl-space-2);
+}
+
+.canvas-layout-create-menu .tlui-button {
+	justify-content: flex-start;
+	gap: var(--tl-space-3);
+}
+
+.canvas-layout-context-toolbar.tlui-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--tl-space-2);
+}
+
+.canvas-layout-context-toolbar .canvas-layout-action {
+	min-height: 32px;
+}
+
+.canvas-layout-context-toolbar select,
+.canvas-layout-number-control {
+	min-height: 32px;
+	border-radius: var(--tl-radius-2);
+	border: 1px solid var(--tl-color-divider);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+}
+
+.canvas-layout-context-toolbar select {
+	padding: 0 var(--tl-space-3);
+}
+
+.canvas-layout-number-control {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tl-space-2);
+	padding: 0 var(--tl-space-2);
+}
+
+.canvas-layout-number-control span {
+	color: var(--tl-color-text-3);
+	font-size: 11px;
+}
+
+.canvas-layout-number-control input {
+	width: 56px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+}

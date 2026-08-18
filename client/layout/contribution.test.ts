@@ -5,6 +5,7 @@ import {
 	CONSTRAINT_LAYOUT_SHAPE_TYPE,
 	FLEX_LAYOUT_SHAPE_TYPE,
 } from './index'
+import { readFileSync } from 'node:fs'
 import { CANVAS_LAYOUT_KIT_CONTRIBUTION } from './contribution'
 
 describe('Canvas layout kit contribution', () => {
@@ -19,5 +20,12 @@ describe('Canvas layout kit contribution', () => {
 		expect(composition.bindingUtils.map((bindingUtil) => bindingUtil.type)).toContain(
 			CONSTRAINT_LAYOUT_BINDING_TYPE
 		)
+	})
+
+	it('uses the native frame icon for the layout launcher', () => {
+		const source = readFileSync(new URL('./components.tsx', import.meta.url), 'utf8')
+		expect(source).toContain('className="canvas-layout-launcher"')
+		expect(source).toContain('aria-label="Frame and layout tools"')
+		expect(source).toMatch(/aria-label="Frame and layout tools"[\s\S]*?icon="tool-frame"/)
 	})
 })

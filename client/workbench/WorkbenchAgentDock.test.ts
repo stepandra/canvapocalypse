@@ -7,8 +7,8 @@ import {
 } from './WorkbenchAgentDock'
 
 describe('Workbench Agent dock ownership', () => {
-	it('keeps Architecture passive because the existing Amp thread is the planner', () => {
-		expect(getWorkbenchAgentDockMode('architecture')).toBe('external-thread-status')
+	it('hides Architecture because the Amp thread lives in Bridge Center', () => {
+		expect(getWorkbenchAgentDockMode('architecture')).toBe('hidden')
 	})
 
 	it('retains compact composers for the non-Architecture packs', () => {
