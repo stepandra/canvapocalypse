@@ -718,6 +718,10 @@
 }
 
 .agents-models-catalog-search {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 7px;
   padding: 9px 12px 7px;
   border-bottom: 1px solid var(--tl-color-divider);
   pointer-events: all;
@@ -741,6 +745,261 @@
   border-color: var(--workflow-node-accent);
   box-shadow: 0 0 0 2px
     color-mix(in srgb, var(--workflow-node-accent) 13%, transparent);
+}
+
+.agents-models-catalog-create {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	height: 30px;
+	padding: 0 9px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 6px;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	font: 650 10px/1 var(--tl-font-sans);
+	cursor: pointer;
+}
+
+.agents-models-catalog-create:hover {
+	background: var(--tl-color-muted-1);
+}
+
+.agents-models-catalog-create:focus-visible {
+	outline: 2px solid var(--tl-color-focus);
+	outline-offset: 1px;
+}
+
+/* The Grok contribution owns the definition workflow; the host supplies the
+   native dialog layout because external Canvas Kit bundles carry no CSS. */
+.tlui-dialog__content:has(> .grok-definition-dialog) {
+	width: min(720px, calc(100vw - 32px));
+	max-width: none;
+	max-height: calc(100vh - 32px);
+	overflow: hidden;
+}
+
+.grok-definition-dialog {
+	display: flex;
+	width: 100%;
+	max-height: calc(100vh - 32px);
+	flex-direction: column;
+	color: var(--tl-color-text-1);
+	font-family: var(--tl-font-sans);
+}
+
+.grok-definition-dialog > .tlui-dialog__header {
+	flex: 0 0 auto;
+	border-bottom: 1px solid var(--tl-color-divider);
+}
+
+.grok-definition-dialog > .tlui-dialog__body {
+	display: grid;
+	min-height: 0;
+	gap: 16px;
+	padding: 16px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.grok-definition-dialog > .tlui-dialog__footer {
+	flex: 0 0 auto;
+	border-top: 1px solid var(--tl-color-divider);
+}
+
+.grok-definition-kinds {
+	display: inline-grid;
+	grid-template-columns: repeat(3, 1fr);
+	justify-self: start;
+	gap: 3px;
+	padding: 3px;
+	border-radius: var(--tl-radius-3);
+	background: var(--tl-color-muted-1);
+}
+
+.grok-definition-kinds button {
+	min-width: 88px;
+	height: 32px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: var(--tl-radius-2);
+	background: transparent;
+	color: var(--tl-color-text-2);
+	font: 650 12px/1 var(--tl-font-sans);
+	cursor: pointer;
+}
+
+.grok-definition-kinds button:hover {
+	background: var(--tl-color-muted-2);
+}
+
+.grok-definition-kinds button.is-active {
+	background: var(--tl-color-panel);
+	box-shadow: var(--tl-shadow-1);
+	color: var(--tl-color-text-1);
+}
+
+.grok-definition-doc-note {
+	margin: 0;
+	padding: 10px 12px;
+	border-left: 3px solid var(--tl-color-text-3);
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-3);
+	font: 500 11px/1.45 var(--tl-font-sans);
+}
+
+.grok-definition-doc-note code {
+	color: var(--tl-color-text-2);
+	font-family: var(--tl-font-mono);
+}
+
+.grok-definition-fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px 16px;
+}
+
+.grok-definition-fields > label {
+	display: grid;
+	min-width: 0;
+	gap: 5px;
+}
+
+.grok-definition-fields > label.is-wide,
+.grok-definition-contracts {
+	grid-column: 1 / -1;
+}
+
+.grok-definition-fields > label > span,
+.grok-definition-contracts > header > span {
+	color: var(--tl-color-text-3);
+	font: 500 10px/1.2 var(--tl-font-mono);
+}
+
+.grok-definition-fields > label > strong {
+	color: var(--tl-color-text-1);
+	font: 650 12px/1.25 var(--tl-font-sans);
+}
+
+.grok-definition-fields :is(input:not([type='checkbox']), select, textarea),
+.grok-definition-contract-row > input {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	min-height: 36px;
+	padding: 8px 10px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	outline: 0;
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-1);
+	font: 500 12px/1.35 var(--tl-font-sans);
+}
+
+.grok-definition-fields textarea {
+	min-height: 128px;
+	resize: vertical;
+}
+
+.grok-definition-fields :is(input, select, textarea):focus {
+	border-color: var(--tl-color-focus);
+	box-shadow: inset 0 0 0 1px var(--tl-color-focus);
+}
+
+.grok-definition-fields[aria-disabled='true'] {
+	opacity: 0.7;
+}
+
+.grok-definition-contracts {
+	display: grid;
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-3);
+}
+
+.grok-definition-contracts > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.grok-definition-contracts button,
+.grok-definition-contract-row button {
+	min-height: 30px;
+	padding: 0 9px;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	font: 600 11px/1 var(--tl-font-sans);
+	cursor: pointer;
+}
+
+.grok-definition-contract-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+	align-items: center;
+	gap: 8px;
+}
+
+.grok-definition-contract-row > label {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--tl-color-text-2);
+	font-size: 11px;
+}
+
+.grok-definition-contract-row > .is-description {
+	grid-column: 1 / -1;
+}
+
+.grok-definition-status {
+	margin: 0;
+	padding: 10px 12px;
+	border-radius: var(--tl-radius-2);
+	font: 600 11px/1.4 var(--tl-font-sans);
+}
+
+.grok-definition-status.is-error {
+	background: var(--tl-color-danger);
+	color: var(--tl-color-panel);
+}
+
+.grok-definition-status.is-success {
+	background: var(--tl-color-success);
+	color: var(--tl-color-panel);
+}
+
+@media (max-width: 640px) {
+	.tlui-dialog__content:has(> .grok-definition-dialog) {
+		width: calc(100vw - 16px);
+		max-height: calc(100vh - 16px);
+	}
+
+	.grok-definition-dialog {
+		max-height: calc(100vh - 16px);
+	}
+
+	.grok-definition-kinds {
+		width: 100%;
+	}
+
+	.grok-definition-kinds button {
+		min-width: 0;
+	}
+
+	.grok-definition-fields {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.grok-definition-fields > label.is-wide,
+	.grok-definition-contracts {
+		grid-column: auto;
+	}
 }
 
 .agents-models-catalog-body {

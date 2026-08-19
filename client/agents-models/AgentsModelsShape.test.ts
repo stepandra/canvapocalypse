@@ -100,6 +100,10 @@ describe('Agents / Models native workflow surface', () => {
 		expect(shellSource).toContain("pageMode === 'agents-models'")
 		expect(shellSource).toContain('<GrokToolboxLayer showToolbox={false} />')
 		expect(shellSource).toContain('<GrokWorkflowToolbox inToolbar />')
+		expect(stylesheetSource).toContain(
+			'.tlui-dialog__content:has(> .grok-definition-dialog)'
+		)
+		expect(stylesheetSource).toContain('.grok-definition-fields')
 		expect(runtimeSource).toContain('agentsModelsDocumentScript({ editor })')
 		expect(runtimeSource).toContain("_materializePreset('fanout')")
 		expect(runtimeSource).toContain('frameGrokWorkspace(editor)')
