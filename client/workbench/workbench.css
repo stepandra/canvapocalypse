@@ -5,7 +5,7 @@
   left: var(--tl-space-4);
   display: flex;
   width: 48px;
-  height: 240px;
+  height: fit-content;
   flex-direction: column;
   gap: 0;
   padding: 0;
@@ -19,17 +19,12 @@
   transform: none;
 }
 
-.workbench-aux-rail[data-domain-control="true"] {
-  height: 288px;
-}
-
 .workbench-pack-switcher {
   pointer-events: auto;
 }
 
 .grok-workspace-rail {
-  top: 132px;
-  height: 96px;
+  height: fit-content;
 }
 
 .workbench-pack-options {
@@ -93,6 +88,12 @@
 .workbench-domain-trigger > .tlui-icon {
   width: 20px;
   height: 20px;
+}
+
+.grok-workspace-trigger svg {
+  display: block;
+  width: 30px;
+  height: 30px;
 }
 
 .workbench-bridge-trigger > .tlui-icon {

@@ -78,13 +78,16 @@ describe('native tldraw workbench chrome', () => {
 		expect(shellSource).toContain(
 			'<CanvasStudioPalette composition={canvasKitComposition} />'
 		)
+		expect(shellSource).toContain('<GrokWorkflowToolbox inToolbar />')
+		expect(shellSource).toContain('aria-label="Open Grok workspace"')
+		expect(shellSource).toContain('<CanvasLayoutControls />')
+		expect(shellSource).toContain('showCommentTools && <CanvasCommentControls />')
 		expect(shellSource).toContain('<BridgeCenter')
 		expect(bridgeSource).toContain('useOptionalCompanionCanvasBridge')
 		expect(shellSource).toContain("effectiveDomain !== 'architecture'")
 		expect(css).toMatch(
-			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*240px;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s
+			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*fit-content;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s
 		)
-		expect(css).toMatch(/\.workbench-aux-rail\[data-domain-control="true"\]\s*\{[^}]*height:\s*288px;/s)
 		expect(css).toMatch(
 			/\.workbench-rail-trigger\s*\{[^}]*width:\s*48px;[^}]*min-width:\s*48px;[^}]*height:\s*48px;/s
 		)

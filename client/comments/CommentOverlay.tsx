@@ -108,9 +108,120 @@ function regionStyle(editor: Editor, anchor: Extract<TLCommentAnchor, { type: 'r
 	}
 }
 
-export const CommentOverlay = track(function CommentOverlay() {
+export const CanvasCommentControls = track(function CanvasCommentControls() {
 	const editor = useEditor()
 	const [toolbarOpen, setToolbarOpen] = useState(false)
+	const state = useValue('canvas comment toolbar state', () => getCommentUiState(editor).get(), [
+		editor,
+	])
+	const threadQuery = useMemo(() => editor.store.query.records('comment-thread'), [editor])
+	const view = useValue(
+		'canvas comment toolbar view',
+		() => {
+			const pageId = editor.getCurrentPageId()
+			return {
+				toolId: editor.getCurrentToolId(),
+				pageThreads: threadQuery
+					.get()
+					.filter(
+						(thread) =>
+							!thread.isDeleted &&
+							thread.pageId === pageId &&
+							thread.anchor.type === 'page'
+					)
+					.sort(compareCreatedAtAndId),
+			}
+		},
+		[editor, threadQuery]
+	)
+
+	return (
+		<div className="canvas-comments__toolbar">
+			<TldrawUiPopover
+				id="canvas-comment-tools"
+				open={toolbarOpen}
+				onOpenChange={setToolbarOpen}
+			>
+				<TldrawUiTooltip
+					content="Comment tools"
+					side="right"
+					sideOffset={8}
+					delayDuration={350}
+				>
+					<TldrawUiPopoverTrigger>
+						<TldrawUiButton
+							type="tool"
+							className="workbench-rail-trigger canvas-comments__trigger"
+							isActive={toolbarOpen || view.toolId === 'comment'}
+							aria-label="Comment tools"
+							aria-expanded={toolbarOpen}
+						>
+							<TldrawUiButtonIcon icon="comment" />
+						</TldrawUiButton>
+					</TldrawUiPopoverTrigger>
+				</TldrawUiTooltip>
+				<TldrawUiPopoverContent
+					side="right"
+					align="start"
+					sideOffset={8}
+					collisionPadding={8}
+				>
+					<div className="canvas-comments__menu">
+						<TldrawUiToolbar
+							className="canvas-comments__mode-toolbar"
+							label="Comment placement"
+							orientation="horizontal"
+							tooltipSide="bottom"
+						>
+							{modes.map((mode) => {
+								const active = state.mode === mode.id && view.toolId === 'comment'
+								return (
+									<TldrawUiToolbarButton
+										key={mode.id}
+										type="tool"
+										className="canvas-comments__mode"
+										title={mode.title}
+										tooltip={mode.title}
+										isActive={active}
+										aria-label={mode.label}
+										aria-pressed={active}
+										onClick={() => {
+											beginCommentPlacement(editor, mode.id)
+											setToolbarOpen(false)
+										}}
+									>
+										<TldrawUiButtonIcon icon={mode.icon} />
+									</TldrawUiToolbarButton>
+								)
+							})}
+						</TldrawUiToolbar>
+						{view.pageThreads.length > 0 && (
+							<div className="canvas-comments__page-threads">
+								{view.pageThreads.map((thread, index) => (
+									<TldrawUiButton
+										key={thread.id}
+										type="menu"
+										className="canvas-comments__page-thread"
+										onClick={() => {
+											selectCommentThread(editor, thread.id)
+											setToolbarOpen(false)
+										}}
+									>
+										<TldrawUiButtonIcon icon="comment" small />
+										<TldrawUiButtonLabel>Page #{index + 1}</TldrawUiButtonLabel>
+									</TldrawUiButton>
+								))}
+							</div>
+						)}
+					</div>
+				</TldrawUiPopoverContent>
+			</TldrawUiPopover>
+		</div>
+	)
+})
+
+export const CommentOverlay = track(function CommentOverlay() {
+	const editor = useEditor()
 	const state = useValue('canvas comment ui', () => getCommentUiState(editor).get(), [editor])
 	const threadQuery = useMemo(() => editor.store.query.records('comment-thread'), [editor])
 	const commentQuery = useMemo(() => editor.store.query.records('comment'), [editor])
@@ -133,7 +244,6 @@ export const CommentOverlay = track(function CommentOverlay() {
 				})),
 				comments: commentQuery.get().sort(compareCreatedAtAndId),
 				reactions: reactionQuery.get(),
-				toolId: editor.getCurrentToolId(),
 				composerPoint: state.composerAnchor
 					? anchorPanelPosition(editor, state.composerAnchor)
 					: null,
@@ -144,92 +254,9 @@ export const CommentOverlay = track(function CommentOverlay() {
 	const selected = view.threads.find(
 		({ thread }) => thread.id === state.selectedThreadId
 	)
-	const pageThreads = view.threads.filter(({ thread }) => thread.anchor.type === 'page')
 
 	return (
 		<div className="canvas-comments" onPointerDown={(event) => event.stopPropagation()}>
-			<div className="canvas-comments__toolbar" role="toolbar" aria-label="Canvas comments">
-				<TldrawUiPopover
-					id="canvas-comment-tools"
-					open={toolbarOpen}
-					onOpenChange={setToolbarOpen}
-				>
-					<TldrawUiTooltip
-						content="Comment tools"
-						side="right"
-						sideOffset={8}
-						delayDuration={350}
-					>
-						<TldrawUiPopoverTrigger>
-							<TldrawUiButton
-								type="tool"
-								className="workbench-rail-trigger canvas-comments__trigger"
-								isActive={toolbarOpen || view.toolId === 'comment'}
-								aria-label="Comment tools"
-								aria-expanded={toolbarOpen}
-							>
-								<TldrawUiButtonIcon icon="comment" />
-							</TldrawUiButton>
-						</TldrawUiPopoverTrigger>
-					</TldrawUiTooltip>
-					<TldrawUiPopoverContent
-						side="right"
-						align="start"
-						sideOffset={8}
-						collisionPadding={8}
-					>
-						<div className="canvas-comments__menu">
-							<TldrawUiToolbar
-								className="canvas-comments__mode-toolbar"
-								label="Comment placement"
-								orientation="horizontal"
-								tooltipSide="bottom"
-							>
-								{modes.map((mode) => {
-									const active = state.mode === mode.id && view.toolId === 'comment'
-									return (
-										<TldrawUiToolbarButton
-											key={mode.id}
-											type="tool"
-											className="canvas-comments__mode"
-											title={mode.title}
-											tooltip={mode.title}
-											isActive={active}
-											aria-label={mode.label}
-											aria-pressed={active}
-											onClick={() => {
-												beginCommentPlacement(editor, mode.id)
-												setToolbarOpen(false)
-											}}
-										>
-											<TldrawUiButtonIcon icon={mode.icon} />
-										</TldrawUiToolbarButton>
-									)
-								})}
-							</TldrawUiToolbar>
-							{pageThreads.length > 0 && (
-								<div className="canvas-comments__page-threads">
-									{pageThreads.map(({ thread }, index) => (
-										<TldrawUiButton
-											key={thread.id}
-											type="menu"
-											className="canvas-comments__page-thread"
-											onClick={() => {
-												selectCommentThread(editor, thread.id)
-												setToolbarOpen(false)
-											}}
-										>
-											<TldrawUiButtonIcon icon="comment" small />
-											<TldrawUiButtonLabel>Page #{index + 1}</TldrawUiButtonLabel>
-										</TldrawUiButton>
-									))}
-								</div>
-							)}
-						</div>
-					</TldrawUiPopoverContent>
-				</TldrawUiPopover>
-			</div>
-
 			{view.threads.map(({ thread, point }, index) => (
 				<div key={thread.id}>
 					{thread.anchor.type === 'region' && (

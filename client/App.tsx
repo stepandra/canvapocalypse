@@ -31,7 +31,6 @@ import { ExperimentCardShapeUtil } from './experiments/ExperimentCardShape'
 import './experiments/experimentCard.css'
 import { LocalHtmlMockupShapeUtil } from './html-mockup/LocalHtmlMockupShape'
 import { ISOFLOW_EMBED_DEFINITION } from './isoflow/isoflowProvider'
-import { CanvasLayoutControls } from './layout/components'
 import './markdown/markdownDocument.css'
 import { AgentHighlightOverlayUtil } from './overlays/AgentHighlightOverlayUtil'
 import { TargetAreaTool } from './tools/TargetAreaTool'
@@ -216,8 +215,7 @@ function App() {
 		return {
 			InFrontOfTheCanvas: () => (
 				<>
-					<WorkbenchShell app={app} />
-					<CanvasLayoutControls />
+					<WorkbenchShell app={app} showCommentTools />
 					<CommentOverlay />
 				</>
 			),

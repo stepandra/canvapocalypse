@@ -24,8 +24,13 @@ describe('Canvas layout kit contribution', () => {
 
 	it('uses the native frame icon for the layout launcher', () => {
 		const source = readFileSync(new URL('./components.tsx', import.meta.url), 'utf8')
+		const shellSource = readFileSync(
+			new URL('../workbench/WorkbenchShell.tsx', import.meta.url),
+			'utf8'
+		)
 		expect(source).toContain('className="canvas-layout-launcher"')
 		expect(source).toContain('aria-label="Frame and layout tools"')
 		expect(source).toMatch(/aria-label="Frame and layout tools"[\s\S]*?icon="tool-frame"/)
+		expect(shellSource).toContain('<CanvasLayoutControls />')
 	})
 })

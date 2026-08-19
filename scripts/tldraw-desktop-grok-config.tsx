@@ -5,6 +5,7 @@ import {
 	TldrawUiPopover,
 	TldrawUiPopoverContent,
 	TldrawUiPopoverTrigger,
+	TldrawUiToolbarButton,
 	TldrawUiTooltip,
 	useEditor,
 	useValue,
@@ -70,7 +71,7 @@ function useGrokDispatch() {
 	)
 }
 
-function GrokWorkflowToolbox() {
+export function GrokWorkflowToolbox({ inToolbar = false }: { inToolbar?: boolean }) {
 	const dispatchAction = useGrokDispatch()
 	const [open, setOpen] = useState(false)
 	const [message, setMessage] = useState('Visual graph is the workflow source.')
@@ -94,19 +95,32 @@ function GrokWorkflowToolbox() {
 		[dispatchAction],
 	)
 
+	const trigger = inToolbar ? (
+		<TldrawUiToolbarButton
+			type="tool"
+			className="workbench-rail-trigger grok-workflow-trigger"
+			title="Grok workflow palette"
+			aria-label="Grok workflow palette"
+			aria-expanded={open}
+		>
+			<GrokMark />
+		</TldrawUiToolbarButton>
+	) : (
+		<TldrawUiButton
+			type="icon"
+			className="grok-workflow-trigger"
+			aria-label="Grok workflow palette"
+			aria-expanded={open}
+		>
+			<GrokMark />
+		</TldrawUiButton>
+	)
+
 	return (
-		<div className="grok-workflow-toolbox">
+		<div className={`grok-workflow-toolbox${inToolbar ? ' is-toolbar-item' : ''}`}>
 			<TldrawUiPopover open={open} onOpenChange={setOpen} id="grok-workflow-palette">
 				<TldrawUiTooltip content="Grok workflow palette">
-					<TldrawUiPopoverTrigger>
-						<TldrawUiButton
-							type="icon"
-							className="grok-workflow-trigger"
-							aria-label="Grok workflow palette"
-						>
-							<GrokMark />
-						</TldrawUiButton>
-					</TldrawUiPopoverTrigger>
+					<TldrawUiPopoverTrigger>{trigger}</TldrawUiPopoverTrigger>
 				</TldrawUiTooltip>
 				<TldrawUiPopoverContent side="right" align="start" sideOffset={8}>
 					<div className="grok-workflow-palette">
@@ -700,7 +714,7 @@ function grokNodePresentation(role: AgentsModelsNodeKind): {
 	)
 }
 
-function GrokMark() {
+export function GrokMark() {
 	return (
 		<svg
 			viewBox="0 0 512 509.641"
@@ -719,11 +733,11 @@ function GrokMark() {
 	)
 }
 
-export function GrokToolboxLayer() {
+export function GrokToolboxLayer({ showToolbox = true }: { showToolbox?: boolean }) {
 	return (
 		<>
 			<style>{`${stylesheet as unknown as string}\n${toolboxStyles}`}</style>
-			<GrokWorkflowToolbox />
+			{showToolbox && <GrokWorkflowToolbox />}
 			<GrokNodeInspector />
 		</>
 	)
@@ -760,7 +774,9 @@ export default function ({ config }: { config: any }) {
 
 const toolboxStyles = `
 .grok-workflow-toolbox{position:absolute;left:12px;top:76px;z-index:310;pointer-events:auto}
+.grok-workflow-toolbox.is-toolbar-item{position:static;left:auto;top:auto;z-index:auto;width:48px;height:48px}
 .grok-workflow-trigger{width:44px!important;height:44px!important;padding:7px!important;color:var(--tl-color-text-2)!important}
+.grok-workflow-toolbox.is-toolbar-item .grok-workflow-trigger{width:48px!important;height:48px!important;padding:9px!important;border-radius:0!important}
 .grok-workflow-trigger svg{width:30px;height:30px}
 .grok-workflow-palette{--grok-stage:#596a7c;--grok-agent:#526d65;--grok-persona:#816a4c;--grok-action:#526d65;width:320px;max-height:min(760px,calc(100vh - 100px));overflow:auto;padding:10px;color:var(--tl-color-text-1);background:var(--tl-color-panel)}
 .grok-workflow-palette *{box-sizing:border-box}

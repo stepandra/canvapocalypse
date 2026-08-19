@@ -14,16 +14,22 @@ import {
 } from 'tldraw'
 import { TldrawAgentApp } from '../agent/TldrawAgentApp'
 import { TldrawAgentAppContextProvider } from '../agent/TldrawAgentAppProvider'
-import { GrokToolboxLayer } from '../../scripts/tldraw-desktop-grok-config'
+import {
+	GrokMark,
+	GrokToolboxLayer,
+	GrokWorkflowToolbox,
+} from '../../scripts/tldraw-desktop-grok-config'
 import { BridgeCenter } from '../bridges/BridgeCenter'
 import { CanvasStudioPalette } from '../canvas-studio/CanvasStudioPalette'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../canvas-studio/host'
 import type { CanvasKitComposition } from '../canvas-studio/types'
 import { resolveCanvasRuntimePageMode } from '../canvas-studio/runtimeCapabilityCatalog'
+import { CanvasCommentControls } from '../comments/CommentOverlay'
 import { MlInternEvalLabLauncher } from '../components/MlInternEvalLabLauncher'
 import { CompanionCanvasBridgeController } from '../components/CompanionCanvasBridgeController'
 import { IsoflowOverlay } from '../isoflow/IsoflowOverlay'
 import { KanbanTracksControl } from '../kanban/KanbanTracksControl'
+import { CanvasLayoutControls } from '../layout/components'
 import { WorkflowOverlay } from '../workflow/WorkflowOverlay'
 import {
 	resolveWorkbenchDomainPack,
@@ -48,11 +54,13 @@ import './workbench.css'
 interface WorkbenchShellProps {
 	app: TldrawAgentApp | null
 	canvasKitComposition?: CanvasKitComposition
+	showCommentTools?: boolean
 }
 
 export function WorkbenchShell({
 	app,
 	canvasKitComposition = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+	showCommentTools = false,
 }: WorkbenchShellProps) {
 	const editor = useEditor()
 	const [activeDomain, setActiveDomain] = useState<WorkbenchDomain>(
@@ -102,6 +110,14 @@ export function WorkbenchShell({
 			editor.setCurrentPage(page.id)
 		}
 	}, [editor])
+	const openGrokWorkspace = useCallback(() => {
+		const page = editor
+			.getPages()
+			.find((candidate) => resolveCanvasRuntimePageMode(candidate) === 'agents-models')
+		if (page && page.id !== editor.getCurrentPageId()) {
+			editor.setCurrentPage(page.id)
+		}
+	}, [editor])
 
 	const createTemplate = useCallback(
 		(templateId: string, templateLabel: string) => {
@@ -130,7 +146,7 @@ export function WorkbenchShell({
 		<>
 			{isGrokWorkspace && (
 				<>
-					<GrokToolboxLayer />
+					<GrokToolboxLayer showToolbox={false} />
 					<TldrawUiToolbar
 						className="workbench-aux-rail grok-workspace-rail"
 						label="Grok workspace"
@@ -138,8 +154,11 @@ export function WorkbenchShell({
 						onPointerDown={(event) => event.stopPropagation()}
 						onClick={(event) => event.stopPropagation()}
 					>
+						<GrokWorkflowToolbox inToolbar />
 						<CanvasStudioPalette composition={canvasKitComposition} />
 						{app && <BridgeCenter />}
+						<CanvasLayoutControls />
+						{showCommentTools && <CanvasCommentControls />}
 					</TldrawUiToolbar>
 				</>
 			)}
@@ -328,8 +347,19 @@ export function WorkbenchShell({
 						</section>
 					</TldrawUiPopoverContent>
 				</TldrawUiPopover>
+				<TldrawUiToolbarButton
+					type="tool"
+					className="workbench-rail-trigger grok-workspace-trigger"
+					title="Open Grok workspace"
+					aria-label="Open Grok workspace"
+					onClick={openGrokWorkspace}
+				>
+					<GrokMark />
+				</TldrawUiToolbarButton>
 				<CanvasStudioPalette composition={canvasKitComposition} />
 				{app && <BridgeCenter />}
+				<CanvasLayoutControls />
+				{showCommentTools && <CanvasCommentControls />}
 			</TldrawUiToolbar>}
 
 			{toolProfile && (

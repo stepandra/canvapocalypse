@@ -22,22 +22,12 @@
 }
 
 .canvas-comments__toolbar {
-	position: absolute;
-	z-index: var(--tl-layer-panels);
-	top: calc(var(--tl-space-10) + 192px);
-	left: var(--tl-space-4);
 	width: 48px;
 	height: 48px;
 	padding: 0;
-	border-top: 1px solid var(--tl-color-divider);
-	border-radius: 0 0 var(--tl-radius-4) var(--tl-radius-4);
 	background: transparent;
 	box-shadow: none;
 	pointer-events: auto;
-}
-
-.tl-container:has(.workbench-aux-rail[data-domain-control='true']) .canvas-comments__toolbar {
-	top: calc(var(--tl-space-10) + 240px);
 }
 
 .canvas-comments__toolbar > .tlui-popover,
@@ -45,10 +35,6 @@
 	width: 48px;
 	height: 48px;
 	margin: 0;
-}
-
-.canvas-comments__trigger {
-	border-radius: 0 0 var(--tl-radius-4) var(--tl-radius-4);
 }
 
 .canvas-comments__menu {

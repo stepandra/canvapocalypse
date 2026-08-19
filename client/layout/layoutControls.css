@@ -1,8 +1,4 @@
 .canvas-layout-launcher {
-	position: absolute;
-	left: var(--tl-space-4);
-	top: calc(var(--tl-space-10) + 152px);
-	z-index: var(--tl-layer-panels);
 	width: 48px;
 	height: 48px;
 	background: transparent;
@@ -10,10 +6,6 @@
 	font-family: var(--tl-font-sans);
 	box-shadow: none;
 	pointer-events: all;
-}
-
-.tl-container:has(.workbench-aux-rail[data-domain-control='true']) .canvas-layout-launcher {
-	top: calc(var(--tl-space-10) + 200px);
 }
 
 .canvas-layout-launcher > .tlui-popover,

@@ -21,6 +21,8 @@ describe('Grok workflow toolbox', () => {
 		expect(source).toContain("dispatch({ kind: 'play' })")
 		expect(source).toContain("dispatch({ kind: 'preflight' })")
 		expect(source).toContain('GrokNodeInspector')
+		expect(source).toContain("inToolbar ? ' is-toolbar-item' : ''")
+		expect(source).toContain('<TldrawUiToolbarButton')
 		expect(source).toContain('connectFromId')
 		expect(source).toContain('Parallel agent')
 		expect(source).toContain('Sync config.toml')
