@@ -7,6 +7,8 @@ const MAX_BOUNDED_AREA = 16_777_216
 const MAX_ABSOLUTE_COORDINATE = 10_000_000
 const MAX_ACTION_PLAN_BYTES = 24_000
 const MAX_RESULT_BYTES = 24_000
+const MAX_CAPABILITY_CATALOG_BYTES = 64_000
+const MAX_RUNTIME_CAPABILITIES = 64
 const MAX_RECEIPTS = 50
 // Protect the newest 500 evicted terminal operations within this bridge
 // process. A bridge restart deliberately starts a fresh idempotency window.
@@ -14,6 +16,8 @@ const MAX_IDEMPOTENCY_TOMBSTONES = 500
 const MAX_MANIFESTS = 32
 const LEASE_MS = 30_000
 const MANIFEST_TTL_MS = 5 * 60_000
+const ID_PATTERN = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/
+const ACTION_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9._-]*$/
 const WEB_PREVIEW_CLIENT_TTL_MS = 10_000
 // Electron may suspend timers while tldraw Offline is behind Amp or another
 // desktop window. Five minutes matches the bounded manifest lifetime without
@@ -68,6 +72,11 @@ const WORKFLOW_ACTION_TYPES = Object.freeze([
 ])
 
 const CAPABILITIES = Object.freeze({
+	'canvas.catalog': {
+		mode: 'read',
+		summary: 'Describe the exact mounted Canvas Studio kits, registrations, presets, and semantic capabilities.',
+		actionTypes: [],
+	},
 	'canvas.inspect': {
 		mode: 'read',
 		summary: 'Inspect only an explicit native-tldraw selection or bounded area.',
@@ -144,13 +153,22 @@ export function issueMlInternCanvasCapabilityManifest(
 
 export function issueCompanionCanvasCapabilityManifest(
 	now = Date.now(),
-	canvasBinding = undefined
+	canvasBinding = undefined,
+	capabilityCatalog = undefined
 ) {
-	return issueCanvasCapabilityManifest(now, canvasBinding, false)
+	return issueCanvasCapabilityManifest(now, canvasBinding, false, capabilityCatalog)
 }
 
-function issueCanvasCapabilityManifest(now, canvasBinding, includeCanvasBinding) {
+function issueCanvasCapabilityManifest(
+	now,
+	canvasBinding,
+	includeCanvasBinding,
+	capabilityCatalog = undefined
+) {
 	pruneManifests(now)
+	const normalizedCatalog = capabilityCatalog
+		? normalizeRuntimeCapabilityCatalog(capabilityCatalog)
+		: undefined
 	const manifest = {
 		manifestId: randomUUID(),
 		binding: randomUUID(),
@@ -159,6 +177,10 @@ function issueCanvasCapabilityManifest(now, canvasBinding, includeCanvasBinding)
 		issuedAt: new Date(now).toISOString(),
 		expiresAt: new Date(now + MANIFEST_TTL_MS).toISOString(),
 		expiresAtMs: now + MANIFEST_TTL_MS,
+		capabilityCatalog: normalizedCatalog,
+		catalogDigest: normalizedCatalog
+			? `sha256:${createHash('sha256').update(JSON.stringify(normalizedCatalog)).digest('hex')}`
+			: undefined,
 	}
 	manifests.set(manifest.manifestId, manifest)
 	return compactManifest(manifest, includeCanvasBinding)
@@ -176,11 +198,40 @@ function describeCanvasCapability(payload, now, includeCanvasBinding) {
 	const manifest = includeCanvasBinding
 		? requireManifest(payload, now)
 		: requireCompanionManifest(payload, now)
-	const capabilityId = requireCapabilityId(payload?.capabilityId)
-	const capability = CAPABILITIES[capabilityId]
+	const capabilityId = requireCapabilityId(payload?.capabilityId, manifest)
+	if (capabilityId === 'canvas.catalog') {
+		return {
+			...compactManifest(manifest, includeCanvasBinding),
+			capability: {
+				id: capabilityId,
+				mode: 'read',
+				summary: CAPABILITIES[capabilityId].summary,
+				catalog: structuredClone(manifest.capabilityCatalog),
+				receipt: ['requestId', 'status', 'capabilityId', 'summary'],
+			},
+		}
+	}
+	const runtimeCapability = getRuntimeCapability(manifest, capabilityId)
+	const capability = runtimeCapability ?? CAPABILITIES[capabilityId]
 	return {
 		...compactManifest(manifest, includeCanvasBinding),
-		capability: {
+		capability: runtimeCapability
+			? {
+					...structuredClone(runtimeCapability),
+					input: {
+						context: runtimeCapability.contexts,
+						idempotencyKey: 'optional stable string (1..96 chars)',
+						...(runtimeCapability.actionPlan.actionTypes.length > 0
+							? {
+									contextRef:
+										'required reference from a succeeded canvas.inspect receipt on this manifest',
+									actions: `1..${runtimeCapability.actionPlan.maxActions} ${runtimeCapability.mode === 'read' ? 'read queries' : 'actions'} matching this capability schema`,
+								}
+							: { actions: 'must be omitted' }),
+					},
+					receipt: ['requestId', 'status', 'capabilityId', 'summary'],
+				}
+			: {
 			id: capabilityId,
 			mode: capability.mode,
 			summary: capability.summary,
@@ -217,7 +268,7 @@ function describeCanvasCapability(payload, now, includeCanvasBinding) {
 					}
 				: {}),
 			receipt: ['requestId', 'status', 'capabilityId', 'summary'],
-		},
+			},
 	}
 }
 
@@ -339,13 +390,31 @@ export function enqueueCompanionCanvasPlan(payload, now = Date.now(), options = 
 	if (payload?.surface && payload.surface !== 'tldraw') {
 		throw httpError(400, 'companion canvas tool only accepts the native tldraw surface')
 	}
-	const capabilityId = requireCapabilityId(payload?.capabilityId)
-	const capability = CAPABILITIES[capabilityId]
+	const manifestId = typeof payload?.manifestId === 'string' ? payload.manifestId : ''
+	let manifest
+	let manifestError
+	if (options.requireManifest) {
+		try {
+			manifest = requireCompanionManifest(payload, now)
+		} catch (error) {
+			if (!Object.hasOwn(CAPABILITIES, payload?.capabilityId)) throw error
+			manifestError = error
+		}
+	}
+	const capabilityId = requireCapabilityId(payload?.capabilityId, manifest)
+	if (capabilityId === 'canvas.catalog') {
+		throw httpError(400, 'canvas.catalog is hydrated through describe and cannot be executed')
+	}
+	const runtimeCapability = getRuntimeCapability(manifest, capabilityId)
+	const capability = runtimeCapability ?? CAPABILITIES[capabilityId]
 	const context = normalizeContext(payload?.context)
+	const allowedContexts = capability.contexts ?? ['selection', 'selection-or-area']
+	if (!allowedContexts.includes(context)) {
+		throw httpError(400, `${capabilityId} does not allow context=${context}`)
+	}
 	const actor = normalizeProvenance(payload?.actor, 'external-agent')
 	const source = normalizeProvenance(payload?.source, 'companion-plugin')
 	const actions = normalizeActionPlan(payload?.actions, capability)
-	const manifestId = typeof payload?.manifestId === 'string' ? payload.manifestId : ''
 	const requestedCanvasBinding =
 		typeof payload?.canvasBinding === 'string' ? payload.canvasBinding : undefined
 	const idCandidate = payload?.idempotencyKey ?? payload?.requestId
@@ -355,7 +424,7 @@ export function enqueueCompanionCanvasPlan(payload, now = Date.now(), options = 
 			: randomUUID()
 
 	let requestedContextRef
-	if (capability.mode === 'read') {
+	if (capability.mode === 'read' && !runtimeCapability) {
 		if (actions.length > 0) {
 			throw httpError(400, `${capabilityId} is read-only and does not accept actions`)
 		}
@@ -368,10 +437,15 @@ export function enqueueCompanionCanvasPlan(payload, now = Date.now(), options = 
 		execution: 'direct-actions',
 		capabilityId,
 		context,
-		contextRef: capability.mode === 'read' ? null : requestedContextRef,
+		contextRef: capability.mode === 'read' && !runtimeCapability ? null : requestedContextRef,
 		actions,
 		...(options.requireManifest
-			? { manifestId }
+			? {
+					manifestId,
+					catalogRevision: runtimeCapability
+						? manifest.capabilityCatalog.catalogRevision
+						: null,
+				}
 			: { canvasBinding: requestedCanvasBinding }),
 		actor,
 		source,
@@ -386,13 +460,11 @@ export function enqueueCompanionCanvasPlan(payload, now = Date.now(), options = 
 	}
 	const completedReplay = replayCompletedRequest(id, fingerprint)
 	if (completedReplay) return completedReplay
+	if (manifestError) throw manifestError
 
-	const manifest = options.requireManifest
-		? requireCompanionManifest(payload, now)
-		: undefined
 	const canvasBinding = manifest?.canvasBinding ?? requestedCanvasBinding
 	const contextRef =
-		capability.mode === 'read'
+		capability.mode === 'read' && !runtimeCapability
 			? undefined
 			: requireCompletedContextRef({
 					contextRef: requestedContextRef,
@@ -407,6 +479,7 @@ export function enqueueCompanionCanvasPlan(payload, now = Date.now(), options = 
 		contextRef,
 		capabilityId,
 		manifestId,
+		catalogRevision: manifest?.capabilityCatalog?.catalogRevision,
 		canvasBinding,
 		actor,
 		source,
@@ -669,17 +742,23 @@ export async function handleMlInternCanvasToolRequest(url, request, response, re
 
 export async function handleCompanionCanvasToolRequest(url, request, response, readBody, send) {
 	if (
-		request.method === 'GET' &&
+		(request.method === 'GET' || request.method === 'POST') &&
 		url.pathname === '/companion/canvas-tool/capabilities'
 	) {
 		requireNonBrowserProducer(request)
+		const payload =
+			request.method === 'POST' ? JSON.parse(await readBody(request)) : undefined
 		const canvasBinding = resolveCompanionCanvasBinding(
-			url.searchParams.get('canvasBinding') || undefined
+			payload?.canvasBinding ?? url.searchParams.get('canvasBinding') ?? undefined
 		)
 		return sendJson(
 			response,
 			200,
-			issueCompanionCanvasCapabilityManifest(Date.now(), canvasBinding),
+			issueCompanionCanvasCapabilityManifest(
+				Date.now(),
+				canvasBinding,
+				payload?.capabilityCatalog
+			),
 			send
 		)
 	}
@@ -768,11 +847,160 @@ function requireCompanionManifest(payload, now) {
 	return manifest
 }
 
-function requireCapabilityId(value) {
-	if (typeof value !== 'string' || !Object.hasOwn(CAPABILITIES, value)) {
+function requireCapabilityId(value, manifest) {
+	if (typeof value !== 'string') {
+		throw httpError(400, 'unknown native tldraw capability id')
+	}
+	if (value === 'canvas.catalog' && !manifestHasExposedCatalog(manifest)) {
+		throw httpError(400, 'unknown native tldraw capability id')
+	}
+	if (!Object.hasOwn(CAPABILITIES, value) && !getRuntimeCapability(manifest, value)) {
 		throw httpError(400, 'unknown native tldraw capability id')
 	}
 	return value
+}
+
+function getRuntimeCapability(manifest, capabilityId) {
+	return manifest?.capabilityCatalog?.capabilities?.find(
+		(capability) => capability.id === capabilityId
+	)
+}
+
+function manifestHasExposedCatalog(manifest) {
+	return Boolean(
+		manifest.capabilityCatalog &&
+			(manifest.capabilityCatalog.kits.length > 0 ||
+				manifest.capabilityCatalog.capabilities.length > 0)
+	)
+}
+
+function normalizeRuntimeCapabilityCatalog(value) {
+	assertNoForbiddenFields(value, 'capabilityCatalog')
+	const serialized = JSON.stringify(value)
+	if (Buffer.byteLength(serialized) > MAX_CAPABILITY_CATALOG_BYTES) {
+		throw httpError(
+			413,
+			`capability catalog must be at most ${MAX_CAPABILITY_CATALOG_BYTES} bytes`
+		)
+	}
+	const catalog = JSON.parse(serialized)
+	if (
+		!isPlainObject(catalog) ||
+		catalog.schema !== 'canvas-studio-runtime-capabilities/v1' ||
+		catalog.version !== 1 ||
+		catalog.surface !== 'tldraw' ||
+		typeof catalog.catalogRevision !== 'string' ||
+		!/^catalog-[a-zA-Z0-9._-]{1,160}$/.test(catalog.catalogRevision) ||
+		typeof catalog.pageMode !== 'string' ||
+		!catalog.pageMode ||
+		!Array.isArray(catalog.capabilities) ||
+		catalog.capabilities.length > MAX_RUNTIME_CAPABILITIES ||
+		!Array.isArray(catalog.kits) ||
+		!isPlainObject(catalog.registrations)
+	) {
+		throw httpError(400, 'canvas runtime capability catalog is invalid')
+	}
+	const allowedContexts = new Set(['selection', 'selection-or-area'])
+	if (
+		!Array.isArray(catalog.contextPolicies) ||
+		catalog.contextPolicies.length === 0 ||
+		catalog.contextPolicies.some((context) => !allowedContexts.has(context))
+	) {
+		throw httpError(400, 'canvas runtime capability context policies are invalid')
+	}
+
+	const capabilityIds = new Set()
+	for (const capability of catalog.capabilities) {
+		if (
+			!isPlainObject(capability) ||
+			typeof capability.id !== 'string' ||
+			!ID_PATTERN.test(capability.id) ||
+			Object.hasOwn(CAPABILITIES, capability.id) ||
+			capabilityIds.has(capability.id) ||
+			capability.version !== 1 ||
+			typeof capability.kitId !== 'string' ||
+			!ID_PATTERN.test(capability.kitId) ||
+			!['read', 'mutate'].includes(capability.mode) ||
+			typeof capability.summary !== 'string' ||
+			!capability.summary.trim() ||
+			capability.summary.length > 500 ||
+			!Array.isArray(capability.contexts) ||
+			capability.contexts.length === 0 ||
+			capability.contexts.some((context) => !allowedContexts.has(context)) ||
+			!isPlainObject(capability.actionPlan) ||
+			capability.actionPlan.coordinateSystem !== 'absolute-page' ||
+			!Number.isInteger(capability.actionPlan.maxActions) ||
+			capability.actionPlan.maxActions < 1 ||
+			capability.actionPlan.maxActions > MAX_ACTIONS ||
+			!Array.isArray(capability.actionPlan.actionTypes) ||
+			capability.actionPlan.actionTypes.length === 0 ||
+			capability.actionPlan.actionTypes.some(
+				(actionType) =>
+					typeof actionType !== 'string' || !ACTION_TYPE_PATTERN.test(actionType)
+			) ||
+			!isPlainObject(capability.actionPlan.schema) ||
+			!isPlainObject(capability.effects) ||
+			!Array.isArray(capability.effects.recordTypes) ||
+			capability.effects.recordTypes.some(
+				(recordType) => recordType !== 'shape' && recordType !== 'binding'
+			) ||
+			capability.effects.atomic !== true ||
+			(capability.mode === 'mutate' && capability.effects.undoable !== true) ||
+			(capability.mode === 'read' &&
+				(capability.effects.undoable !== false ||
+					capability.effects.recordTypes.length !== 0))
+		) {
+			throw httpError(400, 'canvas runtime capability descriptor is invalid')
+		}
+		capabilityIds.add(capability.id)
+	}
+	const kitIds = new Set()
+	for (const kit of catalog.kits) {
+		if (
+			!isPlainObject(kit) ||
+			typeof kit.id !== 'string' ||
+			!ID_PATTERN.test(kit.id) ||
+			kitIds.has(kit.id) ||
+			typeof kit.title !== 'string' ||
+			!kit.title.trim() ||
+			!Array.isArray(kit.presets) ||
+			!Array.isArray(kit.capabilityIds) ||
+			kit.capabilityIds.some(
+				(capabilityId) =>
+					typeof capabilityId !== 'string' || !capabilityIds.has(capabilityId)
+			)
+		) {
+			throw httpError(400, 'canvas runtime kit descriptor is invalid')
+		}
+		kitIds.add(kit.id)
+	}
+	if (
+		catalog.capabilities.some(
+			(capability) =>
+				!kitIds.has(capability.kitId) ||
+				!catalog.kits
+					.find((kit) => kit.id === capability.kitId)
+					?.capabilityIds.includes(capability.id)
+		)
+	) {
+		throw httpError(400, 'canvas runtime capability is not owned by its declared kit')
+	}
+	for (const field of ['shapeTypes', 'bindingTypes', 'toolIds', 'recordTypes']) {
+		if (
+			!Array.isArray(catalog.registrations[field]) ||
+			catalog.registrations[field].some(
+				(registration) =>
+					!isPlainObject(registration) ||
+					typeof registration.id !== 'string' ||
+					!registration.id ||
+					typeof registration.owner !== 'string' ||
+					!registration.owner
+			)
+		) {
+			throw httpError(400, 'canvas runtime registrations are invalid')
+		}
+	}
+	return catalog
 }
 
 function normalizeContext(value) {
@@ -824,13 +1052,39 @@ function normalizeRequestedBounds(value, context) {
 }
 
 function compactManifest(manifest, includeCanvasBinding = true) {
+	const runtimeCapabilityIds =
+		manifest.capabilityCatalog?.capabilities?.map((capability) => capability.id) ?? []
+	const exposeCatalog = manifestHasExposedCatalog(manifest)
 	return {
+		protocolVersion: 'canvas-capabilities/1',
 		manifestId: manifest.manifestId,
 		...(includeCanvasBinding ? { binding: manifest.binding } : {}),
 		surface: manifest.surface,
 		issuedAt: manifest.issuedAt,
 		expiresAt: manifest.expiresAt,
-		capabilityIds: ML_INTERN_TLDRAW_CAPABILITY_IDS,
+		capabilityIds: [
+			...ML_INTERN_TLDRAW_CAPABILITY_IDS,
+			...(exposeCatalog ? ['canvas.catalog', ...runtimeCapabilityIds] : []),
+		],
+		...(exposeCatalog
+			? {
+					catalog: {
+						version: manifest.capabilityCatalog.version,
+						digest: manifest.catalogDigest,
+						pageMode: manifest.capabilityCatalog.pageMode,
+					},
+					capabilities: manifest.capabilityCatalog.capabilities.map(
+						(capability) => ({
+							id: capability.id,
+							version: capability.version,
+							kitId: capability.kitId,
+							mode: capability.mode,
+							summary: capability.summary,
+							contexts: capability.contexts,
+						})
+					),
+				}
+			: {}),
 	}
 }
 
@@ -852,6 +1106,9 @@ function compactRequest(request, includeInstruction = false) {
 		...(includeInstruction && request.source ? { source: request.source } : {}),
 		...(includeInstruction && request.bounds ? { bounds: request.bounds } : {}),
 		...(request.contextRef ? { contextRef: request.contextRef } : {}),
+		...(includeInstruction && request.catalogRevision
+			? { catalogRevision: request.catalogRevision }
+			: {}),
 		...(request.summary ? { summary: request.summary } : {}),
 		...(request.result !== undefined ? { result: request.result } : {}),
 	}
@@ -895,7 +1152,7 @@ function normalizeContextRef(contextRef) {
 	if (typeof contextRef !== 'string' || !/^[a-zA-Z0-9-]{1,96}$/.test(contextRef)) {
 		throw httpError(
 			409,
-			'a mutating companion plan requires contextRef from a succeeded canvas.inspect receipt'
+			'a semantic companion operation requires contextRef from a succeeded canvas.inspect receipt'
 		)
 	}
 	return contextRef
@@ -930,8 +1187,10 @@ function requireCompletedContextRef({ contextRef, manifestId, canvasBinding, now
 function normalizeActionPlan(value, capability) {
 	if (value === undefined || value === null) return []
 	if (!Array.isArray(value)) throw httpError(400, 'actions must be an array')
-	if (value.length > MAX_ACTIONS) {
-		throw httpError(400, `actions must contain at most ${MAX_ACTIONS} validated operations`)
+	const maxActions = capability.actionPlan?.maxActions ?? MAX_ACTIONS
+	const actionTypes = capability.actionPlan?.actionTypes ?? capability.actionTypes
+	if (value.length > maxActions) {
+		throw httpError(400, `actions must contain at most ${maxActions} validated operations`)
 	}
 	const serialized = JSON.stringify(value)
 	if (Buffer.byteLength(serialized) > MAX_ACTION_PLAN_BYTES) {
@@ -941,7 +1200,7 @@ function normalizeActionPlan(value, capability) {
 		if (!isPlainObject(action)) throw httpError(400, `actions[${index}] must be an object`)
 		if (
 			typeof action._type !== 'string' ||
-			!capability.actionTypes.includes(action._type)
+			!actionTypes.includes(action._type)
 		) {
 			throw httpError(
 				400,
@@ -950,8 +1209,11 @@ function normalizeActionPlan(value, capability) {
 		}
 		assertNoForbiddenFields(action, `actions[${index}]`)
 	}
-	if (capability.mode === 'mutate' && value.length === 0) {
-		throw httpError(400, 'mutating companion capability requires at least one action')
+	if (capability.actionPlan && capability.actionPlan.actionTypes.length > 0 && value.length === 0) {
+		throw httpError(
+			400,
+			`${capability.mode === 'read' ? 'semantic read' : 'mutating'} companion capability requires at least one action`
+		)
 	}
 	return structuredClone(value)
 }

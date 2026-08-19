@@ -60,11 +60,19 @@ test('Grok plugin resolves the shared companion runtime from a canvapocalypse wo
 	assert.match(url, /amp-tldraw-companion-runtime\.mjs$/)
 })
 
-test('MCP framer accepts both Content-Length and newline JSON', () => {
+test('Grok MCP emits newline-delimited JSON', () => {
+	const message = { jsonrpc: '2.0', id: 1, result: {} }
+	const encoded = encodeMcpMessage(message).toString('utf8')
+	assert.equal(encoded, `${JSON.stringify(message)}\n`)
+	assert.doesNotMatch(encoded, /Content-Length/i)
+})
+
+test('MCP input framer accepts both Content-Length and newline JSON', () => {
 	const messages = []
 	const feed = createMcpFramer((message) => messages.push(message))
 	feed(Buffer.from('{"jsonrpc":"2.0","id":1,"method":"ping"}\n'))
-	feed(encodeMcpMessage({ jsonrpc: '2.0', id: 2, method: 'ping' }))
+	const body = Buffer.from('{"jsonrpc":"2.0","id":2,"method":"ping"}', 'utf8')
+	feed(Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body]))
 	assert.equal(messages.length, 2)
 	assert.equal(messages[0].id, 1)
 	assert.equal(messages[1].id, 2)

@@ -18,6 +18,8 @@ export const ChatHistoryPartUtil = registerPromptPartUtil(
 
 			for (const historyItem of history) {
 				if (historyItem.type !== 'prompt') continue
+				// Turn IDs belong to the local branching UI, not model context.
+				delete historyItem.turnId
 				if (_request.routing?.enabled) {
 					// Older attachments remain locally inspectable but are not resent.
 					historyItem.contextItems = []

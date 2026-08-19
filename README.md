@@ -13,10 +13,12 @@ provider.
 
 Each pack inserts editable native tldraw templates:
 
-- **Architecture:** System Context, Decision Graph, Change Radar.
+- **Architecture:** System Context, C4 Container, C4 Component, Service / Data
+  Flow, Decision Graph + ADR, Change Radar.
 - **ML / LLM:** Experiment Loop, Evaluation Pipeline, Model Delivery Map.
 - **UI / UX:** User Flow, Wireframe Screen Set, Component Anatomy.
-- **Product / PM:** Product Roadmap, Delivery Timeline, Opportunity Decision.
+- **Product / PM:** Product Roadmap, Delivery Timeline, Opportunity Decision,
+  Opportunity Solution Tree, Impact Map, User Journey / Service Blueprint.
 
 ### Canvas Studio Offline composition
 
@@ -257,6 +259,19 @@ The `TldrawAgent` class has additional methods:
 - `agent.cancel()` - Cancel the agent's current task.
 - `agent.reset()` - Reset the agent's chat and memory.
 - `agent.request(input)` - Send a single request to the agent and handle its response _without_ entering into an agentic loop.
+
+Conversation history is branch-aware and persisted locally. Existing prompt and
+action code always reads or writes the active branch:
+
+- `agent.chat.createBranch()` - Start an independent root conversation on the shared canvas.
+- `agent.chat.forkFromTurn(turnId)` - Fork after a stable user turn and activate the alternative.
+- `agent.chat.switchBranch(branchId)` - Switch the active conversation. Branch changes are blocked while a request is streaming.
+
+Templates inserted from the Workbench carry the active branch lineage in their
+allowlisted semantic metadata. From a forked branch, **Compare** materializes
+the fork and its parent as a native Decision Graph with an ADR-style outcome;
+the comparison remains editable, selectable agent context rather than a chat
+transcript dump.
 
 ## Architecture overview
 

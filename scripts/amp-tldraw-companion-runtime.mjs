@@ -7,6 +7,9 @@ const DEFAULT_SUPERVISOR_URL = 'http://127.0.0.1:5177'
 const RESIDENT_CAPABILITY_PATTERN = /^hr_[A-Za-z0-9_-]{43,128}$/
 const OPAQUE_LOCAL_ID_PATTERN = /^[a-zA-Z0-9._:-]{1,128}$/
 const CANVAS_BINDING_SLOT = 'canvapocalypse.renderer.companionCanvasBinding'
+const CANVAS_CAPABILITY_CATALOG_SLOT =
+	'canvapocalypse.renderer.companionCanvasCapabilityCatalog'
+const MAX_CAPABILITY_CATALOG_BYTES = 64_000
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed'])
 
 export function resolveLoopbackBridgeUrl(
@@ -28,12 +31,13 @@ export function resolveLoopbackBridgeUrl(
 	return url.toString().replace(/\/$/, '')
 }
 
-export async function resolveProjectCanvasBinding({
+export async function resolveProjectCanvasTarget({
 	workspaceRoot,
 	serverConfigPath = resolveTldrawServerConfigPath(),
 	fetchFn = fetch,
 	fs = { lstat, readFile, readdir, realpath },
 	pathApi = path,
+	requireCapabilityCatalog = true,
 } = {}) {
 	if (typeof workspaceRoot !== 'string' || !workspaceRoot) {
 		throw new Error('tldraw project routing requires an Amp workspace')
@@ -108,18 +112,61 @@ export async function resolveProjectCanvasBinding({
 		{
 			method: 'POST',
 			body: JSON.stringify({
-				code: `return Reflect.get(globalThis, Symbol.for(${JSON.stringify(CANVAS_BINDING_SLOT)}))`,
+				code: `return {
+					canvasBinding: Reflect.get(globalThis, Symbol.for(${JSON.stringify(CANVAS_BINDING_SLOT)})),
+					capabilityCatalog: Reflect.get(globalThis, Symbol.for(${JSON.stringify(CANVAS_CAPABILITY_CATALOG_SLOT)})),
+				}`,
 			}),
 		},
 		fetchFn
 	)
+	const target =
+		typeof bindingPayload.result === 'string'
+			? { canvasBinding: bindingPayload.result, capabilityCatalog: undefined }
+			: bindingPayload.result
 	if (
-		typeof bindingPayload.result !== 'string' ||
-		!OPAQUE_LOCAL_ID_PATTERN.test(bindingPayload.result)
+		!isRecord(target) ||
+		typeof target.canvasBinding !== 'string' ||
+		!OPAQUE_LOCAL_ID_PATTERN.test(target.canvasBinding)
 	) {
 		throw new Error('The project canvas has no active Canvapocalypse companion binding.')
 	}
-	return bindingPayload.result
+	const capabilityCatalog = target.capabilityCatalog
+	let catalogBytes = 0
+	try {
+		catalogBytes = capabilityCatalog
+			? Buffer.byteLength(JSON.stringify(capabilityCatalog))
+			: 0
+	} catch {
+		throw new Error('The project canvas capability catalog is malformed.')
+	}
+	if (catalogBytes > MAX_CAPABILITY_CATALOG_BYTES) {
+		throw new Error('The project canvas capability catalog exceeds its bounded size.')
+	}
+	if (
+		requireCapabilityCatalog &&
+		(!isRecord(capabilityCatalog) ||
+			capabilityCatalog.schema !== 'canvas-studio-runtime-capabilities/v1' ||
+			capabilityCatalog.version !== 1 ||
+			capabilityCatalog.surface !== 'tldraw' ||
+			typeof capabilityCatalog.catalogRevision !== 'string' ||
+			!Array.isArray(capabilityCatalog.kits) ||
+			!Array.isArray(capabilityCatalog.capabilities))
+	) {
+		throw new Error('The project canvas capability catalog is not ready; wait for the mounted workbench.')
+	}
+	return {
+		canvasBinding: target.canvasBinding,
+		...(capabilityCatalog ? { capabilityCatalog } : {}),
+	}
+}
+
+export async function resolveProjectCanvasBinding(options = {}) {
+	const target = await resolveProjectCanvasTarget({
+		...options,
+		requireCapabilityCatalog: false,
+	})
+	return target.canvasBinding
 }
 
 export function isPathContained(parent, candidate, pathApi = path) {
@@ -295,7 +342,16 @@ export function createAmpTldrawCompanionClient({
 	}
 
 	return {
-		async capabilities({ canvasBinding } = {}) {
+		async capabilities({ canvasBinding, capabilityCatalog } = {}) {
+			if (capabilityCatalog !== undefined) {
+				return requestJson('/capabilities', {
+					method: 'POST',
+					body: JSON.stringify({
+						canvasBinding: requireCanvasBinding(canvasBinding),
+						capabilityCatalog,
+					}),
+				})
+			}
 			const query = canvasBinding
 				? `?canvasBinding=${encodeURIComponent(requireCanvasBinding(canvasBinding))}`
 				: ''

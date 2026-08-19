@@ -140,7 +140,7 @@ export class AgentAppPersistenceManager extends BaseAgentAppManager {
 	private createAgentStateWatcher(agent: TldrawAgent): () => void {
 		return react(`${agent.id} state`, () => {
 			// Access reactive state to trigger on changes
-			agent.chat.getHistory()
+			agent.chat.getState()
 			agent.chatOrigin.getOrigin()
 			agent.todos.getTodos()
 			agent.context.getItems()

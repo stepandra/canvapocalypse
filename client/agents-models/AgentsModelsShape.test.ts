@@ -13,6 +13,19 @@ const stylesheetSource = readFileSync(
 	new URL('../../scripts/tldraw-desktop-eval-lab.css', import.meta.url),
 	'utf8'
 )
+const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+const shellSource = readFileSync(
+	new URL('../workbench/WorkbenchShell.tsx', import.meta.url),
+	'utf8'
+)
+const runtimeSource = readFileSync(
+	new URL('./grokWorkspaceRuntime.ts', import.meta.url),
+	'utf8'
+)
+const stylePanelSource = readFileSync(
+	new URL('../workbench/WorkbenchStylePanel.tsx', import.meta.url),
+	'utf8'
+)
 
 describe('Agents / Models native workflow surface', () => {
 	it('uses one custom shape with real controls for all logical card roles', () => {
@@ -79,5 +92,18 @@ describe('Agents / Models native workflow surface', () => {
 			'@container agents-models-workflow-node (max-width: 259px)'
 		)
 		expect(stylesheetSource).toContain('.agents-models-catalog-row')
+	})
+
+	it('mounts the complete Grok workspace on its dedicated web page', () => {
+		expect(appSource).toContain('mountGrokWorkspaceRuntime(nextApp.editor)')
+		expect(appSource).toContain("? 'agents-models'")
+		expect(shellSource).toContain("pageMode === 'agents-models'")
+		expect(shellSource).toContain('<GrokToolboxLayer />')
+		expect(runtimeSource).toContain('agentsModelsDocumentScript({ editor })')
+		expect(runtimeSource).toContain("_materializePreset('fanout')")
+		expect(runtimeSource).toContain('frameGrokWorkspace(editor)')
+		expect(stylePanelSource).toContain("pageMode === 'agents-models'")
+		expect(scriptSource).toContain('name: "PHASE"')
+		expect(scriptSource).toContain('name: "SUBAGENT RUN / PERSONA"')
 	})
 })

@@ -27,6 +27,9 @@ import {
 	TLShapeId,
 	TLShapePartial,
 	TLShapeUtilCanBindOpts,
+	TldrawUiButtonIcon,
+	TldrawUiToolbar,
+	TldrawUiToolbarButton,
 	BaseBoxShapeUtil,
 	track,
 	useEditor,
@@ -750,65 +753,83 @@ export const ConstraintLayoutControls = track(function ConstraintLayoutControls(
 	}
 
 	return (
-		<div
+		<TldrawUiToolbar
+			className="canvas-layout-context-toolbar canvas-constraint-layout-toolbar"
+			label="Constraint layout controls"
+			orientation="horizontal"
+			tooltipSide="top"
 			onPointerDown={stopEventPropagation}
-			style={{
-				position: 'absolute',
-				right: 12,
-				bottom: 120,
-				display: 'flex',
-				alignItems: 'center',
-				gap: 6,
-				padding: 8,
-				borderRadius: 10,
-				background: 'var(--tl-color-panel, #fff)',
-				border: '1px solid var(--tl-color-muted-1, #cbd5e1)',
-				boxShadow: '0 4px 16px rgb(15 23 42 / 16%)',
-				pointerEvents: 'all',
-			}}
 		>
-			<button
-						type="button"
-						disabled={selected.shapeIds.length === 0}
-						onClick={() => {
-							editor.markHistoryStoppingPoint('Bind shapes to constraint layout')
-							bindShapesToConstraintLayout(editor, container.id, selected.shapeIds)
-						}}
-					>
-						Bind selected
-					</button>
-					<button
-						type="button"
-						disabled={selected.shapeIds.length === 0}
-						onClick={() => {
-							editor.markHistoryStoppingPoint('Detach shapes from constraint layout')
-							detachShapesFromConstraintLayout(editor, selected.shapeIds)
-						}}
-					>
-						Detach selected
-					</button>
-					<button type="button" onClick={() => updateContainer({ direction: 'horizontal' })}>Row</button>
-					<button type="button" onClick={() => updateContainer({ direction: 'vertical' })}>Column</button>
-					<select
-						aria-label="Constraint alignment"
-						value={container.props.align}
-						onChange={(event) => updateContainer({ align: event.currentTarget.value as LayoutAlign })}
-					>
-						<option value="start">Align start</option>
-						<option value="center">Align center</option>
-						<option value="end">Align end</option>
-					</select>
-					<select
-						aria-label="Constraint justification"
-						value={container.props.justify}
-						onChange={(event) => updateContainer({ justify: event.currentTarget.value as LayoutJustify })}
-					>
-						<option value="start">Justify start</option>
-						<option value="center">Justify center</option>
-						<option value="end">Justify end</option>
-						<option value="space-between">Space between</option>
-					</select>
-		</div>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Bind selected shapes"
+				tooltip="Bind selected shapes"
+				disabled={selected.shapeIds.length === 0}
+				onClick={() => {
+					editor.markHistoryStoppingPoint('Bind shapes to constraint layout')
+					bindShapesToConstraintLayout(editor, container.id, selected.shapeIds)
+				}}
+			>
+				<TldrawUiButtonIcon icon="group" />
+			</TldrawUiToolbarButton>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Detach selected shapes"
+				tooltip="Detach selected shapes"
+				disabled={selected.shapeIds.length === 0}
+				onClick={() => {
+					editor.markHistoryStoppingPoint('Detach shapes from constraint layout')
+					detachShapesFromConstraintLayout(editor, selected.shapeIds)
+				}}
+			>
+				<TldrawUiButtonIcon icon="ungroup" />
+			</TldrawUiToolbarButton>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Horizontal layout"
+				tooltip="Horizontal layout"
+				isActive={container.props.direction === 'horizontal'}
+				aria-pressed={container.props.direction === 'horizontal'}
+				onClick={() => updateContainer({ direction: 'horizontal' })}
+			>
+				<TldrawUiButtonIcon icon="stack-horizontal" />
+			</TldrawUiToolbarButton>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Vertical layout"
+				tooltip="Vertical layout"
+				isActive={container.props.direction === 'vertical'}
+				aria-pressed={container.props.direction === 'vertical'}
+				onClick={() => updateContainer({ direction: 'vertical' })}
+			>
+				<TldrawUiButtonIcon icon="stack-vertical" />
+			</TldrawUiToolbarButton>
+			<select
+				aria-label="Constraint alignment"
+				title="Cross-axis alignment"
+				value={container.props.align}
+				onChange={(event) => updateContainer({ align: event.currentTarget.value as LayoutAlign })}
+			>
+				<option value="start">Align start</option>
+				<option value="center">Align center</option>
+				<option value="end">Align end</option>
+			</select>
+			<select
+				aria-label="Constraint justification"
+				title="Main-axis distribution"
+				value={container.props.justify}
+				onChange={(event) => updateContainer({ justify: event.currentTarget.value as LayoutJustify })}
+			>
+				<option value="start">Justify start</option>
+				<option value="center">Justify center</option>
+				<option value="end">Justify end</option>
+				<option value="space-between">Space between</option>
+			</select>
+		</TldrawUiToolbar>
 	)
 })
 

@@ -76,13 +76,13 @@ describe('WorkflowOverlay Prompt Experiment Lab', () => {
 })
 
 describe('WorkflowOverlay native tldraw chrome', () => {
-	it('uses the public toolbar controls as a horizontal top-center tool strip', () => {
-		expect(overlaySource).toContain('TldrawUiPopover')
-		expect(overlaySource).toContain('className="workflow-palette-toggle"')
+	it('pins the public toolbar controls as a horizontal top-center tool strip', () => {
+		expect(overlaySource).not.toContain('paletteOpen')
+		expect(overlaySource).not.toContain('TldrawUiPopover')
+		expect(overlaySource).not.toContain('workflow-palette-toggle')
+		expect(overlaySource).toContain('className="workflow-palette"')
 		expect(overlaySource).toContain('TldrawUiToolbar')
 		expect(overlaySource).toContain('orientation="horizontal"')
-		expect(overlaySource).toContain('side="bottom"')
-		expect(overlaySource).toContain('align="center"')
 
 		expect(overlaySource).toContain('TldrawUiToolbarButton')
 		expect(overlaySource).toContain('type="tool"')
@@ -172,6 +172,6 @@ describe('WorkflowOverlay native tldraw chrome', () => {
 				'workflow-mlflow-model',
 			])
 		)
-		expect(WORKBENCH_DOMAIN_PACKS.ml.overlays.terminalSession).toBe(false)
+		expect(WORKBENCH_DOMAIN_PACKS.ml.overlays).not.toHaveProperty('terminalSession')
 	})
 })

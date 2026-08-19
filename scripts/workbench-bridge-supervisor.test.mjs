@@ -7,6 +7,7 @@ import {
 	WORKBENCH_SERVICE_STATES,
 	WORKBENCH_SUPERVISOR_CAPABILITY_HEADER,
 	WORKBENCH_SUPERVISOR_CLIENT,
+	WORKBENCH_SUPERVISOR_PROXY_HEADER,
 	createWorkbenchBridgeSupervisor,
 	createWorkbenchServiceManager,
 	redactLogMessage,
@@ -14,7 +15,7 @@ import {
 
 const TEST_CAPABILITY = `hr_${'S'.repeat(43)}`
 
-test('fixed registry separates two managed bridges from two observe-only external services', () => {
+test('fixed registry separates three managed bridges from two observe-only external services', () => {
 	assert.deepEqual(
 		WORKBENCH_SERVICE_REGISTRY.map(({ id, port, management }) => ({
 			id,
@@ -24,6 +25,7 @@ test('fixed registry separates two managed bridges from two observe-only externa
 		[
 			{ id: 'workbench', port: 5176, management: 'managed' },
 			{ id: 'isoflow', port: 4174, management: 'managed' },
+			{ id: 'grok', port: 5187, management: 'managed' },
 			{ id: 'kanban', port: 3484, management: 'external' },
 			{ id: 'legacy-ml', port: 7860, management: 'external' },
 		],
@@ -101,6 +103,11 @@ test('exact health identities distinguish external services, stopped services, a
 				state: 'port-conflict',
 				controllable: false,
 				managedSafe: false,
+			},
+			grok: {
+				state: 'stopped',
+				controllable: true,
+				managedSafe: true,
 			},
 			kanban: {
 				state: 'external',
@@ -281,6 +288,11 @@ test('control plane bootstraps only exact local HTTP origins and requires the re
 		capabilityHeader: WORKBENCH_SUPERVISOR_CAPABILITY_HEADER,
 		capability: TEST_CAPABILITY,
 	})
+	const proxiedBootstrap = await fetch(`${baseUrl}/api/session`, {
+		method: 'POST',
+		headers: { [WORKBENCH_SUPERVISOR_PROXY_HEADER]: 'vite' },
+	})
+	assert.equal(proxiedBootstrap.status, 200)
 
 	const unauthorized = await fetch(`${baseUrl}/api/services`)
 	assert.equal(unauthorized.status, 401)

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useModelStore } from 'src/stores/modelStore';
 import { useUiStateStore } from 'src/stores/uiStateStore';
-import { ModeActions, State, SlimMouseEvent } from 'src/types';
-import { getMouse, getItemAtTile } from 'src/utils';
+import { Coords, ModeActions, Scroll, State, SlimMouseEvent } from 'src/types';
+import {
+  CoordsUtils,
+  getMouse,
+  getItemAtTile,
+  setWindowCursor
+} from 'src/utils';
 import { useResizeObserver } from 'src/hooks/useResizeObserver';
 import { useScene } from 'src/hooks/useScene';
 import { Cursor } from './modes/Cursor';
@@ -42,6 +47,13 @@ const getModeFunction = (mode: ModeActions, e: SlimMouseEvent) => {
 export const useInteractionManager = () => {
   const rendererRef = useRef<HTMLElement>();
   const reducerTypeRef = useRef<string>();
+  const temporaryPanRef = useRef<{
+    button: number;
+    moved: boolean;
+    start: Coords;
+    scroll: Scroll;
+  } | null>(null);
+  const skipContextMenuRef = useRef(false);
   const uiState = useUiStateStore((state) => {
     return state;
   });
@@ -54,6 +66,15 @@ export const useInteractionManager = () => {
   const onMouseEvent = useCallback(
     (e: SlimMouseEvent) => {
       if (!rendererRef.current) return;
+      if (temporaryPanRef.current) return;
+
+      const mouseEvent = e as MouseEvent;
+      if (
+        (e.type === 'mousedown' || e.type === 'mouseup') &&
+        typeof mouseEvent.button === 'number' &&
+        mouseEvent.button !== 0
+      )
+        return;
 
       const mode = modes[uiState.mode.type];
       const modeFunction = getModeFunction(mode, e);
@@ -100,25 +121,135 @@ export const useInteractionManager = () => {
     [model, scene, uiState, rendererSize]
   );
 
-  const onContextMenu = useCallback(
+  const openContextMenu = useCallback(
     (e: SlimMouseEvent) => {
-      e.preventDefault();
+      if (!rendererRef.current) return;
+
+      const nextMouse = getMouse({
+        interactiveElement: rendererRef.current,
+        zoom: uiState.zoom,
+        scroll: uiState.scroll,
+        lastMouse: uiState.mouse,
+        mouseEvent: e,
+        rendererSize
+      });
+      uiState.actions.setMouse(nextMouse);
 
       const itemAtTile = getItemAtTile({
-        tile: uiState.mouse.position.tile,
+        tile: nextMouse.position.tile,
         scene
       });
 
       if (itemAtTile?.type === 'RECTANGLE') {
         uiState.actions.setContextMenu({
           item: itemAtTile,
-          tile: uiState.mouse.position.tile
+          tile: nextMouse.position.tile
         });
       } else if (uiState.contextMenu) {
         uiState.actions.setContextMenu(null);
       }
     },
-    [uiState.mouse, scene, uiState.contextMenu, uiState.actions]
+    [
+      rendererSize,
+      scene,
+      uiState.actions,
+      uiState.contextMenu,
+      uiState.mouse,
+      uiState.scroll,
+      uiState.zoom
+    ]
+  );
+
+  const onTemporaryPanStart = useCallback(
+    (e: MouseEvent) => {
+      if (
+        (e.button !== 1 && e.button !== 2) ||
+        !rendererRef.current ||
+        !rendererRef.current.contains(e.target as Node)
+      )
+        return;
+
+      e.preventDefault();
+      temporaryPanRef.current = {
+        button: e.button,
+        moved: false,
+        start: { x: e.clientX, y: e.clientY },
+        scroll: uiState.scroll
+      };
+      setWindowCursor('grabbing');
+    },
+    [uiState.scroll]
+  );
+
+  const onTemporaryPanMove = useCallback(
+    (e: MouseEvent) => {
+      const temporaryPan = temporaryPanRef.current;
+      if (!temporaryPan) return;
+
+      e.preventDefault();
+      const delta = {
+        x: e.clientX - temporaryPan.start.x,
+        y: e.clientY - temporaryPan.start.y
+      };
+      if (!temporaryPan.moved && Math.hypot(delta.x, delta.y) < 3) return;
+
+      temporaryPan.moved = true;
+      uiState.actions.setScroll({
+        position: CoordsUtils.add(temporaryPan.scroll.position, delta),
+        offset: temporaryPan.scroll.offset
+      });
+    },
+    [uiState.actions]
+  );
+
+  const onTemporaryPanEnd = useCallback(
+    (e: MouseEvent) => {
+      const temporaryPan = temporaryPanRef.current;
+      if (!temporaryPan || e.button !== temporaryPan.button) return;
+
+      e.preventDefault();
+      temporaryPanRef.current = null;
+      setWindowCursor(uiState.mode.type === 'PAN' ? 'grab' : 'default');
+
+      if (temporaryPan.button === 2) {
+        skipContextMenuRef.current = true;
+        window.setTimeout(() => {
+          skipContextMenuRef.current = false;
+        });
+
+        if (!temporaryPan.moved) openContextMenu(e);
+      }
+    },
+    [openContextMenu, uiState.mode.type]
+  );
+
+  const onTemporaryPanCancel = useCallback(() => {
+    if (!temporaryPanRef.current) return;
+
+    temporaryPanRef.current = null;
+    setWindowCursor(uiState.mode.type === 'PAN' ? 'grab' : 'default');
+  }, [uiState.mode.type]);
+
+  const onTemporaryPanAuxClick = useCallback((e: MouseEvent) => {
+    if (
+      (e.button === 1 || e.button === 2) &&
+      rendererRef.current?.contains(e.target as Node)
+    )
+      e.preventDefault();
+  }, []);
+
+  const onContextMenu = useCallback(
+    (e: SlimMouseEvent) => {
+      e.preventDefault();
+      if (temporaryPanRef.current?.button === 2) return;
+      if (skipContextMenuRef.current) {
+        skipContextMenuRef.current = false;
+        return;
+      }
+
+      openContextMenu(e);
+    },
+    [openContextMenu]
   );
 
   useEffect(() => {
@@ -164,6 +295,11 @@ export const useInteractionManager = () => {
     el.addEventListener('mousemove', onMouseEvent);
     el.addEventListener('mousedown', onMouseEvent);
     el.addEventListener('mouseup', onMouseEvent);
+    el.addEventListener('mousedown', onTemporaryPanStart);
+    el.addEventListener('mousemove', onTemporaryPanMove);
+    el.addEventListener('mouseup', onTemporaryPanEnd);
+    el.addEventListener('auxclick', onTemporaryPanAuxClick);
+    el.addEventListener('blur', onTemporaryPanCancel);
     el.addEventListener('contextmenu', onContextMenu);
     el.addEventListener('touchstart', onTouchStart);
     el.addEventListener('touchmove', onTouchMove);
@@ -174,6 +310,11 @@ export const useInteractionManager = () => {
       el.removeEventListener('mousemove', onMouseEvent);
       el.removeEventListener('mousedown', onMouseEvent);
       el.removeEventListener('mouseup', onMouseEvent);
+      el.removeEventListener('mousedown', onTemporaryPanStart);
+      el.removeEventListener('mousemove', onTemporaryPanMove);
+      el.removeEventListener('mouseup', onTemporaryPanEnd);
+      el.removeEventListener('auxclick', onTemporaryPanAuxClick);
+      el.removeEventListener('blur', onTemporaryPanCancel);
       el.removeEventListener('contextmenu', onContextMenu);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
@@ -185,6 +326,11 @@ export const useInteractionManager = () => {
     onMouseEvent,
     uiState.mode.type,
     onContextMenu,
+    onTemporaryPanStart,
+    onTemporaryPanMove,
+    onTemporaryPanEnd,
+    onTemporaryPanCancel,
+    onTemporaryPanAuxClick,
     uiState.actions,
     uiState.rendererEl
   ]);

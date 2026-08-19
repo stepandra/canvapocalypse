@@ -1,28 +1,43 @@
 import {
 	createTLStore,
+	defaultAddFontsFromNode,
 	defaultBindingUtils,
 	defaultShapeTools,
 	defaultShapeUtils,
 	defaultTools,
 	Editor,
+	tipTapDefaultExtensions,
+	type TLAnyBindingUtilConstructor,
+	type TLAnyShapeUtilConstructor,
 	type TLStateNodeConstructor,
 } from 'tldraw'
 
 export class CanvasExamplesTestEditor extends Editor {
 	constructor({
 		tools = [],
+		shapeUtils: additionalShapeUtils = [],
+		bindingUtils: additionalBindingUtils = [],
 		initialState = 'select',
 	}: {
 		tools?: TLStateNodeConstructor[]
+		shapeUtils?: TLAnyShapeUtilConstructor[]
+		bindingUtils?: TLAnyBindingUtilConstructor[]
 		initialState?: string
 	} = {}) {
-		const shapeUtils = [...defaultShapeUtils]
-		const bindingUtils = [...defaultBindingUtils]
+		const shapeUtils = [...defaultShapeUtils, ...additionalShapeUtils]
+		const bindingUtils = [...defaultBindingUtils, ...additionalBindingUtils]
+		const customToolIds = new Set(tools.map((tool) => tool.id))
+		const editorTools = [...defaultTools, ...defaultShapeTools]
+			.filter((tool) => !customToolIds.has(tool.id))
+			.concat(tools)
 		super({
 			shapeUtils,
 			bindingUtils,
-			textOptions: {},
-			tools: [...defaultTools, ...defaultShapeTools, ...tools],
+			textOptions: {
+				addFontsFromNode: defaultAddFontsFromNode,
+				tipTapConfig: { extensions: tipTapDefaultExtensions },
+			},
+			tools: editorTools,
 			store: createTLStore({ shapeUtils, bindingUtils }),
 			getContainer: () => document.createElement('div'),
 			initialState,

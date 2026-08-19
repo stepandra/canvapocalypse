@@ -40,6 +40,7 @@ import { DataPartUtil } from '../parts/DataPartUtil'
 import '../parts/DesignSystemContextPartUtil'
 import { DebugPartUtil } from '../parts/DebugPartUtil'
 import '../parts/HtmlMockupContextPartUtil'
+import { MarkdownDocumentsPartUtil } from '../parts/MarkdownDocumentsPartUtil'
 import { MessagesPartUtil } from '../parts/MessagesPartUtil'
 import { IsoflowContextPartUtil } from '../parts/IsoflowContextPartUtil'
 import { ModelNamePartUtil } from '../parts/ModelNamePartUtil'
@@ -125,6 +126,7 @@ export const AGENT_MODE_DEFINITIONS = [
 			PeripheralShapesPartUtil.type,
 			SelectedShapesPartUtil.type,
 			WorkbenchArtifactsPartUtil.type,
+			MarkdownDocumentsPartUtil.type,
 
 			// History
 			ChatHistoryPartUtil.type,

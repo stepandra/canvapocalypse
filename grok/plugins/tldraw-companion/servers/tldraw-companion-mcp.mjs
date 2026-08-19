@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { pathToFileURL, fileURLToPath } from 'node:url'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const PROTOCOL_VERSION = '2024-11-05'
@@ -35,7 +36,7 @@ const TOOLS = [
 	{
 		name: 'tldraw_execute',
 		description:
-			'Inspect or mutate one explicit native-tldraw selection/area. Inspect first, then pass its contextRef with a bounded plan of complete validated AgentAction objects in absolute page coordinates. Waits for and returns the local canvas receipt. Always stamped actor=grok.',
+			'Inspect, semantically read, or mutate one explicit native-tldraw selection/area. Inspect first, then pass its contextRef with the hydrated capability’s bounded query/action plan. Waits for and returns the local canvas receipt. Always stamped actor=grok.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -44,7 +45,8 @@ const TOOLS = [
 				context: { enum: ['selection', 'selection-or-area'] },
 				contextRef: {
 					type: 'string',
-					description: 'Required for mutation; returned by a succeeded canvas.inspect receipt.',
+					description:
+						'Required for mutation and custom semantic reads; returned by a succeeded canvas.inspect receipt.',
 				},
 				idempotencyKey: {
 					type: 'string',
@@ -54,7 +56,7 @@ const TOOLS = [
 					type: 'array',
 					maxItems: 24,
 					description:
-						'Required for mutation, omitted for inspection. Must match the hydrated capability schema.',
+						'Required for mutation and custom semantic reads, omitted for base inspection. Must match the hydrated capability schema.',
 					items: { type: 'object' },
 				},
 			},
@@ -68,11 +70,19 @@ export function resolveCompanionRuntimeUrl({
 	cwd = process.cwd(),
 	pluginRoot = process.env.GROK_PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_ROOT,
 	envRoot = process.env.CANVAPOCALYPSE_ROOT,
+	registryPath = join(homedir(), '.grok', 'installed-plugins', 'registry.json'),
 } = {}) {
+	const sourcePluginRoots = readInstalledPluginSourceRoots(registryPath)
 	const candidates = [
 		envRoot && join(envRoot, 'scripts/amp-tldraw-companion-runtime.mjs'),
 		join(cwd, 'scripts/amp-tldraw-companion-runtime.mjs'),
 		pluginRoot && join(pluginRoot, '../../../scripts/amp-tldraw-companion-runtime.mjs'),
+		fileURLToPath(
+			new URL('../../../../scripts/amp-tldraw-companion-runtime.mjs', import.meta.url)
+		),
+		...sourcePluginRoots.map((sourceRoot) =>
+			join(sourceRoot, '../../../scripts/amp-tldraw-companion-runtime.mjs')
+		),
 	].filter(Boolean)
 	for (const candidate of candidates) {
 		const resolved = resolve(candidate)
@@ -81,6 +91,28 @@ export function resolveCompanionRuntimeUrl({
 	throw new Error(
 		'Grok tldraw companion plugin must run from a canvapocalypse workspace (scripts/amp-tldraw-companion-runtime.mjs).'
 	)
+}
+
+function readInstalledPluginSourceRoots(registryPath) {
+	let registry
+	try {
+		registry = JSON.parse(readFileSync(registryPath, 'utf8'))
+	} catch {
+		return []
+	}
+	const roots = []
+	const visit = (value) => {
+		if (!value || typeof value !== 'object') return
+		if (
+			typeof value.source === 'string' &&
+			value.source.replaceAll('\\', '/').endsWith('/grok/plugins/tldraw-companion')
+		) {
+			roots.push(value.source)
+		}
+		for (const child of Object.values(value)) visit(child)
+	}
+	visit(registry)
+	return [...new Set(roots)]
 }
 
 export async function createDefaultCompanionApi({
@@ -108,8 +140,8 @@ export async function createDefaultCompanionApi({
 	})
 	return {
 		async capabilities() {
-			const canvasBinding = await runtime.resolveProjectCanvasBinding({ workspaceRoot: cwd })
-			return client.capabilities({ canvasBinding })
+			const canvasTarget = await runtime.resolveProjectCanvasTarget({ workspaceRoot: cwd })
+			return client.capabilities(canvasTarget)
 		},
 		describe: (input) => client.describe(input),
 		execute: (input) => client.execute(input),
@@ -166,8 +198,7 @@ function error(code, message, id) {
 }
 
 export function encodeMcpMessage(payload) {
-	const body = Buffer.from(JSON.stringify(payload), 'utf8')
-	return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'utf8'), body])
+	return Buffer.from(`${JSON.stringify(payload)}\n`, 'utf8')
 }
 
 export function createMcpFramer(onMessage) {

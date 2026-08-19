@@ -66,6 +66,8 @@ export function createGrokConfigService(options = {}) {
     paths,
     env,
     fetchLiveModels,
+    inspectGrok: options.inspectGrok ?? null,
+    inspection: null,
     now,
     writeFile: writeFileImpl,
     copyFile: copyFileImpl,
@@ -742,6 +744,8 @@ function normalizeIo(options = {}) {
             ...opts,
             env: options.env ?? process.env,
           })),
+      inspectGrok: options.inspectGrok ?? null,
+      inspection: null,
       now: options.now ?? Date.now,
       writeFile: options.writeFile ?? writeFile,
       copyFile: options.copyFile ?? copyFile,
@@ -762,6 +766,8 @@ function normalizeIo(options = {}) {
     fetchLiveModels:
       options.fetchLiveModels ??
       ((opts) => defaultFetchLiveModels({ ...opts, env })),
+    inspectGrok: options.inspectGrok ?? null,
+    inspection: null,
     now: options.now ?? Date.now,
     writeFile: options.writeFile ?? writeFile,
     copyFile: options.copyFile ?? copyFile,
@@ -824,15 +830,22 @@ function parseModelsDefaults(source) {
 }
 
 async function loadAgents(io) {
+  const inspection = await loadGrokInspection(io);
+  const inspectedAgents = Array.isArray(inspection?.agents)
+    ? inspection.agents
+        .map(normalizeInspectedAgent)
+        .filter(Boolean)
+        .slice(0, MAX_AGENTS)
+    : [];
   const files = await listFiles(io, io.paths.agentsDir, ".md", MAX_AGENTS);
-  const agents = [];
+  const agents = new Map(inspectedAgents.map((agent) => [agent.id, agent]));
   for (const file of files) {
     const text = await readTextFile(io, file.path, false);
     if (text == null) continue;
-    agents.push(parseAgentMarkdown(text, file.name));
+    const agent = parseAgentMarkdown(text, file.name);
+    agents.set(agent.id, agent);
   }
-  agents.sort((a, b) => a.id.localeCompare(b.id));
-  return agents;
+  return [...agents.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 async function loadPersonas(io) {
@@ -854,13 +867,21 @@ async function loadPersonas(io) {
 }
 
 async function loadProjectSkills(io) {
+  const inspection = await loadGrokInspection(io);
+  const skillsById = new Map(
+    (Array.isArray(inspection?.skills) ? inspection.skills : [])
+      .map(normalizeInspectedSkill)
+      .filter(Boolean)
+      .slice(0, MAX_SKILLS)
+      .map((skill) => [skill.id, skill]),
+  );
   let entries;
   try {
     entries = await io.readdir(io.paths.projectSkillsDir, {
       withFileTypes: true,
     });
   } catch (error) {
-    if (error?.code === "ENOENT") return [];
+    if (error?.code === "ENOENT") return [...skillsById.values()];
     throw error;
   }
   const directories = entries
@@ -873,7 +894,6 @@ async function loadProjectSkills(io) {
     )
     .sort((left, right) => left.name.localeCompare(right.name))
     .slice(0, MAX_SKILLS);
-  const skills = [];
   for (const directory of directories) {
     const skillPath = join(
       io.paths.projectSkillsDir,
@@ -884,9 +904,63 @@ async function loadProjectSkills(io) {
     if (!fileStat?.isFile?.() || fileStat.isSymbolicLink?.()) continue;
     const text = await readTextFile(io, skillPath, true);
     if (text == null) continue;
-    skills.push(parseSkillMarkdown(text, directory.name));
+    const skill = parseSkillMarkdown(text, directory.name);
+    skillsById.set(skill.id, skill);
   }
-  return skills;
+  return [...skillsById.values()].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
+}
+
+async function loadGrokInspection(io) {
+  if (typeof io.inspectGrok !== "function") return null;
+  io.inspection ??= Promise.resolve()
+    .then(() => io.inspectGrok({ cwd: io.paths.projectCwd, env: io.env }))
+    .then((value) => (value && typeof value === "object" ? value : null))
+    .catch(() => null);
+  return io.inspection;
+}
+
+function normalizeInspectedAgent(value) {
+  const id = normalizeCatalogId(value?.name ?? value?.id);
+  if (!id) return null;
+  const description = normalizeCatalogText(value?.description);
+  const modelRef = normalizeCatalogText(value?.model);
+  const source = normalizeCatalogText(value?.source?.type);
+  return {
+    id,
+    name: id,
+    description,
+    heading: null,
+    modelRef,
+    promptMode: null,
+    permissionMode: null,
+    ...(source ? { sourceRef: `grok:${source}` } : {}),
+  };
+}
+
+function normalizeInspectedSkill(value) {
+  const id = normalizeCatalogId(value?.name ?? value?.id);
+  if (!id) return null;
+  const name = normalizeCatalogText(value?.name) ?? id;
+  const description = normalizeCatalogText(value?.description);
+  const source = normalizeCatalogText(value?.source?.type) ?? "installed";
+  return {
+    id,
+    name,
+    description,
+    sourceRef: `grok:${source}`,
+  };
+}
+
+function normalizeCatalogId(value) {
+  const id = String(value ?? "").trim();
+  return id && WORKFLOW_NAME_RE.test(id) ? id : null;
+}
+
+function normalizeCatalogText(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? clip(text, MAX_DESCRIPTION_CHARS) : null;
 }
 
 async function loadWorkflowModules(io) {

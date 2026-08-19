@@ -16,7 +16,7 @@ describe('workbench emoji palette contract', () => {
 		expect(WORKBENCH_EMOJIS.some((emoji) => emoji.glyph === '🧭')).toBe(false)
 	})
 
-	it('inserts a normal emoji as one selected native text shape in one undo step', () => {
+	it('inserts a normal emoji at the requested stamp point in one undo step', () => {
 		const shapes = new Map<TLShapeId, Partial<TLShape>>()
 		let historyLabel = ''
 		let selected: TLShapeId[] = []
@@ -41,14 +41,17 @@ describe('workbench emoji palette contract', () => {
 			},
 		} as unknown as Editor
 
-		const receipt = insertWorkbenchEmoji(editor, 'idea', { instanceId: 'idea-test' })
+		const receipt = insertWorkbenchEmoji(editor, 'idea', {
+			instanceId: 'idea-test',
+			point: { x: 320, y: 260 },
+		})
 		const shape = shapes.get(receipt.shapeId)
 
 		expect(runCount).toBe(1)
 		expect(historyLabel).toBe('Insert Idea')
 		expect(shape?.type).toBe('text')
-		expect(shape?.x).toBe(552)
-		expect(shape?.y).toBe(364)
+		expect(shape?.x).toBe(272)
+		expect(shape?.y).toBe(224)
 		expect(selected).toEqual([receipt.shapeId])
 		expect(receipt).toMatchObject({ emojiId: 'idea', undoable: true })
 		expect(receipt.assetId).toBeUndefined()

@@ -9,6 +9,15 @@ import type {
 } from './types'
 
 const contributionIdPattern = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/
+const reservedAgentCapabilityIds = new Set([
+	'canvas.catalog',
+	'canvas.inspect',
+	'canvas.shape.basic',
+	'canvas.layout',
+	'canvas.native-assets',
+	'canvas.workflow',
+	'canvas.result.read',
+])
 
 type Registration =
 	| TLAnyShapeUtilConstructor
@@ -60,6 +69,7 @@ export function composeCanvasKitContributions(
 ): CanvasKitComposition {
 	const byKitId = new Map<string, CanvasKitContribution>()
 	const byPresetId = new Map<string, CanvasKitContribution>()
+	const byAgentCapabilityId = new Map<string, NonNullable<CanvasKitContribution['agentCapabilities']>[number]>()
 	const recordOwners = new Map<string, string>()
 	const records: Record<
 		string,
@@ -97,6 +107,40 @@ export function composeCanvasKitContributions(
 			recordOwners.set(typeName, contribution.kitId)
 			records[typeName] = record
 		}
+
+		for (const capability of contribution.agentCapabilities ?? []) {
+			const descriptor = capability.descriptor
+			assertContributionId(descriptor.id, 'agent capability')
+			if (reservedAgentCapabilityIds.has(descriptor.id)) {
+				throw new Error(
+					`Canvas Studio agent capability ${descriptor.id} collides with a host capability`
+				)
+			}
+			if (descriptor.kitId !== contribution.kitId) {
+				throw new Error(
+					`Canvas Studio agent capability ${descriptor.id} must belong to ${contribution.kitId}`
+				)
+			}
+			if (byAgentCapabilityId.has(descriptor.id)) {
+				throw new Error(`Duplicate Canvas Studio agent capability id ${descriptor.id}`)
+			}
+			if (
+				descriptor.version !== 1 ||
+				!descriptor.summary.trim() ||
+				descriptor.contexts.length === 0 ||
+				descriptor.actionPlan.maxActions < 1 ||
+				descriptor.actionPlan.maxActions > 24 ||
+				descriptor.actionPlan.actionTypes.length === 0 ||
+				descriptor.effects.atomic !== true ||
+				(descriptor.mode === 'mutate' && descriptor.effects.undoable !== true) ||
+				(descriptor.mode === 'read' &&
+					(descriptor.effects.undoable !== false ||
+						descriptor.effects.recordTypes.length !== 0))
+			) {
+				throw new Error(`Canvas Studio agent capability ${descriptor.id} has an invalid contract`)
+			}
+			byAgentCapabilityId.set(descriptor.id, capability)
+		}
 	}
 
 	rejectDuplicateRegistrationIds(contributions, 'shapeUtils', 'type', 'shape')
@@ -113,6 +157,9 @@ export function composeCanvasKitContributions(
 	const tools = stableContributions.flatMap((contribution) => [
 		...contribution.tools,
 	])
+	const agentCapabilities = stableContributions.flatMap((contribution) => [
+		...(contribution.agentCapabilities ?? []),
+	])
 
 	return {
 		contributions: stableContributions,
@@ -120,6 +167,7 @@ export function composeCanvasKitContributions(
 		bindingUtils,
 		tools,
 		records,
+		agentCapabilities,
 		onMount(editor) {
 			const disposers: Array<() => void> = []
 			const dispose = () => {
@@ -153,6 +201,7 @@ export function composeCanvasKitContributions(
 		},
 		getContribution: (kitId) => byKitId.get(kitId),
 		getPresetContribution: (presetId) => byPresetId.get(presetId),
+		getAgentCapability: (capabilityId) => byAgentCapabilityId.get(capabilityId),
 		insertPreset(editor, presetId, options) {
 			const contribution = byPresetId.get(presetId)
 			if (!contribution) {

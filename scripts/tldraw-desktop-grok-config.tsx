@@ -24,7 +24,7 @@ import {
 	WorkflowIcon,
 	type WorkflowIconName,
 } from '../client/workflow/WorkflowIcons'
-import stylesheet from './tldraw-desktop-eval-lab.css'
+import stylesheet from './tldraw-desktop-eval-lab.css?inline'
 
 const TOOLBAR_ID = 'shape:am-toolbar'
 
@@ -719,7 +719,7 @@ function GrokMark() {
 	)
 }
 
-function GrokToolboxLayer() {
+export function GrokToolboxLayer() {
 	return (
 		<>
 			<style>{`${stylesheet as unknown as string}\n${toolboxStyles}`}</style>

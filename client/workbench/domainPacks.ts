@@ -40,7 +40,6 @@ export interface WorkbenchDomainPack {
 		designSystem: boolean
 		stitch: boolean
 		mlIntern: boolean
-		terminalSession: boolean
 	}
 	templates: readonly WorkbenchTemplateSummary[]
 }
@@ -67,7 +66,6 @@ export const WORKBENCH_DOMAIN_PACKS: Readonly<
 			designSystem: false,
 			stitch: false,
 			mlIntern: false,
-			terminalSession: true,
 		},
 		templates: [
 			{
@@ -83,6 +81,27 @@ export const WORKBENCH_DOMAIN_PACKS: Readonly<
 				icon: 'geo-diamond',
 				description:
 					'Assumptions, evidence, options, and an inspectable decision.',
+			},
+			{
+				id: 'c4-container',
+				label: 'C4 Container',
+				icon: 'group',
+				description:
+					'Map deployable services, data stores, actors, and external dependencies.',
+			},
+			{
+				id: 'c4-component',
+				label: 'C4 Component',
+				icon: 'corners',
+				description:
+					'Decompose one container into responsibilities and explicit dependencies.',
+			},
+			{
+				id: 'service-data-flow',
+				label: 'Service / Data Flow',
+				icon: 'share-1',
+				description:
+					'Trace synchronous requests and asynchronous data movement.',
 			},
 			{
 				id: 'change-radar',
@@ -110,7 +129,6 @@ export const WORKBENCH_DOMAIN_PACKS: Readonly<
 			designSystem: false,
 			stitch: false,
 			mlIntern: true,
-			terminalSession: false,
 		},
 		templates: [
 			{
@@ -153,7 +171,6 @@ export const WORKBENCH_DOMAIN_PACKS: Readonly<
 			designSystem: true,
 			stitch: true,
 			mlIntern: false,
-			terminalSession: false,
 		},
 		templates: [
 			{
@@ -196,7 +213,6 @@ export const WORKBENCH_DOMAIN_PACKS: Readonly<
 			designSystem: false,
 			stitch: false,
 			mlIntern: false,
-			terminalSession: false,
 		},
 		templates: [
 			{
@@ -219,6 +235,27 @@ export const WORKBENCH_DOMAIN_PACKS: Readonly<
 				icon: 'geo-diamond',
 				description:
 					'Opportunity, intended outcome, options, evidence, and a decision gate.',
+			},
+			{
+				id: 'opportunity-solution-tree',
+				label: 'Opportunity Solution Tree',
+				icon: 'spline-cubic',
+				description:
+					'Connect a measurable outcome to opportunities, solutions, and experiments.',
+			},
+			{
+				id: 'impact-map',
+				label: 'Impact Map',
+				icon: 'target',
+				description:
+					'Align goals, actors, behavior changes, and bounded deliverables.',
+			},
+			{
+				id: 'service-blueprint',
+				label: 'Journey / Service Blueprint',
+				icon: 'stack-horizontal',
+				description:
+					'Layer customer steps, visible touchpoints, backstage work, and support.',
 			},
 		],
 	},

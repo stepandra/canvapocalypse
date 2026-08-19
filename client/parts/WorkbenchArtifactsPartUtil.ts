@@ -2,6 +2,7 @@ import type { BoxModel, Editor, TLShape } from 'tldraw'
 import type {
 	WorkbenchArtifactSummary,
 	WorkbenchArtifactsPart,
+	WorkbenchConversationSummary,
 	WorkbenchRelationSummary,
 } from '../../shared/schema/PromptPartDefinitions'
 import type { AgentRequest } from '../../shared/types/AgentRequest'
@@ -17,26 +18,26 @@ export const WorkbenchArtifactsPartUtil = registerPromptPartUtil(
 	class WorkbenchArtifactsPartUtil extends PromptPartUtil<WorkbenchArtifactsPart> {
 		static override type = 'workbenchArtifacts' as const
 
-		override getPart(
-			request: AgentRequest,
-			helpers: AgentHelpers
-		): WorkbenchArtifactsPart {
+		override getPart(request: AgentRequest, helpers: AgentHelpers): WorkbenchArtifactsPart {
 			const boundary = request.routing?.includeBounds ? 'bounds' : 'selection'
 
 			// This part is part of the routed companion contract. Keeping it empty
 			// for legacy requests preserves the pre-routing working-mode prompt.
 			if (!request.routing?.enabled) {
-				return { type: 'workbenchArtifacts', boundary, records: [], truncated: false }
+				return {
+					type: 'workbenchArtifacts',
+					boundary,
+					records: [],
+					truncated: false,
+				}
 			}
 
 			const sourceShapes =
 				boundary === 'bounds'
-					? this.editor
-							.getCurrentPageShapesSorted()
-							.filter((shape) => {
-								const bounds = getPageBounds(this.editor, shape)
-								return bounds ? boxesIntersect(bounds, request.bounds) : false
-							})
+					? this.editor.getCurrentPageShapesSorted().filter((shape) => {
+							const bounds = getPageBounds(this.editor, shape)
+							return bounds ? boxesIntersect(bounds, request.bounds) : false
+						})
 					: this.editor.getSelectedShapes()
 
 			const semanticShapes = sourceShapes
@@ -48,17 +49,15 @@ export const WorkbenchArtifactsPartUtil = registerPromptPartUtil(
 				})
 				.sort((a, b) => (a.shape.id < b.shape.id ? -1 : a.shape.id > b.shape.id ? 1 : 0))
 
-			const records = semanticShapes
-				.slice(0, MAX_WORKBENCH_ARTIFACT_RECORDS)
-				.map(({ shape, semantic, pageBounds }) => {
-					const offsetBounds = helpers.applyOffsetToBox(toBoxModel(pageBounds))
-					return {
-						shapeId: shape.id,
-						shapeType: shape.type,
-						bounds: roundBox(offsetBounds),
-						...semantic,
-					}
-				})
+			const records = semanticShapes.slice(0, MAX_WORKBENCH_ARTIFACT_RECORDS).map(({ shape, semantic, pageBounds }) => {
+				const offsetBounds = helpers.applyOffsetToBox(toBoxModel(pageBounds))
+				return {
+					shapeId: shape.id,
+					shapeType: shape.type,
+					bounds: roundBox(offsetBounds),
+					...semantic,
+				}
+			})
 
 			return {
 				type: 'workbenchArtifacts',
@@ -74,9 +73,11 @@ export const WorkbenchArtifactsPartUtil = registerPromptPartUtil(
  * Read only the stable semantic allowlist. No arbitrary shape metadata, linked
  * document bodies, provider payloads, or credential fields cross this seam.
  */
-export function summarizeWorkbenchMeta(
-	value: unknown
-): { artifact?: WorkbenchArtifactSummary; relation?: WorkbenchRelationSummary } | null {
+export function summarizeWorkbenchMeta(value: unknown): {
+	artifact?: WorkbenchArtifactSummary
+	relation?: WorkbenchRelationSummary
+	conversation?: WorkbenchConversationSummary
+} | null {
 	const meta = asRecord(value)
 	if (!meta) return null
 
@@ -96,6 +97,7 @@ export function summarizeWorkbenchMeta(
 
 	let artifact: WorkbenchArtifactSummary | undefined
 	let relation: WorkbenchRelationSummary | undefined
+	const conversation = compactConversation(workbench?.conversation)
 
 	for (const candidate of artifactCandidates) {
 		if (!candidate) continue
@@ -112,7 +114,26 @@ export function summarizeWorkbenchMeta(
 		if (relation) break
 	}
 
-	return artifact || relation ? { ...(artifact ? { artifact } : {}), ...(relation ? { relation } : {}) } : null
+	return artifact || relation || conversation
+		? {
+				...(artifact ? { artifact } : {}),
+				...(relation ? { relation } : {}),
+				...(conversation ? { conversation } : {}),
+			}
+		: null
+}
+
+function compactConversation(value: unknown): WorkbenchConversationSummary | undefined {
+	const source = asRecord(value)
+	if (!source) return undefined
+	const conversation: WorkbenchConversationSummary = {}
+	assignString(conversation, 'branchId', source.branchId, 180)
+	assignString(conversation, 'branchName', source.branchName, 80)
+	assignString(conversation, 'parentBranchId', source.parentBranchId, 180)
+	assignString(conversation, 'parentTurnId', source.parentTurnId, 180)
+	assignString(conversation, 'comparedBranchId', source.comparedBranchId, 180)
+	assignString(conversation, 'comparedBranchName', source.comparedBranchName, 80)
+	return Object.keys(conversation).length > 0 ? conversation : undefined
 }
 
 function compactArtifact(value: UnknownRecord): WorkbenchArtifactSummary | undefined {
@@ -187,9 +208,7 @@ function compactOwner(value: unknown): WorkbenchArtifactSummary['owner'] | undef
 	return Object.keys(owner).length > 0 ? owner : undefined
 }
 
-function compactRelationBinding(
-	value: unknown
-): WorkbenchRelationSummary['start'] | undefined {
+function compactRelationBinding(value: unknown): WorkbenchRelationSummary['start'] | undefined {
 	const source = asRecord(value)
 	if (!source) return undefined
 	const binding: NonNullable<WorkbenchRelationSummary['start']> = {}
@@ -214,12 +233,7 @@ function isRelationLike(value: UnknownRecord | null): value is UnknownRecord {
 	)
 }
 
-function assignString<T extends object, K extends keyof T>(
-	target: T,
-	key: K,
-	value: unknown,
-	maxLength: number
-) {
+function assignString<T extends object, K extends keyof T>(target: T, key: K, value: unknown, maxLength: number) {
 	const compact = compactString(value, maxLength)
 	if (compact) target[key] = compact as T[K]
 }
@@ -232,9 +246,7 @@ function compactString(value: unknown, maxLength: number): string | undefined {
 }
 
 function asRecord(value: unknown): UnknownRecord | null {
-	return value && typeof value === 'object' && !Array.isArray(value)
-		? (value as UnknownRecord)
-		: null
+	return value && typeof value === 'object' && !Array.isArray(value) ? (value as UnknownRecord) : null
 }
 
 function getPageBounds(editor: Editor, shape: TLShape): BoxModel | null {

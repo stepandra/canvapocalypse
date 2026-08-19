@@ -1,6 +1,7 @@
 import { FormEventHandler, useCallback, useRef } from 'react'
 import { ML_INTERN_EVAL_LAB_MODEL_NAME } from '../../shared/models'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
+import { ChatBranchNavigator } from './ChatBranchNavigator'
 import { ChatHistory } from './chat-history/ChatHistory'
 import { ChatInput } from './ChatInput'
 import { TodoList } from './TodoList'
@@ -50,16 +51,10 @@ export function ChatPanel() {
 		[agent]
 	)
 
-	const handleNewChat = useCallback(() => {
-		agent.reset()
-	}, [agent])
-
 	return (
 		<div className="chat-panel tl-theme__dark">
 			<div className="chat-header">
-				<button className="new-chat-button" onClick={handleNewChat}>
-					+
-				</button>
+				<ChatBranchNavigator agent={agent} />
 			</div>
 			<ChatHistory agent={agent} />
 			<div className="chat-input-container">

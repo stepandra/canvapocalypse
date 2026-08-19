@@ -415,6 +415,27 @@ describe('context-efficient companion routing', () => {
 		expect(plan.partTypes).not.toContain('isoflowContext')
 	})
 
+	it('includes selected Markdown semantic context without broad bounds', () => {
+		const plan = buildCompanionRoutePlan(
+			request('Summarize the selected architecture note', {
+				enabled: true,
+				route: 'auto',
+				domainPack: 'architecture',
+			}),
+			{
+				selectedShapeCount: 1,
+				selectedIsoflowEmbedCount: 0,
+				selectedMarkdownDocumentCount: 1,
+			},
+			workingMode
+		)
+
+		expect(plan.route).toBe('inquiry')
+		expect(plan.partTypes).toContain('markdownDocuments')
+		expect(plan.partTypes).not.toContain('screenshot')
+		expect(plan.partTypes).not.toContain('blurryShapes')
+	})
+
 	it.each(['architecture', 'ml', 'uiux', 'product'] as const)(
 		'carries the canonical %s domain pack while keeping generic work on native tldraw',
 		(domainPack) => {

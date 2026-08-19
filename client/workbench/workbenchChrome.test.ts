@@ -10,6 +10,22 @@ const emojiSource = readFileSync(
 	new URL('./WorkbenchEmojiPalette.tsx', import.meta.url),
 	'utf8'
 )
+const toolbarSource = readFileSync(
+	new URL('./WorkbenchToolbar.tsx', import.meta.url),
+	'utf8'
+)
+const creativeIdeationSource = readFileSync(
+	new URL('./ProductCreativeIdeationButton.tsx', import.meta.url),
+	'utf8'
+)
+const stylePanelSource = readFileSync(
+	new URL('./WorkbenchStylePanel.tsx', import.meta.url),
+	'utf8'
+)
+const layoutSource = readFileSync(
+	new URL('../layout/components.tsx', import.meta.url),
+	'utf8'
+)
 const css = readFileSync(new URL('./workbench.css', import.meta.url), 'utf8')
 const workflowCss = readFileSync(
 	new URL('../../scripts/tldraw-desktop-eval-lab.css', import.meta.url),
@@ -39,9 +55,7 @@ describe('native tldraw workbench chrome', () => {
 		}
 
 		for (const primitive of [
-			'TldrawUiToolbar',
 			'TldrawUiToolbarButton',
-			'TldrawUiButtonIcon',
 			'TldrawUiDropdownMenuRoot',
 			'TldrawUiDropdownMenuContent',
 			'TldrawUiDropdownMenuItem',
@@ -50,31 +64,49 @@ describe('native tldraw workbench chrome', () => {
 			expect(emojiSource).toContain(primitive)
 		}
 
-		expect(emojiSource).toContain('icon="geo-star"')
+		expect(emojiSource).toContain('activateEmojiStamp')
+		expect(toolbarSource).toContain('DefaultToolbar')
+		expect(toolbarSource).toContain('<WorkbenchEmojiPalette />')
+		expect(toolbarSource).toContain('<MarkdownImportButton />')
+		expect(shellSource).not.toContain('<WorkbenchEmojiPalette />')
 		expect(emojiSource).not.toContain('<svg')
 	})
 
-	it('keeps domain, catalog, and bridge as a vertical rail beside ML-intern', () => {
+	it('keeps domain controls in a compact vertical rail without empty slots', () => {
 		expect(shellSource).toContain('workbench-aux-rail')
 		expect(shellSource).toContain('orientation="vertical"')
 		expect(shellSource).toContain(
 			'<CanvasStudioPalette composition={canvasKitComposition} />'
 		)
-		expect(shellSource).toContain('<BridgeCenter />')
+		expect(shellSource).toContain('<BridgeCenter')
+		expect(bridgeSource).toContain('useOptionalCompanionCanvasBridge')
+		expect(shellSource).toContain("effectiveDomain !== 'architecture'")
 		expect(css).toMatch(
-			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*144px;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s
+			/\.workbench-aux-rail\s*\{[^}]*top:\s*var\(--tl-space-10\);[^}]*left:\s*var\(--tl-space-4\);[^}]*width:\s*48px;[^}]*height:\s*240px;[^}]*flex-direction:\s*column;[^}]*transform:\s*none;/s
 		)
+		expect(css).toMatch(/\.workbench-aux-rail\[data-domain-control="true"\]\s*\{[^}]*height:\s*288px;/s)
 		expect(css).toMatch(
 			/\.workbench-rail-trigger\s*\{[^}]*width:\s*48px;[^}]*min-width:\s*48px;[^}]*height:\s*48px;/s
 		)
 	})
 
-	it('centers only the workflow launcher and opens a shorter two-row palette', () => {
+	it('extends the native style panel with selection-aware workflow and layout context', () => {
+		expect(stylePanelSource).toContain('DefaultStylePanelContent')
+		expect(stylePanelSource).toContain('WorkbenchSelectionContext')
+		expect(stylePanelSource).toContain('<WorkflowInspector')
+		expect(stylePanelSource).toContain('<CanvasLayoutSelectionControls />')
+		expect(layoutSource).toContain('content="Frame and layout tools"')
+		expect(layoutSource).toContain('icon="tool-frame"')
+		expect(layoutSource).toContain('icon="stack-horizontal"')
+	})
+
+	it('pins the workflow toolbar directly at top center', () => {
 		expect(workflowCss).toMatch(
-			/\.workflow-palette\s*\{[^}]*top:\s*var\(--tl-space-3\);[^}]*left:\s*50%;[^}]*transform:\s*translateX\(-50%\);/s
+			/\.workflow-palette\s*\{[^}]*top:\s*var\(--tl-space-3\);[^}]*left:\s*50%;[^}]*background:\s*var\(--tl-color-panel\);[^}]*box-shadow:\s*var\(--tl-shadow-2\);[^}]*transform:\s*translateX\(-50%\);/s
 		)
-		expect(workflowCss).toMatch(/\.workflow-toolbar\.tlui-toolbar\s*\{[^}]*display:\s*flex;[^}]*flex-flow:\s*row wrap;[^}]*width:\s*min\(584px,\s*calc\(100vw - 32px\)\);[^}]*max-height:\s*104px;/s)
-		expect(workflowCss).toMatch(/\.tl-container > div:has\(> \.tlui-popover__content > \.workflow-toolbar\)\s*\{[^}]*left:\s*50% !important;[^}]*transform:\s*translate\(-50%,\s*calc\(var\(--tl-space-3\) \+ 56px\)\) !important;/s)
+		expect(workflowCss).toMatch(/\.workflow-toolbar\.tlui-toolbar\s*\{[^}]*display:\s*flex;[^}]*flex-flow:\s*row wrap;[^}]*width:\s*fit-content;[^}]*max-width:\s*calc\(100vw - 32px\);[^}]*max-height:\s*104px;/s)
+		expect(workflowCss).not.toContain('workflow-palette-toggle')
+		expect(workflowCss).not.toContain('.tlui-popover__content > .workflow-toolbar')
 	})
 
 	it('keeps all domain tools in one bounded right-opening popover', () => {
@@ -84,7 +116,8 @@ describe('native tldraw workbench chrome', () => {
 			'<WorkbenchDomainIcon name={activePack.icon} />'
 		)
 		expect(shellSource).toContain('<WorkbenchDomainIcon name={pack.icon} small />')
-		expect(shellSource).toContain('icon={template.icon}')
+		expect(shellSource).toContain('<WorkbenchTemplatePreview templateId={template.id} />')
+		expect(shellSource).toContain('<ProductCreativeIdeationButton />')
 		expect(shellSource).not.toContain('pack.shortLabel')
 		expect(shellSource).not.toContain('workbench-domain-option-short')
 		expect(shellSource).toContain('<UiuxProviderDock />')
@@ -98,6 +131,16 @@ describe('native tldraw workbench chrome', () => {
 		expect(css).toMatch(
 			/\.uiux-provider-dock\s*\{[^}]*position:\s*static;[^}]*box-shadow:\s*none;/s
 		)
+	})
+
+	it('routes Product creative ideation through the existing bounded agent thread', () => {
+		expect(shellSource).toContain("effectiveDomain === 'product' && app")
+		expect(creativeIdeationSource).toContain('useAgent()')
+		expect(creativeIdeationSource).toContain('buildWorkbenchAgentInput({')
+		expect(creativeIdeationSource).toContain("domain: 'product'")
+		expect(creativeIdeationSource).toContain("'selection' : 'visible-area'")
+		expect(creativeIdeationSource).toContain('await agent.prompt(input)')
+		expect(creativeIdeationSource).not.toContain('insertWorkbenchTemplate')
 	})
 
 	it('inherits tldraw panel, text, focus, radius, spacing, and shadow tokens', () => {
@@ -119,18 +162,18 @@ describe('native tldraw workbench chrome', () => {
 		expect(css).not.toContain('backdrop-filter')
 	})
 
-	it('keeps the horizontal rail and emoji menu bounded at narrow widths', () => {
+	it('keeps the bottom-toolbar emoji menu bounded at narrow widths', () => {
 		const fontSizes = [...css.matchAll(/font-size:\s*(\d+)px/g)].map((match) =>
 			Number(match[1])
 		)
 		expect(fontSizes.length).toBeGreaterThan(0)
 		expect(Math.min(...fontSizes)).toBeGreaterThanOrEqual(11)
 		expect(css).toMatch(
-			/\.workbench-emoji-control\s*\{[^}]*width:\s*48px;[^}]*height:\s*48px;/s
+			/\.workbench-emoji-control\s*\{[^}]*order:\s*1;[^}]*width:\s*40px;[^}]*height:\s*40px;/s
 		)
 		expect(css).toMatch(
 			/\.workbench-emoji-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*40px\);/s
 		)
-		expect(css).toContain('width: min(96px, calc(100vw - 24px))')
+		expect(css).toMatch(/@media \(max-width: 760px\)[\s\S]*?\.workbench-aux-rail\s*\{[^}]*width:\s*48px;/)
 	})
 })

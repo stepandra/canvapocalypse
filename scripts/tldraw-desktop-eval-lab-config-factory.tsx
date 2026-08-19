@@ -1,9 +1,25 @@
 import React, { useEffect, useState } from 'react'
-import { DEFAULT_EMBED_DEFINITIONS, EmbedShapeUtil, useEditor } from 'tldraw'
+import {
+	DEFAULT_EMBED_DEFINITIONS,
+	defaultBindingUtils,
+	defaultShapeUtils,
+	EmbedShapeUtil,
+	type TLAnyBindingUtilConstructor,
+	type TLAnyShapeUtilConstructor,
+	type TLStateNodeConstructor,
+	useEditor,
+} from 'tldraw'
 import { TldrawAgentApp } from '../client/agent/TldrawAgentApp'
+import { publishCompanionCanvasCapabilityCatalog } from '../client/agent/companionCanvasBinding'
 import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'
+import { resolveAgentPageRegistrations } from '../client/canvas-studio/agentPageRegistrations'
+import { readEmbeddedCanvasStudioCatalog } from '../client/canvas-studio/catalog'
 import { composeCanvasKitContributions } from '../client/canvas-studio/compose'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../client/canvas-studio/host'
+import {
+	buildCanvasRuntimeCapabilityCatalog,
+	resolveCanvasRuntimePageMode,
+} from '../client/canvas-studio/runtimeCapabilityCatalog'
 import type { CanvasKitComposition } from '../client/canvas-studio/types'
 import { DesignSystemShapeUtil } from '../client/design-system/DesignSystemShape'
 import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'
@@ -16,9 +32,13 @@ import { TargetShapeTool } from '../client/tools/TargetShapeTool'
 import { WorkflowRichOutputShapeUtil } from '../client/workflow/RichOutputShape'
 import { WorkflowNodeShapeUtil } from '../client/workflow/WorkflowNodeShape'
 import { WORKFLOW_TOOLS } from '../client/workflow/WorkflowTools'
+import { EmojiStampTool } from '../client/workbench/EmojiStampTool'
 import { WorkbenchShell } from '../client/workbench/WorkbenchShell'
+import { WorkbenchToolbar } from '../client/workbench/WorkbenchToolbar'
+import { ensureWorkbenchModePages } from '../client/workbench/workbenchPages'
 import designSystemStylesheet from '../client/design-system/design-system.css'
 import experimentCardStylesheet from '../client/experiments/experimentCard.css'
+import markdownDocumentStylesheet from '../client/markdown/markdownDocument.css'
 import terminalSessionMonitorStylesheet from '../client/terminal/terminalSessionMonitor.css'
 import workbenchStylesheet from '../client/workbench/workbench.css'
 import workbenchAgentDockStylesheet from '../client/workbench/workbenchAgentDock.css'
@@ -35,6 +55,7 @@ const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
 const desktopStylesheet = [
 	designSystemStylesheet as unknown as string,
 	experimentCardStylesheet as unknown as string,
+	markdownDocumentStylesheet as unknown as string,
 	terminalSessionMonitorStylesheet as unknown as string,
 	workbenchStylesheet as unknown as string,
 	workbenchAgentDockStylesheet as unknown as string,
@@ -44,14 +65,61 @@ const desktopStylesheet = [
 function WorkbenchDesktopLayer({
 	composition,
 	unsupportedKitIds,
+	shapeUtils,
+	bindingUtils,
+	tools,
 }: {
 	composition: CanvasKitComposition
 	unsupportedKitIds: readonly string[]
+	shapeUtils: readonly TLAnyShapeUtilConstructor[]
+	bindingUtils: readonly TLAnyBindingUtilConstructor[]
+	tools: readonly TLStateNodeConstructor[]
 }) {
 	const editor = useEditor()
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
 
 	useEffect(() => composition.onMount(editor), [composition, editor])
+
+	useEffect(() => {
+		ensureWorkbenchModePages(editor)
+		const studioCatalog = readEmbeddedCanvasStudioCatalog()
+		let pageSignature = ''
+		let disposePublishedCatalog: (() => void) | undefined
+		const publishCurrentPageCatalog = () => {
+			const page = editor.getCurrentPage()
+			const nextSignature = JSON.stringify({ id: page.id, name: page.name, meta: page.meta })
+			if (nextSignature === pageSignature) return
+			pageSignature = nextSignature
+			const pageMode = resolveCanvasRuntimePageMode(page)
+			const registrations = resolveAgentPageRegistrations({
+				pageMode,
+				composition,
+				shapeUtils,
+				bindingUtils,
+				tools,
+			})
+			disposePublishedCatalog?.()
+			disposePublishedCatalog = publishCompanionCanvasCapabilityCatalog(
+				buildCanvasRuntimeCapabilityCatalog({
+					composition,
+					studioCatalog,
+					page,
+					shapeUtils: registrations.shapeUtils,
+					bindingUtils: registrations.bindingUtils,
+					tools: registrations.tools,
+				})
+			)
+		}
+		publishCurrentPageCatalog()
+		const stopPublishingCatalog = editor.store.listen(publishCurrentPageCatalog, {
+			scope: 'all',
+			source: 'all',
+		})
+		return () => {
+			stopPublishingCatalog()
+			disposePublishedCatalog?.()
+		}
+	}, [bindingUtils, composition, editor, shapeUtils, tools])
 
 	useEffect(() => {
 		const instance = new TldrawAgentApp(editor, { onError: console.error })
@@ -106,6 +174,49 @@ export function createTldrawDesktopEvalLabConfig(
 		: composition
 
 	return function applyTldrawDesktopEvalLabConfig({ config }: { config: any }) {
+		const suppliesCanonicalAgentsModelsShape = desktopComposition.shapeUtils.some(
+			(shapeUtil) => shapeUtil.type === AgentsModelsShapeUtil.type
+		)
+		const desktopShapeUtils = mergeUniqueRegistrations(
+			config.shapeUtils,
+			[
+				...desktopComposition.shapeUtils,
+				...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil]),
+				ExperimentCardShapeUtil,
+				WorkflowNodeShapeUtil,
+				WorkflowRichOutputShapeUtil,
+				DesignSystemShapeUtil,
+				LocalHtmlMockupShapeUtil,
+				IsoflowEmbedShapeUtil,
+			],
+			'type'
+		)
+		const desktopBindingUtils = mergeUniqueRegistrations(
+			config.bindingUtils,
+			desktopComposition.bindingUtils,
+			'type'
+		)
+		const desktopTools = mergeUniqueRegistrations(
+			config.tools,
+			[
+				...desktopComposition.tools,
+				TargetShapeTool,
+				TargetAreaTool,
+				EmojiStampTool,
+				...WORKFLOW_TOOLS,
+			],
+			'id'
+		)
+		const desktopCatalogShapeUtils = mergeUniqueRegistrations(
+			defaultShapeUtils,
+			desktopShapeUtils,
+			'type'
+		)
+		const desktopCatalogBindingUtils = mergeUniqueRegistrations(
+			defaultBindingUtils,
+			desktopBindingUtils,
+			'type'
+		)
 		const PreviousInFrontOfTheCanvas = unwrapWorkbenchDesktopLayer(
 			config.components.InFrontOfTheCanvas
 		)
@@ -117,6 +228,9 @@ export function createTldrawDesktopEvalLabConfig(
 					<WorkbenchDesktopLayer
 						composition={desktopComposition}
 						unsupportedKitIds={unsupportedKitIds}
+						shapeUtils={desktopCatalogShapeUtils}
+						bindingUtils={desktopCatalogBindingUtils}
+						tools={desktopTools}
 					/>
 				</>
 			)
@@ -128,35 +242,9 @@ export function createTldrawDesktopEvalLabConfig(
 
 		return {
 			...config,
-			shapeUtils: mergeUniqueRegistrations(
-				config.shapeUtils,
-				[
-					...desktopComposition.shapeUtils,
-					AgentsModelsShapeUtil,
-					ExperimentCardShapeUtil,
-					WorkflowNodeShapeUtil,
-					WorkflowRichOutputShapeUtil,
-					DesignSystemShapeUtil,
-					LocalHtmlMockupShapeUtil,
-					IsoflowEmbedShapeUtil,
-				],
-				'type'
-			),
-			bindingUtils: mergeUniqueRegistrations(
-				config.bindingUtils,
-				desktopComposition.bindingUtils,
-				'type'
-			),
-			tools: mergeUniqueRegistrations(
-				config.tools,
-				[
-					...desktopComposition.tools,
-					TargetShapeTool,
-					TargetAreaTool,
-					...WORKFLOW_TOOLS,
-				],
-				'id'
-			),
+			shapeUtils: desktopShapeUtils,
+			bindingUtils: desktopBindingUtils,
+			tools: desktopTools,
 			overlayUtils: mergeUniqueRegistrations(
 				config.overlayUtils,
 				[AgentHighlightOverlayUtil],
@@ -165,6 +253,7 @@ export function createTldrawDesktopEvalLabConfig(
 			components: {
 				...config.components,
 				InFrontOfTheCanvas,
+				Toolbar: WorkbenchToolbar,
 			},
 		}
 	}

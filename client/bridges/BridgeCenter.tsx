@@ -130,13 +130,13 @@ export function BridgeCenter() {
 		>
 			<TldrawUiPopoverTrigger>
 				<TldrawUiToolbarButton
-					type="icon"
+					type="tool"
 					className="workbench-rail-trigger workbench-bridge-trigger"
 					title={`Bridge Center · ${aggregateLabel(aggregate)}`}
 					aria-label={`Bridge Center · ${aggregateLabel(aggregate)}`}
 					aria-expanded={open}
 				>
-					<TldrawUiButtonIcon icon="link" />
+					<TldrawUiIcon icon="link" />
 					<span
 						className="workbench-bridge-dot"
 						data-state={aggregate}
@@ -164,8 +164,8 @@ export function BridgeCenter() {
 							<span data-state={aggregate}>{aggregateLabel(aggregate)}</span>
 						</div>
 						<p>
-							Managed bridges expose bounded lifecycle controls. External
-							dependencies stay observation-only.
+							Runtime services and the active architecture thread connection
+							share one bounded control plane.
 						</p>
 					</header>
 

@@ -1,0 +1,117 @@
+.tlui-style-panel:has(.workbench-selection-context) {
+	width: min(320px, calc(100vw - 24px));
+	max-width: min(320px, calc(100vw - 24px));
+}
+
+.workbench-selection-context {
+	display: grid;
+	box-sizing: border-box;
+	width: 100%;
+	gap: var(--tl-space-4);
+	padding: var(--tl-space-4);
+	border-top: 1px solid var(--tl-color-divider);
+	color: var(--tl-color-text-1);
+	font-family: var(--tl-font-sans);
+}
+
+.workbench-selection-context__header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--tl-space-1) var(--tl-space-3);
+}
+
+.workbench-selection-context__header > span {
+	grid-column: 1 / -1;
+	color: var(--tl-color-text-3);
+	font: 700 10px/1.2 var(--tl-font-mono);
+	letter-spacing: 0.08em;
+}
+
+.workbench-selection-context__header > strong {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 13px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	text-transform: capitalize;
+	white-space: nowrap;
+}
+
+.workbench-selection-context__header > small {
+	color: var(--tl-color-text-3);
+	font: 500 10px/1.2 var(--tl-font-mono);
+	text-transform: uppercase;
+}
+
+.workbench-selection-artifact {
+	display: grid;
+	gap: var(--tl-space-2);
+	padding: var(--tl-space-3);
+	border-radius: var(--tl-radius-1);
+	background: var(--tl-color-low);
+	box-shadow: inset 0 0 0 1px var(--tl-color-low-border);
+}
+
+.workbench-selection-artifact > span {
+	color: var(--tl-color-text-3);
+	font: 600 10px/1.35 var(--tl-font-mono);
+	text-transform: capitalize;
+}
+
+.workbench-selection-artifact > strong {
+	overflow: hidden;
+	color: var(--tl-color-text-1);
+	font: 600 11px/1.35 var(--tl-font-sans);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workbench-selection-context .workflow-inspector {
+	position: static;
+	width: 100%;
+	max-height: none;
+	padding: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.workbench-selection-context .workflow-inspector > header {
+	display: none;
+}
+
+.workbench-selection-context .canvas-layout-context-toolbar.tlui-toolbar {
+	position: static;
+	display: flex;
+	width: 100%;
+	max-width: none;
+	height: auto;
+	min-height: 0;
+	flex-wrap: wrap;
+	justify-content: flex-start;
+	gap: var(--tl-space-1);
+	padding: 0;
+	overflow: visible;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	transform: none;
+}
+
+.workbench-selection-context .canvas-layout-context-toolbar select {
+	width: 100%;
+	max-width: none;
+}
+
+.workbench-selection-context .canvas-layout-number-control {
+	flex: 1 1 120px;
+	justify-content: space-between;
+}
+
+@media (max-width: 760px) {
+	.tlui-style-panel:has(.workbench-selection-context) {
+		width: min(280px, calc(100vw - 16px));
+		max-width: min(280px, calc(100vw - 16px));
+	}
+}

@@ -72,6 +72,83 @@ test("loopback server exposes browser preflight without weakening route auth", a
   }
 });
 
+test("catalog merges source-built Grok inspection with local definitions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "grok-config-inspect-"));
+  const agentsDir = join(root, ".grok", "agents");
+  const projectSkillsDir = join(root, ".agents", "skills");
+  await mkdir(agentsDir, { recursive: true });
+  await mkdir(join(projectSkillsDir, "canvas-skill"), { recursive: true });
+  await writeFile(
+    join(agentsDir, "explore.md"),
+    "---\nname: explore\ndescription: Local override.\n---\n",
+    "utf8",
+  );
+  await writeFile(
+    join(projectSkillsDir, "canvas-skill", "SKILL.md"),
+    "---\nname: canvas-skill\ndescription: Local skill.\n---\n",
+    "utf8",
+  );
+
+  let inspections = 0;
+  const inspectGrok = async () => {
+    inspections += 1;
+    return {
+      agents: [
+        {
+          name: "general-purpose",
+          description: "Built-in agent.",
+          source: { type: "builtin" },
+        },
+        {
+          name: "explore",
+          description: "Built-in value that local config replaces.",
+          source: { type: "builtin" },
+        },
+      ],
+      skills: [
+        {
+          name: "canvas-skill",
+          description: "Inspected value that local source replaces.",
+          source: { type: "project" },
+        },
+        {
+          name: "installed-skill",
+          description: "Installed through Grok.",
+          source: { type: "personal" },
+        },
+      ],
+    };
+  };
+  const catalog = await buildGrokCatalog({
+    projectCwd: root,
+    grokHome: join(root, ".grok"),
+    agentsDir,
+    projectSkillsDir,
+    inspectGrok,
+    fetchLiveModels: async () => ({ ok: false, error: "offline", models: [] }),
+    now: () => 0,
+  });
+
+  assert.equal(inspections, 1);
+  assert.deepEqual(
+    catalog.agents.map((agent) => agent.id),
+    ["explore", "general-purpose"],
+  );
+  assert.equal(
+    catalog.agents.find((agent) => agent.id === "explore").description,
+    "Local override.",
+  );
+  assert.deepEqual(
+    catalog.skills.map((skill) => skill.id),
+    ["canvas-skill", "installed-skill"],
+  );
+  assert.equal(
+    catalog.skills.find((skill) => skill.id === "canvas-skill").sourceRef,
+    ".agents/skills/canvas-skill/SKILL.md",
+  );
+  assert.doesNotMatch(JSON.stringify(catalog), new RegExp(root));
+});
+
 test("parses model slots from config.toml and rewrites only model lines", () => {
   const source = `# keep me
 [ui]

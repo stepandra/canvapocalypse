@@ -4,9 +4,6 @@ import {
 	Editor,
 	TldrawUiButton,
 	TldrawUiInput,
-	TldrawUiPopover,
-	TldrawUiPopoverContent,
-	TldrawUiPopoverTrigger,
 	TldrawUiSelect,
 	TldrawUiSelectContent,
 	TldrawUiSelectItem,
@@ -14,7 +11,6 @@ import {
 	TldrawUiSelectValue,
 	TldrawUiToolbar,
 	TldrawUiToolbarButton,
-	TldrawUiTooltip,
 	toRichText,
 	useEditor,
 	useValue,
@@ -134,7 +130,6 @@ export function WorkflowOverlay({
 	)
 	const [message, setMessage] = useState('READY')
 	const [running, setRunning] = useState(false)
-	const [paletteOpen, setPaletteOpen] = useState(false)
 
 	useEffect(() => {
 		if (profile.mode !== 'workflow') return
@@ -180,31 +175,26 @@ export function WorkflowOverlay({
 				? 'CURRENT FLOW CREATED (READ ONLY)'
 				: 'CURRENT FLOW SELECTED'
 		)
-		setPaletteOpen(false)
 	}, [editor])
 
 	const createCandidate = useCallback(() => {
 		const result = installEditableLlmFlow(editor)
 		setMessage(`NEW FLOW: ${result.workflowId}`)
-		setPaletteOpen(false)
 	}, [editor])
 
 	const createPromptExperiment = useCallback(() => {
 		const result = installPromptExperimentWorkflow(editor)
 		setMessage(`PROMPT EXPERIMENT: ${result.workflowId}`)
-		setPaletteOpen(false)
 	}, [editor])
 
 	const createLeadExperiments = useCallback(() => {
 		const result = installLeadAcquisitionExperimentCards(editor)
 		setMessage(`LEAD EXPERIMENTS: ${result.count} CARDS`)
-		setPaletteOpen(false)
 	}, [editor])
 
 	const createMlflow = useCallback(() => {
 		const result = installMlflowWorkflow(editor)
 		setMessage(`MLFLOW FLOW: ${result.workflowId}`)
-		setPaletteOpen(false)
 	}, [editor])
 
 	const play = useCallback(async () => {
@@ -236,17 +226,14 @@ export function WorkflowOverlay({
 			switch (tool.action) {
 				case 'select-workflow-tool':
 					editor.setCurrentTool(tool.toolId)
-					setPaletteOpen(false)
 					return
 				case 'select-native-tool':
 					editor.setCurrentTool(tool.toolId)
 					setMessage('DRAW DEPENDENCY')
-					setPaletteOpen(false)
 					return
 				case 'insert-product-artifact':
 					insertProductArtifact(editor, tool)
 					setMessage(`${tool.label.toUpperCase()} CREATED`)
-					setPaletteOpen(false)
 					return
 			}
 		},
@@ -263,138 +250,96 @@ export function WorkflowOverlay({
 					: 'idle'
 
 	return (
-		<>
-			<div
-				className={`workflow-palette${paletteOpen ? ' is-open' : ''}`}
-				onPointerDown={(event) => event.stopPropagation()}
-				onClick={(event) => event.stopPropagation()}
+		<div
+			className="workflow-palette"
+			onPointerDown={(event) => event.stopPropagation()}
+			onClick={(event) => event.stopPropagation()}
+		>
+			<TldrawUiToolbar
+				className="workflow-toolbar"
+				label={profile.label}
+				orientation="horizontal"
+				tooltipSide="bottom"
 			>
-				<TldrawUiPopover
-					id={`workflow-palette-${profile.id}`}
-					open={paletteOpen}
-					onOpenChange={setPaletteOpen}
-				>
-					<TldrawUiTooltip
-						content={profile.label}
-						side="bottom"
-						sideOffset={8}
-						delayDuration={350}
-					>
-						<TldrawUiPopoverTrigger>
-							<TldrawUiButton
-								type="tool"
-								className="workflow-palette-toggle"
-								isActive={paletteOpen}
-								aria-label={profile.label}
-								aria-expanded={paletteOpen}
-								title={message}
-							>
-								<WorkflowIcon name={profile.mode === 'workflow' ? 'new' : 'map'} />
-								<span
-									className={`workflow-status-dot is-${statusTone}`}
-									aria-hidden="true"
-								/>
-							</TldrawUiButton>
-						</TldrawUiPopoverTrigger>
-					</TldrawUiTooltip>
-					<TldrawUiPopoverContent
-						side="bottom"
-						align="center"
-						sideOffset={8}
-						collisionPadding={8}
-					>
-						<TldrawUiToolbar
-							className="workflow-toolbar"
-							label={profile.label}
-							orientation="horizontal"
-							tooltipSide="bottom"
+				{profile.mode === 'workflow' && (
+					<>
+						<WorkflowToolButton
+							icon="map"
+							label="Текущий flow — только чтение"
+							onClick={createCurrent}
+						/>
+						<WorkflowToolButton
+							icon="new"
+							label="Новый TEXT → PROMPT → LLM → OUTPUT"
+							onClick={createCandidate}
+						/>
+						<WorkflowToolButton
+							icon="experiment"
+							label="Prompt Experiment Lab"
+							onClick={createPromptExperiment}
+						/>
+						<WorkflowToolButton
+							icon="experiment"
+							label="Lead Acquisition Experiment Cards"
+							onClick={createLeadExperiments}
+						/>
+						<WorkflowToolButton
+							icon="mlflow-experiment"
+							label="Новый MLflow evaluation flow"
+							onClick={createMlflow}
+						/>
+						<div className="workflow-toolbar-divider" />
+					</>
+				)}
+				{profile.tools.map((tool) => (
+					<WorkflowToolButton
+						key={tool.id}
+						icon={tool.icon}
+						label={tool.label}
+						active={
+							(tool.action === 'select-workflow-tool' ||
+								tool.action === 'select-native-tool') &&
+							currentToolId === tool.toolId
+						}
+						onClick={() => activatePaletteTool(tool)}
+					/>
+				))}
+				{profile.mode === 'workflow' && (
+					<>
+						<WorkflowToolButton
+							icon="link"
+							label="Соединить ноды"
+							active={currentToolId === 'arrow'}
+							onClick={() => {
+								editor.setCurrentTool('arrow')
+							}}
+						/>
+						<div className="workflow-toolbar-divider" />
+						<WorkflowToolButton
+							icon="play"
+							label="Запустить workflow"
+							active={running}
+							onClick={play}
+							disabled={running}
+						/>
+						<WorkflowToolButton
+							icon="stop"
+							label="Остановить"
+							onClick={stop}
+							disabled={!running}
+						/>
+						<div
+							className={`workflow-toolbar-status is-${statusTone}`}
+							role="status"
+							title={message}
 						>
-							{profile.mode === 'workflow' && (
-								<>
-									<WorkflowToolButton
-										icon="map"
-										label="Текущий flow — только чтение"
-										onClick={createCurrent}
-									/>
-									<WorkflowToolButton
-										icon="new"
-										label="Новый TEXT → PROMPT → LLM → OUTPUT"
-										onClick={createCandidate}
-									/>
-									<WorkflowToolButton
-										icon="experiment"
-										label="Prompt Experiment Lab"
-										onClick={createPromptExperiment}
-									/>
-									<WorkflowToolButton
-										icon="experiment"
-										label="Lead Acquisition Experiment Cards"
-										onClick={createLeadExperiments}
-									/>
-									<WorkflowToolButton
-										icon="mlflow-experiment"
-										label="Новый MLflow evaluation flow"
-										onClick={createMlflow}
-									/>
-									<div className="workflow-toolbar-divider" />
-								</>
-							)}
-							{profile.tools.map((tool) => (
-								<WorkflowToolButton
-									key={tool.id}
-									icon={tool.icon}
-									label={tool.label}
-									active={
-										(tool.action === 'select-workflow-tool' ||
-											tool.action === 'select-native-tool') &&
-										currentToolId === tool.toolId
-									}
-									onClick={() => activatePaletteTool(tool)}
-								/>
-							))}
-							{profile.mode === 'workflow' && (
-								<>
-									<WorkflowToolButton
-										icon="link"
-										label="Соединить ноды"
-										active={currentToolId === 'arrow'}
-										onClick={() => {
-											editor.setCurrentTool('arrow')
-											setPaletteOpen(false)
-										}}
-									/>
-									<div className="workflow-toolbar-divider" />
-									<WorkflowToolButton
-										icon="play"
-										label="Запустить workflow"
-										active={running}
-										onClick={play}
-										disabled={running}
-									/>
-									<WorkflowToolButton
-										icon="stop"
-										label="Остановить"
-										onClick={stop}
-										disabled={!running}
-									/>
-									<div
-										className={`workflow-toolbar-status is-${statusTone}`}
-										role="status"
-										title={message}
-									>
-										<span className="workflow-status-dot" />
-										<span className="workflow-sr-only">{message}</span>
-									</div>
-								</>
-							)}
-						</TldrawUiToolbar>
-					</TldrawUiPopoverContent>
-				</TldrawUiPopover>
-			</div>
-			{profile.mode === 'workflow' && selectedNode && (
-				<WorkflowInspector key={selectedNode.id} shape={selectedNode} />
-			)}
-		</>
+							<span className="workflow-status-dot" />
+							<span className="workflow-sr-only">{message}</span>
+						</div>
+					</>
+				)}
+			</TldrawUiToolbar>
+		</div>
 	)
 }
 
@@ -473,7 +418,7 @@ function WorkflowSelect({
 	)
 }
 
-function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
+export function WorkflowInspector({ shape }: { shape: WorkflowNodeShape }) {
 	const editor = useEditor()
 	const meta = getWorkflowNodeMeta(shape)
 	const [apiKey, setApiKey] = useState(getOpenRouterApiKey)

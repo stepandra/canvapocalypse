@@ -10,6 +10,7 @@ import { ContextItem } from '../../shared/types/ContextItem'
 import { PromptPart } from '../../shared/types/PromptPart'
 import { Streaming } from '../../shared/types/Streaming'
 import { TodoItem } from '../../shared/types/TodoItem'
+import type { AgentChatState } from '../../shared/types/AgentChat'
 import { AgentHelpers } from '../AgentHelpers'
 import { getModeNode } from '../modes/AgentModeChart'
 import { AgentModeType } from '../modes/AgentModeDefinitions'
@@ -38,6 +39,9 @@ import {
  * Used for saving and loading agent state.
  */
 export interface PersistedAgentState {
+	/** Current branch-aware chat state. */
+	chatState?: AgentChatState
+	/** Legacy append-only history, migrated to the Main branch on load. */
 	chatHistory?: ChatHistoryItem[]
 	chatOrigin?: { x: number; y: number }
 	todoList?: TodoItem[]
@@ -168,7 +172,7 @@ export class TldrawAgent {
 	 */
 	serializeState(): PersistedAgentState {
 		return {
-			chatHistory: this.chat.getHistory(),
+			chatState: this.chat.getState(),
 			chatOrigin: this.chatOrigin.getOrigin(),
 			todoList: this.todos.getTodos(),
 			contextItems: this.context.getItems(),
@@ -184,7 +188,9 @@ export class TldrawAgent {
 	 * @param state - The persisted state to load.
 	 */
 	loadState(state: PersistedAgentState) {
-		if (state.chatHistory) {
+		if (state.chatState) {
+			this.chat.setState(state.chatState)
+		} else if (state.chatHistory) {
 			this.chat.setHistory(state.chatHistory)
 		}
 		if (state.chatOrigin) {

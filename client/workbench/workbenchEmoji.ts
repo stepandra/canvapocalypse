@@ -5,6 +5,7 @@ import {
 	TLAssetId,
 	TLImageAsset,
 	TLShapeId,
+	VecLike,
 	toRichText,
 } from 'tldraw'
 import angryPoopMangaUrl from './assets/angry-poop-manga.png'
@@ -53,7 +54,7 @@ export interface WorkbenchEmojiReceipt {
 export function insertWorkbenchEmoji(
 	editor: Editor,
 	emojiId: WorkbenchEmojiId,
-	options: { instanceId?: string } = {}
+	options: { instanceId?: string; point?: VecLike } = {}
 ): WorkbenchEmojiReceipt {
 	const definition = WORKBENCH_EMOJIS.find((candidate) => candidate.id === emojiId)
 	if (!definition) throw new Error(`Unknown workbench emoji: ${emojiId}`)
@@ -62,7 +63,7 @@ export function insertWorkbenchEmoji(
 		options.instanceId ??
 		`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 	const shapeId = createShapeId(`workbench-emoji-${emojiId}-${instanceId}`)
-	const center = editor.getViewportPageBounds().center
+	const point = options.point ?? editor.getViewportPageBounds().center
 	let assetId: TLAssetId | undefined
 	let asset: TLImageAsset | undefined
 
@@ -99,8 +100,8 @@ export function insertWorkbenchEmoji(
 			editor.createShape({
 				id: shapeId,
 				type: 'image',
-				x: center.x - 48,
-				y: center.y - 48,
+				x: point.x - 48,
+				y: point.y - 48,
 				props: {
 					assetId,
 					w: 96,
@@ -112,8 +113,8 @@ export function insertWorkbenchEmoji(
 			editor.createShape({
 				id: shapeId,
 				type: 'text',
-				x: center.x - 48,
-				y: center.y - 36,
+				x: point.x - 48,
+				y: point.y - 36,
 				props: {
 					richText: toRichText(definition.glyph ?? ''),
 					size: 'xl',

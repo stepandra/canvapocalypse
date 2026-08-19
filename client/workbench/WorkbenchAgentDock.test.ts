@@ -19,12 +19,14 @@ describe('Workbench Agent dock ownership', () => {
 
 	it('maps request and bridge state onto a compact native status badge', () => {
 		expect(getWorkbenchAgentDockIndicator('idle')).toBe('idle')
+		expect(getWorkbenchAgentDockIndicator('running')).toBe('running')
 		expect(getWorkbenchAgentDockIndicator('applying')).toBe('running')
 		expect(getWorkbenchAgentDockIndicator('finished')).toBe('success')
 		expect(getWorkbenchAgentDockIndicator('ready')).toBe('success')
 		expect(getWorkbenchAgentDockIndicator('offline')).toBe('error')
 		expect(getWorkbenchAgentDockIndicator('failed')).toBe('error')
 		expect(getWorkbenchAgentDockIndicator('cancelled')).toBe('error')
+		expect(getWorkbenchAgentDockIndicator('error')).toBe('error')
 	})
 
 	it('does not turn a failed Amp receipt green on an idle ready poll', () => {

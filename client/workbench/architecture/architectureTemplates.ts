@@ -8,6 +8,9 @@
 
 export const ARCHITECTURE_TEMPLATE_IDS = [
 	'system-context',
+	'c4-container',
+	'c4-component',
+	'service-data-flow',
 	'decision-graph',
 	'change-radar',
 ] as const
@@ -21,10 +24,15 @@ export type ArchitectureArtifactRole =
 	| 'boundary'
 	| 'system'
 	| 'external-system'
+	| 'container'
+	| 'data-store'
+	| 'interface'
+	| 'message'
 	| 'decision'
 	| 'assumption'
 	| 'evidence'
 	| 'option'
+	| 'adr'
 	| 'radar-zone'
 	| 'change'
 	| 'component'
@@ -44,10 +52,16 @@ export type ArchitectureArtifactStatus =
 export type ArchitectureRelationKind =
 	| 'uses'
 	| 'depends-on'
+	| 'calls'
+	| 'reads'
+	| 'writes'
+	| 'publishes'
+	| 'subscribes'
 	| 'informs'
 	| 'supports'
 	| 'considers'
 	| 'conflicts'
+	| 'records'
 	| 'precedes'
 	| 'affects'
 
@@ -67,12 +81,7 @@ export interface ArchitectureArtifactMetadata {
 	documentRef?: string
 }
 
-export type ArchitectureGeo =
-	| 'rectangle'
-	| 'ellipse'
-	| 'diamond'
-	| 'hexagon'
-	| 'cloud'
+export type ArchitectureGeo = 'rectangle' | 'ellipse' | 'diamond' | 'hexagon' | 'cloud'
 
 export type ArchitectureColor =
 	| 'black'
@@ -138,12 +147,76 @@ export interface ArchitectureTemplateBlueprint {
 	relations: readonly ArchitectureRelationBlueprint[]
 }
 
+function architectureNode(
+	templateId: ArchitectureTemplateId,
+	key: string,
+	text: string,
+	geometry: { x: number; y: number; w: number; h: number },
+	role: ArchitectureArtifactRole,
+	visual: ArchitectureNodeBlueprint['visual'],
+	options: {
+		status?: ArchitectureArtifactStatus
+		zIndex?: number
+		containerId?: string
+	} = {}
+): ArchitectureNodeBlueprint {
+	const id = `${templateId}:${key}`
+	return {
+		id,
+		text,
+		...geometry,
+		zIndex: options.zIndex ?? 1,
+		...(options.containerId ? { containerId: options.containerId } : {}),
+		visual,
+		meta: {
+			workbenchArtifact: {
+				schema: WORKBENCH_ARTIFACT_SCHEMA,
+				artifactId: id,
+				pack: 'architecture',
+				templateId,
+				artifactType: 'node',
+				role,
+				...(options.status ? { status: options.status } : {}),
+			},
+		},
+	}
+}
+
+function architectureRelation(
+	templateId: ArchitectureTemplateId,
+	key: string,
+	fromKey: string,
+	toKey: string,
+	text: string,
+	relation: ArchitectureRelationKind,
+	visual: ArchitectureRelationBlueprint['visual']
+): ArchitectureRelationBlueprint {
+	const id = `${templateId}:${key}`
+	return {
+		id,
+		from: `${templateId}:${fromKey}`,
+		to: `${templateId}:${toKey}`,
+		text,
+		visual,
+		meta: {
+			workbenchArtifact: {
+				schema: WORKBENCH_ARTIFACT_SCHEMA,
+				artifactId: id,
+				pack: 'architecture',
+				templateId,
+				artifactType: 'relation',
+				role: 'relationship',
+				relation,
+			},
+		},
+	}
+}
+
 export const ARCHITECTURE_TEMPLATES = {
 	'system-context': {
 		id: 'system-context',
 		title: 'System Context',
-		description:
-			'Editable system boundary, primary actor, core system, and external dependency.',
+		description: 'Editable system boundary, primary actor, core system, and external dependency.',
 		canvas: { w: 1280, h: 720 },
 		nodes: [
 			{
@@ -306,8 +379,7 @@ export const ARCHITECTURE_TEMPLATES = {
 	'decision-graph': {
 		id: 'decision-graph',
 		title: 'Decision Graph',
-		description:
-			'An inspectable decision with assumptions, evidence, and competing options.',
+		description: 'An inspectable decision with assumptions, evidence, and competing options.',
 		canvas: { w: 1360, h: 820 },
 		nodes: [
 			{
@@ -445,6 +517,21 @@ export const ARCHITECTURE_TEMPLATES = {
 					},
 				},
 			},
+			architectureNode(
+				'decision-graph',
+				'adr-outcome',
+				'ADR outcome\nChoice · rationale · consequences · review trigger',
+				{ x: 500, y: 650, w: 340, h: 120 },
+				'adr',
+				{
+					shape: 'geo',
+					geo: 'rectangle',
+					color: 'light-green',
+					fill: 'tint',
+					dash: 'solid',
+				},
+				{ status: 'proposed', zIndex: 2 }
+			),
 		],
 		relations: [
 			{
@@ -557,13 +644,17 @@ export const ARCHITECTURE_TEMPLATES = {
 					},
 				},
 			},
+			architectureRelation('decision-graph', 'decision-records-adr', 'decision', 'adr-outcome', 'Records', 'records', {
+				color: 'green',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
 		],
 	},
 	'change-radar': {
 		id: 'change-radar',
 		title: 'Change Radar',
-		description:
-			'Now, next, and later change bands connected to the components they affect.',
+		description: 'Now, next, and later change bands converge on the component they affect.',
 		canvas: { w: 1440, h: 840 },
 		nodes: [
 			{
@@ -572,7 +663,7 @@ export const ARCHITECTURE_TEMPLATES = {
 				x: 50,
 				y: 90,
 				w: 390,
-				h: 660,
+				h: 500,
 				zIndex: 0,
 				visual: {
 					shape: 'geo',
@@ -599,7 +690,7 @@ export const ARCHITECTURE_TEMPLATES = {
 				x: 490,
 				y: 90,
 				w: 390,
-				h: 660,
+				h: 500,
 				zIndex: 0,
 				visual: {
 					shape: 'geo',
@@ -626,7 +717,7 @@ export const ARCHITECTURE_TEMPLATES = {
 				x: 930,
 				y: 90,
 				w: 390,
-				h: 660,
+				h: 500,
 				zIndex: 0,
 				visual: {
 					shape: 'geo',
@@ -649,19 +740,19 @@ export const ARCHITECTURE_TEMPLATES = {
 			},
 			{
 				id: 'change-radar:instrument-critical-path',
-				text: 'Instrument critical path\nOwner · evidence · exit signal',
+				text: 'Instrument critical path\nEvidence + exit signal',
 				x: 115,
-				y: 190,
+				y: 235,
 				w: 260,
-				h: 130,
+				h: 140,
 				zIndex: 1,
 				containerId: 'change-radar:now-zone',
 				visual: {
-					shape: 'note',
+					shape: 'geo',
 					geo: 'rectangle',
 					color: 'light-green',
 					fill: 'tint',
-					dash: 'draw',
+					dash: 'solid',
 				},
 				meta: {
 					workbenchArtifact: {
@@ -677,19 +768,19 @@ export const ARCHITECTURE_TEMPLATES = {
 			},
 			{
 				id: 'change-radar:split-write-model',
-				text: 'Split write model\nDependency · migration proof',
+				text: 'Split write model\nMigration proof',
 				x: 555,
-				y: 365,
+				y: 235,
 				w: 260,
-				h: 130,
+				h: 140,
 				zIndex: 1,
 				containerId: 'change-radar:next-zone',
 				visual: {
-					shape: 'note',
+					shape: 'geo',
 					geo: 'rectangle',
 					color: 'light-blue',
 					fill: 'tint',
-					dash: 'draw',
+					dash: 'solid',
 				},
 				meta: {
 					workbenchArtifact: {
@@ -705,19 +796,19 @@ export const ARCHITECTURE_TEMPLATES = {
 			},
 			{
 				id: 'change-radar:retire-legacy-gateway',
-				text: 'Retire legacy gateway\nCompatibility · rollback',
+				text: 'Retire legacy gateway\nRollback ready',
 				x: 995,
-				y: 540,
+				y: 235,
 				w: 260,
-				h: 130,
+				h: 140,
 				zIndex: 1,
 				containerId: 'change-radar:later-zone',
 				visual: {
-					shape: 'note',
+					shape: 'geo',
 					geo: 'rectangle',
 					color: 'grey',
 					fill: 'tint',
-					dash: 'draw',
+					dash: 'solid',
 				},
 				meta: {
 					workbenchArtifact: {
@@ -734,12 +825,11 @@ export const ARCHITECTURE_TEMPLATES = {
 			{
 				id: 'change-radar:core-api',
 				text: 'Affected component\nCore API',
-				x: 1090,
-				y: 185,
+				x: 635,
+				y: 640,
 				w: 170,
 				h: 100,
 				zIndex: 2,
-				containerId: 'change-radar:later-zone',
 				visual: {
 					shape: 'geo',
 					geo: 'rectangle',
@@ -784,50 +874,6 @@ export const ARCHITECTURE_TEMPLATES = {
 				},
 			},
 			{
-				id: 'change-radar:instrument-precedes-split',
-				from: 'change-radar:instrument-critical-path',
-				to: 'change-radar:split-write-model',
-				text: 'Precedes',
-				visual: {
-					color: 'blue',
-					dash: 'dashed',
-					arrowheadEnd: 'arrow',
-				},
-				meta: {
-					workbenchArtifact: {
-						schema: WORKBENCH_ARTIFACT_SCHEMA,
-						artifactId: 'change-radar:instrument-precedes-split',
-						pack: 'architecture',
-						templateId: 'change-radar',
-						artifactType: 'relation',
-						role: 'relationship',
-						relation: 'precedes',
-					},
-				},
-			},
-			{
-				id: 'change-radar:split-precedes-retire',
-				from: 'change-radar:split-write-model',
-				to: 'change-radar:retire-legacy-gateway',
-				text: 'Precedes',
-				visual: {
-					color: 'grey',
-					dash: 'dashed',
-					arrowheadEnd: 'arrow',
-				},
-				meta: {
-					workbenchArtifact: {
-						schema: WORKBENCH_ARTIFACT_SCHEMA,
-						artifactId: 'change-radar:split-precedes-retire',
-						pack: 'architecture',
-						templateId: 'change-radar',
-						artifactType: 'relation',
-						role: 'relationship',
-						relation: 'precedes',
-					},
-				},
-			},
-			{
 				id: 'change-radar:split-affects-core-api',
 				from: 'change-radar:split-write-model',
 				to: 'change-radar:core-api',
@@ -849,12 +895,412 @@ export const ARCHITECTURE_TEMPLATES = {
 					},
 				},
 			},
+			{
+				id: 'change-radar:retire-affects-core-api',
+				from: 'change-radar:retire-legacy-gateway',
+				to: 'change-radar:core-api',
+				text: 'Affects',
+				visual: {
+					color: 'grey',
+					dash: 'solid',
+					arrowheadEnd: 'arrow',
+				},
+				meta: {
+					workbenchArtifact: {
+						schema: WORKBENCH_ARTIFACT_SCHEMA,
+						artifactId: 'change-radar:retire-affects-core-api',
+						pack: 'architecture',
+						templateId: 'change-radar',
+						artifactType: 'relation',
+						role: 'relationship',
+						relation: 'affects',
+					},
+				},
+			},
+		],
+	},
+	'c4-container': {
+		id: 'c4-container',
+		title: 'C4 Container',
+		description: 'Native C4 container view with actors, deployable services, data stores, and external dependencies.',
+		canvas: { w: 1500, h: 820 },
+		nodes: [
+			architectureNode(
+				'c4-container',
+				'system-boundary',
+				'SYSTEM · Product platform',
+				{ x: 260, y: 60, w: 980, h: 700 },
+				'boundary',
+				{ shape: 'geo', geo: 'rectangle', color: 'grey', fill: 'none', dash: 'dashed' },
+				{ status: 'active', zIndex: 0 }
+			),
+			architectureNode(
+				'c4-container',
+				'user',
+				'Customer\nUses the product',
+				{ x: 30, y: 315, w: 175, h: 125 },
+				'actor',
+				{ shape: 'geo', geo: 'ellipse', color: 'blue', fill: 'tint', dash: 'solid' },
+				{ status: 'active' }
+			),
+			architectureNode(
+				'c4-container',
+				'web-app',
+				'Web application\n[Container: browser]',
+				{ x: 340, y: 180, w: 245, h: 135 },
+				'container',
+				{ shape: 'geo', geo: 'rectangle', color: 'light-blue', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-container:system-boundary' }
+			),
+			architectureNode(
+				'c4-container',
+				'api',
+				'Application API\n[Container: service]',
+				{ x: 695, y: 180, w: 245, h: 135 },
+				'container',
+				{ shape: 'geo', geo: 'hexagon', color: 'green', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-container:system-boundary' }
+			),
+			architectureNode(
+				'c4-container',
+				'worker',
+				'Background worker\n[Container: process]',
+				{ x: 695, y: 500, w: 245, h: 135 },
+				'container',
+				{ shape: 'geo', geo: 'hexagon', color: 'violet', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-container:system-boundary' }
+			),
+			architectureNode(
+				'c4-container',
+				'database',
+				'Primary database\n[Container: data store]',
+				{ x: 1010, y: 335, w: 180, h: 140 },
+				'data-store',
+				{ shape: 'geo', geo: 'ellipse', color: 'orange', fill: 'background', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-container:system-boundary' }
+			),
+			architectureNode(
+				'c4-container',
+				'external-provider',
+				'External provider\nIdentity · payment · data',
+				{ x: 1300, y: 175, w: 175, h: 150 },
+				'external-system',
+				{ shape: 'geo', geo: 'cloud', color: 'grey', fill: 'background', dash: 'solid' },
+				{ status: 'active' }
+			),
+		],
+		relations: [
+			architectureRelation('c4-container', 'user-uses-web', 'user', 'web-app', 'Uses', 'uses', {
+				color: 'blue',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('c4-container', 'web-calls-api', 'web-app', 'api', 'HTTPS', 'calls', {
+				color: 'green',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('c4-container', 'api-writes-db', 'api', 'database', 'SQL', 'writes', {
+				color: 'orange',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('c4-container', 'api-calls-worker', 'api', 'worker', 'Schedules', 'calls', {
+				color: 'violet',
+				dash: 'dashed',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('c4-container', 'worker-reads-db', 'worker', 'database', 'Reads', 'reads', {
+				color: 'orange',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('c4-container', 'api-calls-provider', 'api', 'external-provider', 'API', 'depends-on', {
+				color: 'grey',
+				dash: 'dashed',
+				arrowheadEnd: 'arrow',
+			}),
+		],
+	},
+	'c4-component': {
+		id: 'c4-component',
+		title: 'C4 Component',
+		description: 'Component-level decomposition of one container with responsibilities and explicit dependencies.',
+		canvas: { w: 1480, h: 820 },
+		nodes: [
+			architectureNode(
+				'c4-component',
+				'container-boundary',
+				'CONTAINER · Application API',
+				{ x: 180, y: 55, w: 1080, h: 710 },
+				'boundary',
+				{ shape: 'geo', geo: 'rectangle', color: 'grey', fill: 'none', dash: 'dashed' },
+				{ status: 'active', zIndex: 0 }
+			),
+			architectureNode(
+				'c4-component',
+				'client',
+				'Web application\n[External container]',
+				{ x: 20, y: 300, w: 150, h: 125 },
+				'container',
+				{ shape: 'geo', geo: 'rectangle', color: 'light-blue', fill: 'background', dash: 'solid' },
+				{ status: 'active' }
+			),
+			architectureNode(
+				'c4-component',
+				'controller',
+				'Request controller\nProtocol + validation',
+				{ x: 260, y: 285, w: 210, h: 135 },
+				'interface',
+				{ shape: 'geo', geo: 'hexagon', color: 'blue', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-component:container-boundary' }
+			),
+			architectureNode(
+				'c4-component',
+				'application-service',
+				'Application service\nUse-case orchestration',
+				{ x: 550, y: 155, w: 230, h: 140 },
+				'component',
+				{ shape: 'geo', geo: 'rectangle', color: 'green', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-component:container-boundary' }
+			),
+			architectureNode(
+				'c4-component',
+				'policy',
+				'Domain policy\nBusiness invariants',
+				{ x: 550, y: 465, w: 230, h: 140 },
+				'component',
+				{ shape: 'geo', geo: 'diamond', color: 'violet', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-component:container-boundary' }
+			),
+			architectureNode(
+				'c4-component',
+				'repository',
+				'Repository adapter\nPersistence boundary',
+				{ x: 885, y: 285, w: 220, h: 140 },
+				'component',
+				{ shape: 'geo', geo: 'rectangle', color: 'orange', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'c4-component:container-boundary' }
+			),
+			architectureNode(
+				'c4-component',
+				'database',
+				'Primary database',
+				{ x: 1300, y: 300, w: 150, h: 125 },
+				'data-store',
+				{ shape: 'geo', geo: 'ellipse', color: 'orange', fill: 'background', dash: 'solid' },
+				{ status: 'active' }
+			),
+		],
+		relations: [
+			architectureRelation('c4-component', 'client-calls-controller', 'client', 'controller', 'API call', 'calls', {
+				color: 'blue',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation(
+				'c4-component',
+				'controller-calls-service',
+				'controller',
+				'application-service',
+				'Invokes',
+				'calls',
+				{
+					color: 'green',
+					dash: 'solid',
+					arrowheadEnd: 'arrow',
+				}
+			),
+			architectureRelation('c4-component', 'service-uses-policy', 'application-service', 'policy', 'Enforces', 'uses', {
+				color: 'violet',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation(
+				'c4-component',
+				'service-calls-repository',
+				'application-service',
+				'repository',
+				'Loads / saves',
+				'calls',
+				{
+					color: 'orange',
+					dash: 'solid',
+					arrowheadEnd: 'arrow',
+				}
+			),
+			architectureRelation('c4-component', 'repository-writes-db', 'repository', 'database', 'SQL', 'writes', {
+				color: 'orange',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+		],
+	},
+	'service-data-flow': {
+		id: 'service-data-flow',
+		title: 'Service / Data Flow',
+		description: 'Synchronous requests and asynchronous data movement across services, stores, and consumers.',
+		canvas: { w: 1480, h: 820 },
+		nodes: [
+			architectureNode(
+				'service-data-flow',
+				'core-boundary',
+				'TRUSTED CORE',
+				{ x: 500, y: 45, w: 650, h: 710 },
+				'boundary',
+				{ shape: 'geo', geo: 'rectangle', color: 'grey', fill: 'none', dash: 'dashed' },
+				{ status: 'active', zIndex: 0 }
+			),
+			architectureNode(
+				'service-data-flow',
+				'client',
+				'Client',
+				{ x: 30, y: 330, w: 155, h: 110 },
+				'actor',
+				{ shape: 'geo', geo: 'ellipse', color: 'blue', fill: 'tint', dash: 'solid' },
+				{ status: 'active' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'gateway',
+				'API gateway\nAuth · routing',
+				{ x: 250, y: 315, w: 200, h: 140 },
+				'interface',
+				{ shape: 'geo', geo: 'hexagon', color: 'light-blue', fill: 'tint', dash: 'solid' },
+				{ status: 'active' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'command-service',
+				'Command service\nValidate + transact',
+				{ x: 540, y: 140, w: 225, h: 145 },
+				'component',
+				{ shape: 'geo', geo: 'rectangle', color: 'green', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'service-data-flow:core-boundary' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'event-bus',
+				'Domain event topic\n[Message broker]',
+				{ x: 880, y: 315, w: 210, h: 140 },
+				'message',
+				{ shape: 'geo', geo: 'hexagon', color: 'violet', fill: 'background', dash: 'solid' },
+				{ status: 'active', containerId: 'service-data-flow:core-boundary' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'query-service',
+				'Query service\nRead models',
+				{ x: 540, y: 510, w: 225, h: 145 },
+				'component',
+				{ shape: 'geo', geo: 'rectangle', color: 'light-green', fill: 'tint', dash: 'solid' },
+				{ status: 'active', containerId: 'service-data-flow:core-boundary' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'primary-db',
+				'Operational store\n[PostgreSQL]',
+				{ x: 880, y: 90, w: 210, h: 125 },
+				'data-store',
+				{ shape: 'geo', geo: 'ellipse', color: 'orange', fill: 'background', dash: 'solid' },
+				{ status: 'active', containerId: 'service-data-flow:core-boundary' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'read-store',
+				'Read model\n[Projection store]',
+				{ x: 880, y: 580, w: 210, h: 125 },
+				'data-store',
+				{ shape: 'geo', geo: 'ellipse', color: 'light-green', fill: 'background', dash: 'solid' },
+				{ status: 'active', containerId: 'service-data-flow:core-boundary' }
+			),
+			architectureNode(
+				'service-data-flow',
+				'analytics',
+				'EXTERNAL · Analytics\nWarehouse + metrics',
+				{ x: 1210, y: 315, w: 230, h: 140 },
+				'external-system',
+				{ shape: 'geo', geo: 'cloud', color: 'grey', fill: 'background', dash: 'solid' },
+				{ status: 'active' }
+			),
+		],
+		relations: [
+			architectureRelation('service-data-flow', 'client-calls-gateway', 'client', 'gateway', 'HTTPS', 'calls', {
+				color: 'blue',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('service-data-flow', 'gateway-calls-command', 'gateway', 'command-service', 'Cmd', 'calls', {
+				color: 'green',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation('service-data-flow', 'gateway-calls-query', 'gateway', 'query-service', 'Query', 'calls', {
+				color: 'light-green',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation(
+				'service-data-flow',
+				'command-writes-db',
+				'command-service',
+				'primary-db',
+				'Writes',
+				'writes',
+				{
+					color: 'orange',
+					dash: 'solid',
+					arrowheadEnd: 'arrow',
+				}
+			),
+			architectureRelation(
+				'service-data-flow',
+				'command-publishes-event',
+				'command-service',
+				'event-bus',
+				'Emits',
+				'publishes',
+				{
+					color: 'violet',
+					dash: 'dashed',
+					arrowheadEnd: 'arrow',
+				}
+			),
+			architectureRelation(
+				'service-data-flow',
+				'query-subscribes-event',
+				'event-bus',
+				'query-service',
+				'Syncs',
+				'subscribes',
+				{
+					color: 'violet',
+					dash: 'dashed',
+					arrowheadEnd: 'arrow',
+				}
+			),
+			architectureRelation('service-data-flow', 'query-reads-model', 'query-service', 'read-store', 'Reads', 'reads', {
+				color: 'light-green',
+				dash: 'solid',
+				arrowheadEnd: 'arrow',
+			}),
+			architectureRelation(
+				'service-data-flow',
+				'analytics-subscribes-event',
+				'event-bus',
+				'analytics',
+				'Events',
+				'subscribes',
+				{
+					color: 'grey',
+					dash: 'dashed',
+					arrowheadEnd: 'arrow',
+				}
+			),
 		],
 	},
 } as const satisfies Readonly<Record<ArchitectureTemplateId, ArchitectureTemplateBlueprint>>
 
-export function getArchitectureTemplate(
-	id: ArchitectureTemplateId
-): ArchitectureTemplateBlueprint {
+export function getArchitectureTemplate(id: ArchitectureTemplateId): ArchitectureTemplateBlueprint {
 	return ARCHITECTURE_TEMPLATES[id]
 }

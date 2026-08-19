@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+	Box,
 	TldrawUiButton,
 	TldrawUiButtonLabel,
 	TldrawUiIcon,
@@ -65,6 +66,25 @@ export function CanvasStudioPalette({
 				pageId: page.id,
 				point: editor.getViewportPageBounds().center,
 			})
+			const visibleBounds = Box.Common(
+				receipt.shapeIds.flatMap((shapeId) => {
+					const shape = editor.getShape(shapeId)
+					if (
+						!shape ||
+						(shape.meta as { am?: { hiddenControl?: boolean } }).am?.hiddenControl
+					) {
+						return []
+					}
+					const bounds = editor.getShapePageBounds(shape)
+					return bounds ? [bounds] : []
+				})
+			)
+			if (visibleBounds) {
+				editor.zoomToBounds(visibleBounds, {
+					inset: 96,
+					animation: { duration: editor.options.animationMediumMs },
+				})
+			}
 			setStatus(
 				`Created ${receipt.shapeIds.length} shapes and ${receipt.bindingIds.length} bindings`
 			)
@@ -82,7 +102,7 @@ export function CanvasStudioPalette({
 		>
 			<TldrawUiPopoverTrigger>
 				<TldrawUiToolbarButton
-					type="icon"
+					type="tool"
 					className="workbench-rail-trigger canvas-studio-trigger"
 					title="Canvas Studio catalog"
 					aria-label="Canvas Studio catalog"

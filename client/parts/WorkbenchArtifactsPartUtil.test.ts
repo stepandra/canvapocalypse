@@ -57,6 +57,13 @@ describe('WorkbenchArtifactsPartUtil', () => {
 	it('emits deterministic allowlisted semantics for selected native shapes only', () => {
 		const canonical = shape('shape:b-canonical', 'geo', {
 			workbench: {
+				conversation: {
+					branchId: 'branch:alternative-b',
+					branchName: 'Alternative B',
+					parentBranchId: 'branch:main',
+					parentTurnId: 'turn:2',
+					privateTranscript: 'secret-conversation-transcript',
+				},
 				artifact: {
 					schema: 'workbench-artifact/v1',
 					artifactId: 'architecture:core',
@@ -65,9 +72,19 @@ describe('WorkbenchArtifactsPartUtil', () => {
 					title: 'Core system',
 					summary: 'Bounded semantic summary',
 					status: 'active',
-					owner: { id: 'team:core', type: 'team', label: 'Core team', email: 'hidden' },
+					owner: {
+						id: 'team:core',
+						type: 'team',
+						label: 'Core team',
+						email: 'hidden',
+					},
 					tags: ['system', 'critical'],
-					refs: [{ target: 'docs/private-architecture.md', body: 'full linked document' }],
+					refs: [
+						{
+							target: 'docs/private-architecture.md',
+							body: 'full linked document',
+						},
+					],
 					apiKey: 'secret-canonical-key',
 				},
 				credentials: { token: 'secret-wrapper-token' },
@@ -92,13 +109,19 @@ describe('WorkbenchArtifactsPartUtil', () => {
 				relationId: 'architecture:depends',
 				pack: 'architecture',
 				type: 'depends-on',
-				start: { artifactId: 'architecture:one', shapeId: 'shape:one', extra: 'omit' },
+				start: {
+					artifactId: 'architecture:one',
+					shapeId: 'shape:one',
+					extra: 'omit',
+				},
 				end: { artifactId: 'architecture:two', shapeId: 'shape:two' },
 				label: 'depends on',
 				credential: 'secret-relation-credential',
 			},
 		})
-		const ordinary = shape('shape:d-ordinary', 'geo', { arbitrary: { huge: 'canvas dump' } })
+		const ordinary = shape('shape:d-ordinary', 'geo', {
+			arbitrary: { huge: 'canvas dump' },
+		})
 		const isoflow = shape('shape:e-isoflow', 'embed', {
 			embedProvider: {
 				schema: 'canvapocalypse-embed/v1',
@@ -146,6 +169,12 @@ describe('WorkbenchArtifactsPartUtil', () => {
 		})
 		expect(part.records[1]).toMatchObject({
 			bounds: { x: 13, y: -3, w: 50, h: 31 },
+			conversation: {
+				branchId: 'branch:alternative-b',
+				branchName: 'Alternative B',
+				parentBranchId: 'branch:main',
+				parentTurnId: 'turn:2',
+			},
 			artifact: {
 				artifactId: 'architecture:core',
 				title: 'Core system',
@@ -182,7 +211,11 @@ describe('WorkbenchArtifactsPartUtil', () => {
 			})
 		)
 		const partial = shape('shape:item-partial', 'geo', {
-			workbenchArtifact: { artifactId: 'product:partial', pack: 'product', role: 'milestone' },
+			workbenchArtifact: {
+				artifactId: 'product:partial',
+				pack: 'product',
+				role: 'milestone',
+			},
 		})
 		const outside = shape('shape:item-outside', 'geo', {
 			workbenchArtifact: { artifactId: 'product:outside', pack: 'product' },
@@ -194,23 +227,21 @@ describe('WorkbenchArtifactsPartUtil', () => {
 		bounds.set(outside.id, { x: 101, y: 40, w: 10, h: 10 })
 		const { util, helpers } = harness([], all, bounds)
 
-		const part = util.getPart(
-			request({ enabled: true, route: 'canvas-edit', includeBounds: true }),
-			helpers
-		)
+		const part = util.getPart(request({ enabled: true, route: 'canvas-edit', includeBounds: true }), helpers)
 
 		expect(part.boundary).toBe('bounds')
 		expect(part.records).toHaveLength(MAX_WORKBENCH_ARTIFACT_RECORDS)
 		expect(part.truncated).toBe(true)
-		expect(part.records.map(({ shapeId }) => shapeId)).toEqual(
-			[...part.records.map(({ shapeId }) => shapeId)].sort()
-		)
+		expect(part.records.map(({ shapeId }) => shapeId)).toEqual([...part.records.map(({ shapeId }) => shapeId)].sort())
 		expect(part.records.some(({ shapeId }) => shapeId === outside.id)).toBe(false)
 	})
 
 	it('keeps the legacy working-mode prompt unchanged when routing is inactive', () => {
 		const selected = shape('shape:selected', 'geo', {
-			workbenchArtifact: { artifactId: 'architecture:selected', pack: 'architecture' },
+			workbenchArtifact: {
+				artifactId: 'architecture:selected',
+				pack: 'architecture',
+			},
 		})
 		const bounds = new Map([[selected.id, { x: 0, y: 0, w: 20, h: 20 }]])
 		const { util, helpers } = harness([selected], [selected], bounds)

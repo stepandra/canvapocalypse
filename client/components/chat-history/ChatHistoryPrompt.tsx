@@ -1,5 +1,6 @@
-import { Editor } from 'tldraw'
+import { Editor, TldrawUiButton, TldrawUiButtonIcon, useValue } from 'tldraw'
 import { ChatHistoryPromptItem } from '../../../shared/types/ChatHistoryItem'
+import { useAgent } from '../../agent/TldrawAgentAppProvider'
 import { ContextItemTag } from '../ContextItemTag'
 import { SelectionTag } from '../SelectionTag'
 
@@ -10,7 +11,13 @@ export function ChatHistoryPrompt({
 	item: ChatHistoryPromptItem
 	editor: Editor
 }) {
+	const agent = useAgent()
 	const { contextItems, agentFacingMessage, userFacingMessage, selectedShapes, promptSource } = item
+	const isGenerating = useValue(
+		'chat history branching disabled',
+		() => agent.requests.isGenerating(),
+		[agent]
+	)
 
 	const showTags = selectedShapes.length > 0 || contextItems.length > 0
 
@@ -22,6 +29,18 @@ export function ChatHistoryPrompt({
 
 	return (
 		<div className="chat-history-prompt-container">
+			{promptSource !== 'self' && item.turnId && (
+				<TldrawUiButton
+					type="low"
+					className="chat-history-fork-button"
+					title="Fork conversation after this turn"
+					aria-label="Fork conversation after this turn"
+					disabled={isGenerating}
+					onClick={() => agent.chat.forkFromTurn(item.turnId!)}
+				>
+					<TldrawUiButtonIcon icon="duplicate" small />
+				</TldrawUiButton>
+			)}
 			<div className={`chat-history-prompt ${sourceClass}`}>
 				{showTags && (
 					<div className="prompt-tags">

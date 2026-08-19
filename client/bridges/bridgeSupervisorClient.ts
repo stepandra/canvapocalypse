@@ -1,4 +1,5 @@
 export const BRIDGE_SUPERVISOR_ORIGIN = 'http://127.0.0.1:5177' as const
+const BRIDGE_SUPERVISOR_PROXY_PATH = '/__canvas-bridge-supervisor'
 export const BRIDGE_SUPERVISOR_CAPABILITY_HEADER =
 	'x-tldraw-html-capability' as const
 
@@ -182,17 +183,22 @@ export function normalizeBridgeService(value: unknown): BridgeService {
 }
 
 export function assertBridgeSupervisorOrigin(
-	value: string = BRIDGE_SUPERVISOR_ORIGIN
-): typeof BRIDGE_SUPERVISOR_ORIGIN {
+	value: string = resolveBridgeSupervisorOrigin()
+): string {
 	let parsed: URL
 	try {
 		parsed = new URL(value)
 	} catch {
 		throw new Error('Invalid bridge supervisor origin')
 	}
+	const direct =
+		parsed.origin === BRIDGE_SUPERVISOR_ORIGIN && parsed.pathname === '/'
+	const portal =
+		isAmpPortalRenderer() &&
+		parsed.origin === location.origin &&
+		parsed.pathname === BRIDGE_SUPERVISOR_PROXY_PATH
 	if (
-		parsed.origin !== BRIDGE_SUPERVISOR_ORIGIN ||
-		parsed.pathname !== '/' ||
+		(!direct && !portal) ||
 		parsed.search ||
 		parsed.hash ||
 		parsed.username ||
@@ -200,7 +206,7 @@ export function assertBridgeSupervisorOrigin(
 	) {
 		throw new Error('Bridge supervisor origin is not allowlisted')
 	}
-	return BRIDGE_SUPERVISOR_ORIGIN
+	return value.replace(/\/$/, '')
 }
 
 async function requestJson(
@@ -224,9 +230,12 @@ export async function fetchBridgeSupervisor(
 	init: RequestInit = {}
 ): Promise<Response> {
 	const supervisorOrigin = assertBridgeSupervisorOrigin()
-	const destination = new URL(String(input), supervisorOrigin)
+	const destination = new URL(
+		String(input).replace(/^\//, ''),
+		`${supervisorOrigin}/`
+	)
 	if (
-		destination.origin !== supervisorOrigin ||
+		!destination.href.startsWith(`${supervisorOrigin}/`) ||
 		destination.username ||
 		destination.password
 	) {
@@ -253,7 +262,10 @@ async function getBridgeSupervisorResidentCapability(
 			'Bridge supervisor resident capability was not provisioned by the Offline host'
 		)
 	}
-	if (!BRIDGE_SUPERVISOR_BROWSER_ORIGINS.has(location.origin)) {
+	if (
+		!BRIDGE_SUPERVISOR_BROWSER_ORIGINS.has(location.origin) &&
+		!isAmpPortalRenderer()
+	) {
 		throw new Error('Bridge supervisor browser origin is not allowlisted')
 	}
 	residentCapabilityBootstrap ??= bootstrapBridgeSupervisorCapability()
@@ -272,7 +284,7 @@ async function getBridgeSupervisorResidentCapability(
 
 async function bootstrapBridgeSupervisorCapability(): Promise<string> {
 	const response = await fetch(
-		new URL('/api/session', assertBridgeSupervisorOrigin()),
+		`${assertBridgeSupervisorOrigin()}/api/session`,
 		{
 			method: 'POST',
 			headers: { accept: 'application/json' },
@@ -291,6 +303,24 @@ async function bootstrapBridgeSupervisorCapability(): Promise<string> {
 		throw new Error('Invalid bridge supervisor capability bootstrap')
 	}
 	return normalizeResidentCapability(payload.capability)
+}
+
+function resolveBridgeSupervisorOrigin(): string {
+	return isAmpPortalRenderer()
+		? `${location.origin}${BRIDGE_SUPERVISOR_PROXY_PATH}`
+		: BRIDGE_SUPERVISOR_ORIGIN
+}
+
+function isAmpPortalRenderer(): boolean {
+	if (typeof location === 'undefined') return false
+	try {
+		const parsed = new URL(location.origin)
+		return (
+			parsed.protocol === 'https:' && parsed.hostname.endsWith('.onamp.dev')
+		)
+	} catch {
+		return false
+	}
 }
 
 function normalizeResidentCapability(value: unknown): string {

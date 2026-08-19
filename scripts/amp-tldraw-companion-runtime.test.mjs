@@ -9,6 +9,7 @@ import {
 	isPathContained,
 	resolveLoopbackBridgeUrl,
 	resolveProjectCanvasBinding,
+	resolveProjectCanvasTarget,
 	startWorkbenchBridge,
 } from './amp-tldraw-companion-runtime.mjs'
 
@@ -129,6 +130,56 @@ test('project routing resolves documentId for one project canvas and ignores unr
 		assert.equal(calls[1].url, 'http://127.0.0.1:7236/api/doc/project-doc/exec')
 		assert.equal(calls[0].init.headers.authorization, `Bearer ${fixture.token}`)
 		assert.match(JSON.parse(calls[1].init.body).code, /companionCanvasBinding/)
+	} finally {
+		await rm(fixture.root, { recursive: true, force: true })
+	}
+})
+
+test('project routing retrieves the renderer binding and page-scoped catalog atomically', async () => {
+	const fixture = await createProjectCanvasFixture()
+	const catalog = {
+		schema: 'canvas-studio-runtime-capabilities/v1',
+		version: 1,
+		catalogRevision: 'catalog-architecture-test',
+		surface: 'tldraw',
+		pageMode: 'architecture',
+		kits: [],
+		capabilities: [],
+	}
+	let execCode = ''
+	try {
+		const target = await resolveProjectCanvasTarget({
+			workspaceRoot: fixture.workspace,
+			serverConfigPath: fixture.serverConfig,
+			fetchFn: async (url, init) => {
+				if (url.endsWith('/api/search')) {
+					return mockJsonResponse(200, {
+						success: true,
+						result: [
+							{ documentId: 'project-doc', filePath: fixture.projectCanvas },
+						],
+					})
+				}
+				if (url.endsWith('/api/doc/project-doc/exec')) {
+					execCode = JSON.parse(init.body).code
+					return mockJsonResponse(200, {
+						success: true,
+						result: {
+							canvasBinding: 'canvas-project-binding',
+							capabilityCatalog: catalog,
+						},
+					})
+				}
+				return mockJsonResponse(404, { error: 'not found' })
+			},
+		})
+
+		assert.deepEqual(target, {
+			canvasBinding: 'canvas-project-binding',
+			capabilityCatalog: catalog,
+		})
+		assert.match(execCode, /companionCanvasBinding/)
+		assert.match(execCode, /companionCanvasCapabilityCatalog/)
 	} finally {
 		await rm(fixture.root, { recursive: true, force: true })
 	}

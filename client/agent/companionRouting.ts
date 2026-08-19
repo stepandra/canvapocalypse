@@ -5,6 +5,7 @@ import type { PromptPart } from '../../shared/types/PromptPart'
 import { isIsoflowEmbedShape } from '../isoflow/isoflowProvider'
 import { isHtmlMockupShape } from '../parts/HtmlMockupContextPartUtil'
 import { isDesignSystemShape } from '../design-system/DesignSystemShape'
+import { isMarkdownDocumentShape } from '../markdown/MarkdownDocumentShape'
 import {
 	getAdvertisedCompanionCapabilities,
 	getCompanionActionTypes,
@@ -49,6 +50,7 @@ export interface CompanionRouteSignals {
 	selectedIsoflowEmbedCount: number
 	selectedHtmlMockupCount?: number
 	selectedDesignSystemCount?: number
+	selectedMarkdownDocumentCount?: number
 	historyLength?: number
 }
 
@@ -59,6 +61,7 @@ export function getCompanionRouteSignals(agent: TldrawAgent): CompanionRouteSign
 		selectedIsoflowEmbedCount: selected.filter(isIsoflowEmbedShape).length,
 		selectedHtmlMockupCount: selected.filter(isHtmlMockupShape).length,
 		selectedDesignSystemCount: selected.filter(isDesignSystemShape).length,
+		selectedMarkdownDocumentCount: selected.filter(isMarkdownDocumentShape).length,
 		historyLength: agent.chat.getHistory().length,
 	}
 }
@@ -101,6 +104,12 @@ export function buildCompanionRoutePlan(
 		}
 	} else if (signals.selectedShapeCount > 0) {
 		partTypes.push('selectedShapes', 'workbenchArtifacts')
+	}
+	if (
+		route !== 'isoflow-edit' &&
+		(signals.selectedMarkdownDocumentCount ?? 0) > 0
+	) {
+		partTypes.push('markdownDocuments')
 	}
 	if (
 		route !== 'isoflow-edit' &&

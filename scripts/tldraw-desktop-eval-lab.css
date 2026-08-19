@@ -689,6 +689,22 @@
   }
 }
 
+.agents-models-workflow-node.is-compact-height
+  .agents-models-workflow-fields.is-responsive-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+}
+
+.agents-models-workflow-node.is-compact-height .workflow-node-card-body {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.agents-models-workflow-node.is-compact-height .workflow-node-field {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .agents-models-catalog-node {
   --workflow-node-accent: #5c706a;
   container-type: size;
@@ -1377,6 +1393,149 @@
   opacity: 1;
 }
 
+/* Grok's Canvas Studio contribution uses native workflow ports and SVG wires.
+ * Keep these host-owned styles beside the shared workflow card anatomy so the
+ * vendored registration bundle never falls back to browser button / SVG defaults.
+ */
+
+.workflow-native-port {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  box-sizing: border-box;
+  width: 12px;
+  min-width: 12px;
+  height: 12px;
+  min-height: 12px;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  border: 2px solid var(--tl-color-panel);
+  border-radius: 50%;
+  outline: none;
+  background: var(--workflow-node-accent);
+  box-shadow: 0 0 0 1px var(--tl-color-divider);
+  cursor: crosshair;
+  pointer-events: all;
+  transform: translate(-50%, -50%);
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.workflow-native-port:hover,
+.workflow-native-port:focus-visible,
+.workflow-native-port.is-active {
+  box-shadow:
+    0 0 0 1px var(--tl-color-panel),
+    0 0 0 3px var(--tl-color-focus);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.workflow-native-port.is-connected::after {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--tl-color-panel);
+  content: '';
+}
+
+.workflow-native-port:is(.is-port-children-out, .is-port-assignment-in) {
+  background: #6476a8;
+}
+
+.workflow-native-port:is(.is-port-data-in, .is-port-data-out, .is-port-result-out, .is-port-result-in) {
+  background: #387b68;
+}
+
+.workflow-native-port:is(.is-port-attachments-out, .is-port-persona-in, .is-port-role-in, .is-port-capability-in) {
+  background: #826894;
+}
+
+.workflow-native-connection {
+  --workflow-wire-color: var(--tl-color-text-3);
+  overflow: visible;
+  color: var(--workflow-wire-color);
+  pointer-events: none;
+}
+
+.workflow-native-connection.is-assignment {
+  --workflow-wire-color: #6476a8;
+}
+
+.workflow-native-connection.is-data {
+  --workflow-wire-color: #387b68;
+}
+
+.workflow-native-connection.is-attachment {
+  --workflow-wire-color: #826894;
+}
+
+.workflow-native-connection.is-condition {
+  --workflow-wire-color: #a86d28;
+}
+
+.workflow-native-connection.is-module {
+  --workflow-wire-color: #42718d;
+}
+
+.workflow-native-connection > path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workflow-native-connection marker path {
+  fill: currentColor;
+  stroke: none;
+}
+
+.workflow-native-connection.is-selected > path {
+  stroke: var(--tl-color-focus);
+  stroke-width: 3;
+}
+
+.workflow-junction-shape {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  pointer-events: all;
+}
+
+.workflow-cable-tie {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: 5px;
+  height: var(--workflow-tie-length);
+  border: 1px solid var(--tl-color-divider);
+  border-radius: 999px;
+  background: var(--tl-color-panel);
+  box-shadow: var(--tl-shadow-1);
+  transform: translate(-50%, -50%) rotate(var(--workflow-tie-angle));
+}
+
+.workflow-cable-tie-buckle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--tl-color-panel);
+  border-radius: 3px;
+  background: var(--tl-color-text-2);
+  box-shadow: 0 0 0 1px var(--tl-color-divider);
+  transform: translate(-50%, -50%);
+}
+
+.workflow-junction-shape.is-selected .workflow-cable-tie-buckle {
+  background: var(--tl-color-focus);
+}
+
 /* Native tldraw chrome
  *
  * Integrations keep their domain semantics, but share tldraw's public controls,
@@ -1388,58 +1547,12 @@
   z-index: var(--tl-layer-panels);
   top: var(--tl-space-3);
   left: 50%;
+  overflow: hidden;
+  border-radius: var(--tl-radius-4);
+  background: var(--tl-color-panel);
+  box-shadow: var(--tl-shadow-2);
   pointer-events: all;
   transform: translateX(-50%);
-}
-
-.workflow-palette .tlui-popover {
-  border-radius: var(--tl-radius-4);
-  background: var(--tl-color-panel);
-  box-shadow: var(--tl-shadow-2);
-}
-
-.tl-container > div:has(> .tlui-popover__content > .workflow-toolbar) {
-  top: 0 !important;
-  left: 50% !important;
-  transform: translate(-50%, calc(var(--tl-space-3) + 56px)) !important;
-}
-
-.workflow-palette-toggle {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--tl-radius-4);
-  background: var(--tl-color-panel);
-  box-shadow: var(--tl-shadow-2);
-  color: var(--tl-color-text-1);
-}
-
-.workflow-palette-toggle .workflow-tool-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.workflow-palette-toggle .workflow-status-dot {
-  position: absolute;
-  right: 8px;
-  bottom: 7px;
-  box-shadow: 0 0 0 2px var(--tl-color-panel);
-}
-
-.workflow-palette-toggle .workflow-status-dot.is-running {
-  background: var(--tl-color-info);
-  animation: workflow-status-pulse 1s ease-in-out infinite;
-}
-
-.workflow-palette-toggle .workflow-status-dot.is-succeeded {
-  background: var(--tl-color-success);
-}
-
-.workflow-palette-toggle .workflow-status-dot.is-failed,
-.workflow-palette-toggle .workflow-status-dot.is-cancelled {
-  background: var(--tl-color-danger);
 }
 
 .workflow-toolbar.tlui-toolbar {
@@ -1447,7 +1560,8 @@
   display: flex;
   flex-flow: row wrap;
   gap: 0;
-  width: min(584px, calc(100vw - 32px));
+  width: fit-content;
+  max-width: calc(100vw - 32px);
   min-height: 52px;
   max-height: 104px;
   padding: 2px;
@@ -1528,8 +1642,13 @@
 .ml-intern-eval-launcher {
   position: absolute;
   z-index: var(--tl-layer-panels);
-  top: var(--tl-space-10);
-  left: 68px;
+  top: calc(var(--tl-space-10) + 144px);
+  left: var(--tl-space-4);
+  width: 48px;
+  height: 48px;
+  border-top: 1px solid var(--tl-color-divider);
+  background: transparent;
+  box-shadow: none;
   font-family: var(--tl-font-sans);
   pointer-events: all;
 }
@@ -1557,9 +1676,11 @@
 }
 
 .ml-intern-eval-launcher .tlui-popover {
-  border-radius: var(--tl-radius-4);
+  width: 48px;
+  height: 48px;
+  border-radius: 0;
   background: var(--tl-color-panel);
-  box-shadow: var(--tl-shadow-2);
+  box-shadow: none;
 }
 
 .ml-intern-eval-launcher-toggle {
@@ -1700,15 +1821,16 @@
 .isoflow-provider-toolbar {
   position: absolute;
   z-index: var(--tl-layer-panels);
-  top: 586px;
+  top: calc(var(--tl-space-10) + 144px);
   left: var(--tl-space-4);
   width: 48px;
   height: 48px;
   padding: 0;
   border: 0;
-  border-radius: var(--tl-radius-4);
-  background: var(--tl-color-panel);
-  box-shadow: var(--tl-shadow-2);
+  border-top: 1px solid var(--tl-color-divider);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--tl-color-text-1);
   pointer-events: all;
 }
@@ -1722,6 +1844,9 @@
   width: 48px;
   height: 48px;
   padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--tl-color-success);
 }
 

@@ -113,7 +113,7 @@ export function IsoflowOverlay() {
 						<TldrawUiPopoverTrigger>
 							<TldrawUiButton
 								type="tool"
-								className="isoflow-provider-button"
+								className="workbench-rail-trigger isoflow-provider-button"
 								aria-label="Isoflow embeds"
 								aria-expanded={pickerOpen}
 								isActive={pickerOpen || Boolean(selected)}

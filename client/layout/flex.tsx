@@ -18,6 +18,9 @@ import {
 	TLShape,
 	TLShapeId,
 	TLShapePartial,
+	TldrawUiButtonIcon,
+	TldrawUiToolbar,
+	TldrawUiToolbarButton,
 	Vec,
 	track,
 	useEditor,
@@ -464,13 +467,12 @@ function LayoutNumberControl({
 	onChange(value: number): void
 }) {
 	return (
-		<label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+		<label className="canvas-layout-number-control">
 			<span>{label}</span>
 			<input
 				type="number"
 				min={0}
 				value={value}
-				style={{ width: 54 }}
 				onPointerDown={stopEventPropagation}
 				onChange={(event) => onChange(Number(event.currentTarget.value))}
 			/>
@@ -497,29 +499,47 @@ export const FlexLayoutControls = track(function FlexLayoutControls() {
 	}
 
 	return (
-		<div
+		<TldrawUiToolbar
+			className="canvas-layout-context-toolbar canvas-flex-layout-toolbar"
+			label="Flex layout controls"
+			orientation="horizontal"
+			tooltipSide="top"
 			onPointerDown={stopEventPropagation}
-			style={{
-				position: 'absolute',
-				left: '50%',
-				bottom: 120,
-				transform: 'translateX(-50%)',
-				display: 'flex',
-				alignItems: 'center',
-				gap: 6,
-				padding: 8,
-				borderRadius: 10,
-				background: 'var(--tl-color-panel, #fff)',
-				border: '1px solid var(--tl-color-muted-1, #cbd5e1)',
-				boxShadow: '0 4px 16px rgb(15 23 42 / 16%)',
-				pointerEvents: 'all',
-			}}
 		>
-			<button type="button" onClick={() => createFlexLayout(editor)}>New flex layout</button>
-			<button type="button" onClick={() => update({ direction: 'horizontal' })}>Row</button>
-			<button type="button" onClick={() => update({ direction: 'vertical' })}>Column</button>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="New flex layout"
+				tooltip="New flex layout"
+				onClick={() => createFlexLayout(editor)}
+			>
+				<TldrawUiButtonIcon icon="plus" />
+			</TldrawUiToolbarButton>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Horizontal layout"
+				tooltip="Horizontal layout"
+				isActive={shape.props.direction === 'horizontal'}
+				aria-pressed={shape.props.direction === 'horizontal'}
+				onClick={() => update({ direction: 'horizontal' })}
+			>
+				<TldrawUiButtonIcon icon="stack-horizontal" />
+			</TldrawUiToolbarButton>
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Vertical layout"
+				tooltip="Vertical layout"
+				isActive={shape.props.direction === 'vertical'}
+				aria-pressed={shape.props.direction === 'vertical'}
+				onClick={() => update({ direction: 'vertical' })}
+			>
+				<TldrawUiButtonIcon icon="stack-vertical" />
+			</TldrawUiToolbarButton>
 			<select
 				aria-label="Flex alignment"
+				title="Cross-axis alignment"
 				value={shape.props.align}
 				onChange={(event) => update({ align: event.currentTarget.value as LayoutAlign })}
 			>
@@ -529,6 +549,7 @@ export const FlexLayoutControls = track(function FlexLayoutControls() {
 			</select>
 			<select
 				aria-label="Flex justification"
+				title="Main-axis distribution"
 				value={shape.props.justify}
 				onChange={(event) => update({ justify: event.currentTarget.value as LayoutJustify })}
 			>
@@ -543,8 +564,11 @@ export const FlexLayoutControls = track(function FlexLayoutControls() {
 				value={shape.props.padding}
 				onChange={(padding) => update({ padding })}
 			/>
-			<button
-				type="button"
+			<TldrawUiToolbarButton
+				type="tool"
+				className="canvas-layout-action"
+				title="Insert selected shapes"
+				tooltip="Insert selected shapes"
 				onClick={() => {
 					const ids = editor
 						.getSelectedShapeIds()
@@ -552,9 +576,9 @@ export const FlexLayoutControls = track(function FlexLayoutControls() {
 					insertShapesIntoFlexLayout(editor, shape.id, ids, getFlexChildren(editor, shape.id).length)
 				}}
 			>
-				Insert selected
-			</button>
-		</div>
+				<TldrawUiButtonIcon icon="group" />
+			</TldrawUiToolbarButton>
+		</TldrawUiToolbar>
 	)
 })
 

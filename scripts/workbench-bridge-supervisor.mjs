@@ -15,6 +15,8 @@ export const WORKBENCH_SUPERVISOR_CLIENT = 'workbench-bridge-supervisor'
 export const WORKBENCH_SUPERVISOR_SCHEMA_VERSION = 1
 export const WORKBENCH_SUPERVISOR_CAPABILITY_HEADER =
 	'x-tldraw-html-capability'
+export const WORKBENCH_SUPERVISOR_PROXY_HEADER =
+	'x-canvas-studio-dev-proxy'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
@@ -96,6 +98,30 @@ export const WORKBENCH_SERVICE_REGISTRY = Object.freeze([
 		}),
 	}),
 	Object.freeze({
+		id: 'grok',
+		label: 'Grok Canvas',
+		port: 5187,
+		management: 'managed',
+		healthPath: '/health',
+		capabilities: Object.freeze([
+			'grok-inspect',
+			'grok-catalog',
+			'grok-workflow-config',
+		]),
+		command: Object.freeze([
+			'/usr/bin/env',
+			'node',
+			join(REPO_ROOT, 'scripts', 'grok-canvas-bridge.mjs'),
+		]),
+		cwd: REPO_ROOT,
+		matchesHealth: exactJsonIdentity({
+			status: 'ok',
+			service: 'grok-canvas-bridge',
+			supervisorPort: 5187,
+			configPort: 5188,
+		}),
+	}),
+	Object.freeze({
 		id: 'kanban',
 		label: 'Kanban runtime',
 		port: 3484,
@@ -162,6 +188,10 @@ export function createWorkbenchBridgeSupervisor(options = {}) {
 	const server = createServer(async (request, response) => {
 		setCommonHeaders(response)
 		const requestOrigin = readHeader(request, 'origin')
+		const trustedProxy =
+			!requestOrigin &&
+			readHeader(request, WORKBENCH_SUPERVISOR_PROXY_HEADER) === 'vite' &&
+			isLoopbackAddress(request.socket?.remoteAddress)
 		if (requestOrigin && requestOrigin !== 'null') {
 			if (!allowedOrigins.has(requestOrigin)) {
 				return sendJson(response, 403, {
@@ -192,7 +222,10 @@ export function createWorkbenchBridgeSupervisor(options = {}) {
 		}
 
 		if (request.method === 'POST' && url.pathname === '/api/session') {
-			if (!requestOrigin || !allowedOrigins.has(requestOrigin)) {
+			if (
+				!trustedProxy &&
+				(!requestOrigin || !allowedOrigins.has(requestOrigin))
+			) {
 				return sendJson(response, 403, {
 					error: 'resident_bootstrap_forbidden',
 					message:
@@ -794,6 +827,14 @@ function probeLoopbackPort(port, timeoutMs) {
 		socket.once('timeout', () => finish(false))
 		socket.once('error', () => finish(false))
 	})
+}
+
+function isLoopbackAddress(value) {
+	return (
+		value === '127.0.0.1' ||
+		value === '::1' ||
+		value === '::ffff:127.0.0.1'
+	)
 }
 
 function waitForChildExit(child, timeoutMs) {

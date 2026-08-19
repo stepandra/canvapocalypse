@@ -3,25 +3,20 @@ const WORKBENCH_CONTRIBUTIONS = [
 		kitId: 'workbench.architecture',
 		presetIds: [
 			'workbench.system-context',
+			'workbench.c4-container',
+			'workbench.c4-component',
+			'workbench.service-data-flow',
 			'workbench.decision-graph',
 			'workbench.change-radar',
 		],
 	},
 	{
 		kitId: 'workbench.ml',
-		presetIds: [
-			'workbench.experiment-loop',
-			'workbench.eval-pipeline',
-			'workbench.model-delivery',
-		],
+		presetIds: ['workbench.experiment-loop', 'workbench.eval-pipeline', 'workbench.model-delivery'],
 	},
 	{
 		kitId: 'workbench.uiux',
-		presetIds: [
-			'workbench.user-flow',
-			'workbench.wireframe-set',
-			'workbench.component-anatomy',
-		],
+		presetIds: ['workbench.user-flow', 'workbench.wireframe-set', 'workbench.component-anatomy'],
 	},
 	{
 		kitId: 'workbench.product',
@@ -29,6 +24,9 @@ const WORKBENCH_CONTRIBUTIONS = [
 			'workbench.roadmap',
 			'workbench.timeline',
 			'workbench.opportunity-map',
+			'workbench.opportunity-solution-tree',
+			'workbench.impact-map',
+			'workbench.service-blueprint',
 		],
 	},
 ]
@@ -57,67 +55,26 @@ function assertValidCanvasKitContributions(contributions) {
 		if (!contribution || typeof contribution !== 'object') {
 			throw new Error('Canvas Studio contribution must be an object.')
 		}
-		assertUniqueContributionId(
-			contribution.kitId,
-			'kit',
-			kitIds,
-			contribution.kitId
-		)
+		assertUniqueContributionId(contribution.kitId, 'kit', kitIds, contribution.kitId)
 		if (!Array.isArray(contribution.presetIds)) {
-			throw new Error(
-				`Canvas Studio kit ${contribution.kitId} presetIds must be an array.`
-			)
+			throw new Error(`Canvas Studio kit ${contribution.kitId} presetIds must be an array.`)
 		}
 		for (const presetId of contribution.presetIds) {
-			assertUniqueContributionId(
-				presetId,
-				'preset',
-				presetIds,
-				contribution.kitId
-			)
+			assertUniqueContributionId(presetId, 'preset', presetIds, contribution.kitId)
 		}
-		assertUniqueRegistrations(
-			contribution.shapeUtils,
-			'type',
-			'shape',
-			shapeIds,
-			contribution.kitId
-		)
-		assertUniqueRegistrations(
-			contribution.bindingUtils,
-			'type',
-			'binding',
-			bindingIds,
-			contribution.kitId
-		)
-		assertUniqueRegistrations(
-			contribution.tools,
-			'id',
-			'tool',
-			toolIds,
-			contribution.kitId
-		)
+		assertUniqueRegistrations(contribution.shapeUtils, 'type', 'shape', shapeIds, contribution.kitId)
+		assertUniqueRegistrations(contribution.bindingUtils, 'type', 'binding', bindingIds, contribution.kitId)
+		assertUniqueRegistrations(contribution.tools, 'id', 'tool', toolIds, contribution.kitId)
 		if (
 			contribution.records !== undefined &&
-			(!contribution.records ||
-				typeof contribution.records !== 'object' ||
-				Array.isArray(contribution.records))
+			(!contribution.records || typeof contribution.records !== 'object' || Array.isArray(contribution.records))
 		) {
-			throw new Error(
-				`Canvas Studio kit ${contribution.kitId} records must be an object.`
-			)
+			throw new Error(`Canvas Studio kit ${contribution.kitId} records must be an object.`)
 		}
 		for (const [typeName, record] of Object.entries(contribution.records ?? {})) {
-			assertUniqueContributionId(
-				typeName,
-				'record',
-				recordIds,
-				contribution.kitId
-			)
+			assertUniqueContributionId(typeName, 'record', recordIds, contribution.kitId)
 			if (!record || typeof record !== 'object') {
-				throw new Error(
-					`Canvas Studio record ${typeName} in ${contribution.kitId} must be an object.`
-				)
+				throw new Error(`Canvas Studio record ${typeName} in ${contribution.kitId} must be an object.`)
 			}
 		}
 	}
@@ -132,34 +89,26 @@ function assertUniqueContributionId(value, kind, owners, owner) {
 		if (kind === 'kit') {
 			throw new Error(`Duplicate Canvas Studio kit id ${value}`)
 		}
-		throw new Error(
-			`Duplicate Canvas Studio ${kind} id ${value} in ${existingOwner} and ${owner}`
-		)
+		throw new Error(`Duplicate Canvas Studio ${kind} id ${value} in ${existingOwner} and ${owner}`)
 	}
 	owners.set(value, owner)
 }
 
 function assertUniqueRegistrations(registrations, key, kind, owners, owner) {
 	if (!Array.isArray(registrations)) {
-		throw new Error(
-			`Canvas Studio kit ${owner} ${kind} registrations must be an array.`
-		)
+		throw new Error(`Canvas Studio kit ${owner} ${kind} registrations must be an array.`)
 	}
 	for (const registration of registrations) {
 		const value = registration?.[key]
 		if (typeof value !== 'string' || !value) {
-			throw new Error(
-				`Canvas Studio ${kind} registration is missing static ${key}`
-			)
+			throw new Error(`Canvas Studio ${kind} registration is missing static ${key}`)
 		}
 		if (!contributionIdPattern.test(value)) {
 			throw new Error(`Invalid Canvas Studio ${kind} id: ${value}`)
 		}
 		const existingOwner = owners.get(value)
 		if (existingOwner) {
-			throw new Error(
-				`Duplicate Canvas Studio ${kind} id ${value} in ${existingOwner} and ${owner}`
-			)
+			throw new Error(`Duplicate Canvas Studio ${kind} id ${value} in ${existingOwner} and ${owner}`)
 		}
 		owners.set(value, owner)
 	}

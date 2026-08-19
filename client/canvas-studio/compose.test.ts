@@ -18,6 +18,7 @@ function contribution(
 		bindingUtils: overrides.bindingUtils ?? [],
 		tools: overrides.tools ?? [],
 		records: overrides.records,
+		agentCapabilities: overrides.agentCapabilities,
 		onMount: overrides.onMount,
 		insertPreset:
 			overrides.insertPreset ??
@@ -209,5 +210,50 @@ describe('Canvas Studio kit composition', () => {
 		expect(() => composeCanvasKitContributions([first, second])).toThrow(
 			/Duplicate Canvas Studio record id comment-thread in kit.one and kit.two/
 		)
+	})
+
+	it('rejects duplicate and host-colliding agent capability ids', () => {
+		const capability = (kitId: string, id: string) => ({
+			descriptor: {
+				id,
+				version: 1 as const,
+				kitId,
+				mode: 'mutate' as const,
+				summary: 'Insert one bounded preset.',
+				contexts: ['selection' as const],
+				actionPlan: {
+					coordinateSystem: 'absolute-page' as const,
+					maxActions: 1,
+					actionTypes: ['insertPreset'],
+					schema: { type: 'array' },
+				},
+				effects: {
+					recordTypes: ['shape' as const],
+					atomic: true as const,
+					undoable: true as const,
+				},
+			},
+			execute: vi.fn(() => ({ shapeIds: [], bindingIds: [], summary: 'Done' })),
+		})
+		expect(() =>
+			composeCanvasKitContributions([
+				contribution({
+					kitId: 'kit.one',
+					agentCapabilities: [capability('kit.one', 'canvas.inspect')],
+				}),
+			])
+		).toThrow(/collides with a host capability/)
+		expect(() =>
+			composeCanvasKitContributions([
+				contribution({
+					kitId: 'kit.one',
+					agentCapabilities: [capability('kit.one', 'kit.shared.insert')],
+				}),
+				contribution({
+					kitId: 'kit.two',
+					agentCapabilities: [capability('kit.two', 'kit.shared.insert')],
+				}),
+			])
+		).toThrow(/Duplicate Canvas Studio agent capability id kit.shared.insert/)
 	})
 })

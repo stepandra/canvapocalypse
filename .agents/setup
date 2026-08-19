@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GROK_BUILD_REPOSITORY="https://github.com/xai-org/grok-build.git"
+GROK_BUILD_REVISION="d92c5b0b8582fda358de1f97446aa74af44a464f"
+GROK_BUILD_TOOLCHAIN="1.94.0"
+DOTSLASH_VERSION="0.5.7"
+
+cache_root="${XDG_CACHE_HOME:-$HOME/.cache}"
+source_dir="$cache_root/grok-build-src"
+install_dir="$HOME/.local/bin"
+grok_bin="$install_dir/grok"
+install_marker="$source_dir/.amp-installed-revision"
+build_bin="$source_dir/target/release/xai-grok-pager"
+build_marker="$source_dir/target/.amp-grok-build-revision"
+
+export PATH="$HOME/.cargo/bin:$install_dir:$PATH"
+
+log_step() {
+	printf '\n[setup] %s\n' "$1"
+}
+
+clean_build_artifacts() {
+	# The installed binary is self-contained; do not retain a multi-gigabyte
+	# Cargo target directory in the orb snapshot.
+	rm -rf "$source_dir/target"
+}
+
+log_step "Checking native build prerequisites"
+required_packages=(ca-certificates curl git build-essential pkg-config)
+missing_packages=()
+for package in "${required_packages[@]}"; do
+	if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -Fq 'install ok installed'; then
+		missing_packages+=("$package")
+	fi
+done
+if ((${#missing_packages[@]})); then
+	if ((EUID == 0)); then
+		apt-get update
+		DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing_packages[@]}"
+	else
+		sudo apt-get update
+		sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${missing_packages[@]}"
+	fi
+fi
+
+log_step "Checking Rust $GROK_BUILD_TOOLCHAIN"
+if ! command -v rustup >/dev/null 2>&1; then
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+		sh -s -- -y --profile minimal
+fi
+
+toolchain_ready=true
+rustup run "$GROK_BUILD_TOOLCHAIN" rustc --version >/dev/null 2>&1 || toolchain_ready=false
+for component in rustfmt clippy; do
+	rustup component list --toolchain "$GROK_BUILD_TOOLCHAIN" 2>/dev/null |
+		grep -Eq "^${component}-.+ \(installed\)$" || toolchain_ready=false
+done
+for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+	rustup target list --installed --toolchain "$GROK_BUILD_TOOLCHAIN" 2>/dev/null |
+		grep -Fqx "$target" || toolchain_ready=false
+done
+if [[ "$toolchain_ready" != true ]]; then
+	rustup toolchain install "$GROK_BUILD_TOOLCHAIN" \
+		--profile default \
+		--component rustfmt \
+		--component clippy \
+		--target x86_64-unknown-linux-gnu \
+		--target aarch64-unknown-linux-gnu
+fi
+
+log_step "Checking DotSlash $DOTSLASH_VERSION"
+if [[ "$(dotslash --version 2>/dev/null || true)" != "DotSlash $DOTSLASH_VERSION" ]]; then
+	cargo "+$GROK_BUILD_TOOLCHAIN" install \
+		--locked \
+		--version "$DOTSLASH_VERSION" \
+		dotslash
+fi
+/usr/bin/env dotslash --help >/dev/null 2>&1
+
+installed_revision=""
+installed_sha256=""
+if [[ -f "$install_marker" ]]; then
+	read -r installed_revision installed_sha256 <"$install_marker" || true
+fi
+current_sha256=""
+if [[ -x "$grok_bin" ]]; then
+	current_sha256="$(sha256sum "$grok_bin" | cut -d' ' -f1)"
+fi
+
+if [[ "$installed_revision" == "$GROK_BUILD_REVISION" && \
+	-n "$installed_sha256" && \
+	"$current_sha256" == "$installed_sha256" ]]; then
+	log_step "Grok Build source install is current"
+	"$grok_bin" --version
+	clean_build_artifacts
+	exit 0
+fi
+
+log_step "Fetching Grok Build source at $GROK_BUILD_REVISION"
+mkdir -p "$cache_root"
+if [[ ! -d "$source_dir/.git" ]]; then
+	rm -rf "$source_dir"
+	git clone --filter=blob:none --no-checkout "$GROK_BUILD_REPOSITORY" "$source_dir"
+else
+	git -C "$source_dir" remote set-url origin "$GROK_BUILD_REPOSITORY"
+fi
+if [[ "$(git -C "$source_dir" rev-parse HEAD 2>/dev/null || true)" != "$GROK_BUILD_REVISION" ]] ||
+	! git -C "$source_dir" diff --quiet --ignore-submodules --; then
+	git -C "$source_dir" fetch --depth=1 origin "$GROK_BUILD_REVISION"
+	git -C "$source_dir" checkout --detach --force "$GROK_BUILD_REVISION"
+fi
+test "$(git -C "$source_dir" rev-parse HEAD)" = "$GROK_BUILD_REVISION"
+
+built_revision=""
+built_sha256=""
+if [[ -f "$build_marker" ]]; then
+	read -r built_revision built_sha256 <"$build_marker" || true
+fi
+current_build_sha256=""
+if [[ -x "$build_bin" ]]; then
+	current_build_sha256="$(sha256sum "$build_bin" | cut -d' ' -f1)"
+fi
+if [[ "$built_revision" == "$GROK_BUILD_REVISION" && \
+	-n "$built_sha256" && \
+	"$current_build_sha256" == "$built_sha256" ]]; then
+	log_step "Reusing verified Grok Build source artifact"
+else
+	log_step "Building Grok Build from source"
+	cargo "+$GROK_BUILD_TOOLCHAIN" build \
+		--locked \
+		--manifest-path "$source_dir/Cargo.toml" \
+		-p xai-grok-pager-bin \
+		--release
+	built_sha256="$(sha256sum "$build_bin" | cut -d' ' -f1)"
+	printf '%s %s\n' "$GROK_BUILD_REVISION" "$built_sha256" >"$build_marker"
+fi
+
+log_step "Installing grok into $install_dir"
+mkdir -p "$install_dir"
+install -m 0755 "$build_bin" "$grok_bin.tmp"
+mv -f "$grok_bin.tmp" "$grok_bin"
+installed_sha256="$(sha256sum "$grok_bin" | cut -d' ' -f1)"
+printf '%s %s\n' "$GROK_BUILD_REVISION" "$installed_sha256" >"$install_marker"
+"$grok_bin" --version
+clean_build_artifacts

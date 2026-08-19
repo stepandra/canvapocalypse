@@ -1,0 +1,324 @@
+.tl-html-container.markdown-document-shell {
+	display: flex;
+	box-sizing: border-box;
+	flex-direction: column;
+	overflow: hidden;
+	pointer-events: all;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: 10px;
+	background: var(--tl-color-panel);
+	box-shadow: var(--tl-shadow-2);
+	color: var(--tl-color-text-1);
+	font-family: var(--tl-font-sans);
+}
+
+.markdown-document-shell.is-collapsed {
+	box-shadow: var(--tl-shadow-1);
+}
+
+.markdown-document-header {
+	display: flex;
+	box-sizing: border-box;
+	min-height: 66px;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--tl-space-3);
+	padding: 0 var(--tl-space-4);
+	border-left: 4px solid var(--tl-color-selected);
+	background: var(--tl-color-panel);
+}
+
+.markdown-document-heading {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.markdown-document-heading strong {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.markdown-document-heading span {
+	color: var(--tl-color-text-3);
+	font-family: var(--tl-font-mono);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
+.markdown-document-toggle {
+	display: grid;
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	padding: 0;
+	place-items: center;
+	border: 0;
+	border-radius: var(--tl-radius-2);
+	background: transparent;
+	color: var(--tl-color-text-3);
+	cursor: pointer;
+}
+
+.markdown-document-toggle:hover {
+	background: var(--tl-color-muted-1);
+	color: var(--tl-color-text-1);
+}
+
+.markdown-document-toggle:focus-visible {
+	outline: 2px solid var(--tl-color-selected);
+	outline-offset: -2px;
+}
+
+.markdown-document-toggle svg {
+	width: 16px;
+	height: 16px;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 1.75;
+}
+
+.markdown-document-content {
+	flex: 1 1 auto;
+	padding: 0 var(--tl-space-5) var(--tl-space-5);
+	overflow: auto;
+	border-top: 1px solid var(--tl-color-divider);
+	overscroll-behavior: contain;
+	user-select: text;
+}
+
+.markdown-document-source {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--tl-space-3);
+	padding: var(--tl-space-3) 0;
+	border-bottom: 1px solid var(--tl-color-divider);
+	color: var(--tl-color-text-3);
+	font-size: 11px;
+}
+
+.markdown-document-source span {
+	font-family: var(--tl-font-mono);
+	font-weight: 700;
+	letter-spacing: 0.08em;
+}
+
+.markdown-document-source code {
+	max-width: 60%;
+	overflow: hidden;
+	font-family: var(--tl-font-mono);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.markdown-document-rendered {
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+.markdown-document-rendered h1,
+.markdown-document-rendered h2,
+.markdown-document-rendered h3,
+.markdown-document-rendered h4 {
+	margin: 1.25em 0 0.5em;
+	line-height: 1.25;
+}
+
+.markdown-document-rendered h1 {
+	font-size: 24px;
+}
+
+.markdown-document-rendered h2 {
+	font-size: 19px;
+}
+
+.markdown-document-rendered h3 {
+	font-size: 16px;
+}
+
+.markdown-document-rendered p,
+.markdown-document-rendered ul,
+.markdown-document-rendered ol,
+.markdown-document-rendered blockquote,
+.markdown-document-rendered pre {
+	margin: 0.75em 0;
+}
+
+.markdown-document-rendered blockquote {
+	padding-left: var(--tl-space-3);
+	border-left: 3px solid var(--tl-color-divider);
+	color: var(--tl-color-text-3);
+}
+
+.markdown-document-rendered code {
+	font-family: var(--tl-font-mono);
+}
+
+.markdown-document-rendered :not(pre) > code {
+	padding: 1px 4px;
+	border-radius: var(--tl-radius-1);
+	background: var(--tl-color-muted-1);
+}
+
+.markdown-document-rendered pre {
+	padding: var(--tl-space-3);
+	overflow: auto;
+	border-radius: var(--tl-radius-2);
+	background: var(--tl-color-muted-1);
+}
+
+.markdown-document-rendered img {
+	max-width: 100%;
+	height: auto;
+}
+
+.markdown-document-rendered a {
+	color: var(--tl-color-selected);
+}
+
+.workbench-markdown-import {
+	position: relative;
+	order: 2;
+	width: 40px;
+	height: 40px;
+}
+
+.workbench-markdown-import > .tlui-button {
+	width: 40px;
+	height: 40px;
+}
+
+.workbench-markdown-file-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.markdown-document-menu,
+.markdown-document-editor {
+	box-sizing: border-box;
+	width: min(360px, calc(100vw - 24px));
+	padding: var(--tl-space-2);
+	color: var(--tl-color-text-1);
+	font-family: var(--tl-font-sans);
+}
+
+.markdown-document-menu-head,
+.markdown-document-editor header,
+.markdown-document-menu-selected {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: var(--tl-space-3);
+}
+
+.markdown-document-editor header > div {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.markdown-document-menu-head strong,
+.markdown-document-editor header strong,
+.markdown-document-menu-selected strong {
+	font-size: 13px;
+}
+
+.markdown-document-menu-head small,
+.markdown-document-editor header small,
+.markdown-document-menu-selected small {
+	color: var(--tl-color-text-3);
+	font-size: 11px;
+	line-height: 1.35;
+}
+
+.markdown-document-menu > .tlui-button {
+	width: 100%;
+	justify-content: flex-start;
+}
+
+.markdown-document-menu-divider {
+	height: 1px;
+	margin: var(--tl-space-2) var(--tl-space-3);
+	background: var(--tl-color-divider);
+}
+
+.markdown-document-menu-selected span {
+	color: var(--tl-color-selected);
+	font-family: var(--tl-font-mono);
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.1em;
+}
+
+.markdown-document-editor {
+	display: flex;
+	flex-direction: column;
+	gap: var(--tl-space-3);
+}
+
+.markdown-document-editor label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--tl-space-2);
+	padding: 0 var(--tl-space-3);
+}
+
+.markdown-document-editor label > span {
+	color: var(--tl-color-text-3);
+	font-size: 11px;
+	font-weight: 700;
+}
+
+.markdown-document-editor input,
+.markdown-document-editor textarea {
+	box-sizing: border-box;
+	width: 100%;
+	border: 1px solid var(--tl-color-divider);
+	border-radius: var(--tl-radius-2);
+	outline: none;
+	background: var(--tl-color-panel);
+	color: var(--tl-color-text-1);
+	font: inherit;
+}
+
+.markdown-document-editor input {
+	height: 36px;
+	padding: 0 var(--tl-space-3);
+}
+
+.markdown-document-editor textarea {
+	min-height: 220px;
+	padding: var(--tl-space-3);
+	font-family: var(--tl-font-mono);
+	font-size: 12px;
+	line-height: 1.45;
+	resize: vertical;
+}
+
+.markdown-document-editor input:focus,
+.markdown-document-editor textarea:focus {
+	border-color: var(--tl-color-selected);
+	box-shadow: 0 0 0 1px var(--tl-color-selected);
+}
+
+.markdown-document-editor footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--tl-space-2);
+	padding: 0 var(--tl-space-3) var(--tl-space-2);
+}

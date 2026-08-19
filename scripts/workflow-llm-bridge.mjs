@@ -28,6 +28,12 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:5175",
   "http://localhost:5175",
 ]);
+const OFFLINE_DESKTOP_ORIGIN = "tldraw-app://app";
+const OFFLINE_DESKTOP_COMPANION_ROUTES = new Set([
+  "/companion/canvas-tool/status",
+  "/companion/canvas-tool/next",
+  "/companion/canvas-tool/receipt",
+]);
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1";
 const HTML_MOCKUP_RESIDENT_CAPABILITY =
   loadOrCreateHtmlMockupResidentCapability({
@@ -82,10 +88,14 @@ const server = createServer(async (request, response) => {
       origin === "" ||
       origin === "null" ||
       ALLOWED_ORIGINS.has(origin));
+  const isAllowedOfflineDesktopOrigin =
+    origin === OFFLINE_DESKTOP_ORIGIN &&
+    OFFLINE_DESKTOP_COMPANION_ROUTES.has(url.pathname);
   if (
     origin &&
     !ALLOWED_ORIGINS.has(origin) &&
-    !isAllowedResidentCapabilityOrigin
+    !isAllowedResidentCapabilityOrigin &&
+    !isAllowedOfflineDesktopOrigin
   ) {
     return send(response, 403, "Origin is not allowed");
   }

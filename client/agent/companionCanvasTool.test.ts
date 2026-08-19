@@ -1,5 +1,8 @@
 import { Box } from 'tldraw'
 import { describe, expect, it, vi } from 'vitest'
+import type { CanvasRuntimeCapabilityCatalog } from '../canvas-studio/runtimeCapabilityCatalog'
+import { createCanvapocalypseCanvasKitComposition } from '../canvas-studio/host'
+import { createMarkdownDocumentInput } from '../markdown/MarkdownDocumentShape'
 import type { TldrawAgent } from './TldrawAgent'
 import {
 	executeCompanionCanvasToolRequest,
@@ -46,6 +49,50 @@ function shape(
 	}
 }
 
+function runtimeCatalog(
+	catalogRevision: string,
+	shapeTypes: readonly string[]
+): CanvasRuntimeCapabilityCatalog {
+	return {
+		schema: 'canvas-studio-runtime-capabilities/v1',
+		version: 1,
+		catalogRevision,
+		surface: 'tldraw',
+		pageMode: 'architecture',
+		contextPolicies: ['selection', 'selection-or-area'],
+		registrations: {
+			shapeTypes: shapeTypes.map((id) => ({ id, owner: 'canvapocalypse.host' })),
+			bindingTypes: [],
+			toolIds: [],
+			recordTypes: [],
+		},
+		kits: [],
+		capabilities: [],
+	}
+}
+
+function markdownRuntimeCatalog(catalogRevision = 'catalog-architecture-markdown') {
+	const composition = createCanvapocalypseCanvasKitComposition()
+	const capability = composition.getAgentCapability('canvas.markdown.read')
+	if (!capability) throw new Error('Markdown capability is not registered')
+	return {
+		composition,
+		catalog: {
+			...runtimeCatalog(catalogRevision, ['geo', 'markdown-document']),
+			kits: [
+				{
+					id: 'canvas.markdown',
+					title: 'Markdown documents',
+					tags: ['markdown'],
+					presets: [],
+					capabilityIds: ['canvas.markdown.read'],
+				},
+			],
+			capabilities: [structuredClone(capability.descriptor)],
+		} satisfies CanvasRuntimeCapabilityCatalog,
+	}
+}
+
 function mockAgent({
 	selected = [shape(1)],
 	pageShapes = selected,
@@ -71,6 +118,10 @@ function mockAgent({
 	const editor = {
 		store: {
 			query: { records: vi.fn(() => ({ get: () => [] })) },
+			extractingChanges: vi.fn((callback: () => void) => {
+				callback()
+				return { added: {}, updated: {}, removed: {} }
+			}),
 		},
 		getSelectedShapes: vi.fn(() => selected),
 		getShapeMaskedPageBounds: vi.fn(getBounds),
@@ -82,6 +133,7 @@ function mockAgent({
 			)
 		),
 		getCurrentPageShapesSorted: vi.fn(() => pageShapes),
+		getCurrentPageId: vi.fn(() => 'page:page'),
 		getShape: vi.fn((id: string) => pageShapes.find((candidate) => candidate.id === id)),
 		getBindingsFromShape: vi.fn(() => []),
 		getShapeUtil: vi.fn(() => ({
@@ -239,7 +291,7 @@ describe('provider-neutral companion live-canvas executor', () => {
 		}
 	})
 
-	it('projects selected, in-bounds, and far page shapes as focused, blurry, and peripheral', async () => {
+	it('projects only selected records without leaking in-bounds or peripheral page context', async () => {
 		const selected = shape(1, {
 			x: 0,
 			y: 0,
@@ -288,13 +340,8 @@ describe('provider-neutral companion live-canvas executor', () => {
 			_type: 'rectangle',
 			shapeId: 'node-1',
 		})
-		expect(result.blurry).toEqual([
-			expect.objectContaining({ shapeId: 'node-1', type: 'rectangle' }),
-			expect.objectContaining({ shapeId: 'node-2', type: 'ellipse' }),
-		])
-		expect(result.peripheral).toEqual([
-			expect.objectContaining({ numberOfShapes: 1 }),
-		])
+		expect(result.blurry).toEqual([])
+		expect(result.peripheral).toEqual([])
 		expect(JSON.stringify(result)).not.toContain('secret-inspection-token')
 		expect(JSON.stringify(result)).not.toContain('blurry-secret-token')
 		expect(JSON.stringify(result)).not.toContain('richText')
@@ -440,11 +487,82 @@ describe('provider-neutral companion live-canvas executor', () => {
 			subType: 'workflow-node',
 			shapeId: 'node-4',
 		})
-		expect(result.blurry.find((item) => item.shapeId === 'node-4')).toMatchObject({
-			type: 'unknown',
-			subType: 'workflow-node',
-			shapeId: 'node-4',
+		expect(result.blurry).toEqual([])
+	})
+
+	it('projects only shape types disclosed by the active page catalog', async () => {
+		const architectureShape = shape(1, {
+			props: { w: 80, h: 48, geo: 'rectangle' },
 		})
+		const productShape = shape(2, {
+			type: 'workflow-node',
+			props: { w: 80, h: 48 },
+		})
+		const { agent } = mockAgent({
+			selected: [architectureShape, productShape],
+			pageShapes: [architectureShape, productShape],
+		})
+		const catalog = runtimeCatalog('catalog-architecture', ['geo'])
+
+		const receipt = await executeCompanionCanvasToolRequest(
+			agent,
+			request({ catalogRevision: catalog.catalogRevision }),
+			undefined,
+			catalog
+		)
+		const result = receipt.result as { focused: Array<{ shapeId: string }> }
+
+		expect(result.focused.map(({ shapeId }) => shapeId)).toEqual(['node-1'])
+		expect(JSON.stringify(result)).not.toContain('workflow-node')
+	})
+
+	it('rejects an old page manifest after the active catalog revision changes', async () => {
+		const { agent } = mockAgent()
+		const catalog = runtimeCatalog('catalog-product', ['geo'])
+
+		await expect(
+			executeCompanionCanvasToolRequest(
+				agent,
+				request({ catalogRevision: 'catalog-architecture' }),
+				undefined,
+				catalog
+			)
+		).rejects.toThrow('catalog is stale')
+	})
+
+	it('invalidates an inspected context when the active page catalog changes', async () => {
+		const { agent, actions } = mockAgent()
+		const architecture = runtimeCatalog('catalog-architecture', ['geo'])
+		const product = runtimeCatalog('catalog-product', ['geo'])
+		const inspection = await executeCompanionCanvasToolRequest(
+			agent,
+			request({ catalogRevision: architecture.catalogRevision }),
+			undefined,
+			architecture
+		)
+		const contextRef = (inspection.result as { contextRef: string }).contextRef
+
+		await expect(
+			executeCompanionCanvasToolRequest(
+				agent,
+				request({
+					capabilityId: 'canvas.shape.basic',
+					catalogRevision: product.catalogRevision,
+					contextRef,
+					actions: [
+						{
+							_type: 'label',
+							intent: 'Change a visible shape',
+							shapeId: 'node-1',
+							text: 'Changed',
+						},
+					],
+				}),
+				undefined,
+				product
+			)
+		).rejects.toThrow('capability catalog drifted')
+		expect(actions.act).not.toHaveBeenCalled()
 	})
 
 	it('redacts api keys and passwords from projected text', async () => {
@@ -470,6 +588,212 @@ describe('provider-neutral companion live-canvas executor', () => {
 		expect(dumped).not.toContain('hunter2')
 		expect(dumped).not.toContain('password=')
 		expect(dumped).not.toContain('api_key=')
+	})
+
+	it('returns selected Markdown as a bounded semantic document projection', async () => {
+		const markdown = '# Architecture\n\nUse an event bus.'
+		const input = createMarkdownDocumentInput(markdown, 'architecture.md', {
+			documentRef: 'markdown-architecture-context',
+			title: 'Architecture constraints',
+		})
+		const selected = shape(1, {
+			type: 'markdown-document',
+			props: {
+				...input,
+				w: 520,
+				h: 68,
+				collapsed: true,
+				expandedH: 460,
+			},
+		})
+		const { agent } = mockAgent({ selected: [selected], pageShapes: [selected] })
+
+		const receipt = await executeCompanionCanvasToolRequest(agent, request())
+		const result = receipt.result as {
+			focused: Array<Record<string, unknown>>
+		}
+
+		expect(result.focused).toEqual([
+			expect.objectContaining({
+				_type: 'markdown-document',
+				title: 'Architecture constraints',
+				documentRef: 'markdown-architecture-context',
+					revision: input.revision,
+					bytes: input.bytes,
+				sourceName: 'architecture.md',
+				readCapability: 'canvas.markdown.read',
+			}),
+		])
+		expect(JSON.stringify(result)).not.toContain(markdown)
+	})
+
+	it('rejects a semantic read when Markdown content no longer matches its revision metadata', async () => {
+		const input = createMarkdownDocumentInput('# Original', 'architecture.md', {
+			documentRef: 'markdown-architecture-integrity',
+		})
+		const selected = shape(1, {
+			type: 'markdown-document',
+			props: {
+				...input,
+				markdown: '# Modified without a revision',
+				w: 520,
+				h: 68,
+				collapsed: true,
+				expandedH: 460,
+			},
+		})
+		const { agent } = mockAgent({ selected: [selected], pageShapes: [selected] })
+		const { composition, catalog } = markdownRuntimeCatalog()
+		const inspection = await executeCompanionCanvasToolRequest(
+			agent,
+			request({ catalogRevision: catalog.catalogRevision }),
+			composition,
+			catalog
+		)
+		const contextRef = (inspection.result as { contextRef: string }).contextRef
+
+		await expect(
+			executeCompanionCanvasToolRequest(
+				agent,
+				request({
+					id: 'markdown-read-integrity',
+					capabilityId: 'canvas.markdown.read',
+					catalogRevision: catalog.catalogRevision,
+					contextRef,
+					actions: [
+						{
+							_type: 'readMarkdownChunk',
+							shapeId: 'node-1',
+							documentRef: input.documentRef,
+							revision: input.revision,
+						},
+					],
+				}),
+				composition,
+				catalog
+			)
+		).rejects.toThrow('content does not match its revision metadata')
+	})
+
+	it('reads selected Markdown in revision-bound chunks and invalidates stale cursors', async () => {
+		const markdown = `# Architecture\n\n${'event-driven constraints '.repeat(500)}`
+		const input = createMarkdownDocumentInput(markdown, '/Users/example/Vault/architecture.md', {
+			documentRef: 'markdown-architecture-chunks',
+			title: 'Architecture constraints',
+		})
+		const selected = shape(1, {
+			type: 'markdown-document',
+			props: {
+				...input,
+				w: 520,
+				h: 68,
+				collapsed: true,
+				expandedH: 460,
+			},
+		})
+		const { agent } = mockAgent({ selected: [selected], pageShapes: [selected] })
+		const { composition, catalog } = markdownRuntimeCatalog()
+		const inspection = await executeCompanionCanvasToolRequest(
+			agent,
+			request({ catalogRevision: catalog.catalogRevision }),
+			composition,
+			catalog
+		)
+		const contextRef = (inspection.result as { contextRef: string }).contextRef
+		const first = await executeCompanionCanvasToolRequest(
+			agent,
+			request({
+				id: 'markdown-read-1',
+				capabilityId: 'canvas.markdown.read',
+				catalogRevision: catalog.catalogRevision,
+				contextRef,
+				actions: [
+					{
+						_type: 'readMarkdownChunk',
+						shapeId: 'node-1',
+						documentRef: input.documentRef,
+						revision: input.revision,
+						maxBytes: 1024,
+					},
+				],
+			}),
+			composition,
+			catalog
+		)
+		const firstResult = first.result as {
+			text: string
+			nextCursor: string
+			byteRange: { start: number; end: number }
+			revision: string
+		}
+		expect(firstResult.byteRange).toEqual({ start: 0, end: 1024 })
+		expect(firstResult.revision).toBe(input.revision)
+		expect(JSON.stringify(firstResult)).not.toContain('/Users/')
+
+		const second = await executeCompanionCanvasToolRequest(
+			agent,
+			request({
+				id: 'markdown-read-2',
+				capabilityId: 'canvas.markdown.read',
+				catalogRevision: catalog.catalogRevision,
+				contextRef,
+				actions: [
+					{
+						_type: 'readMarkdownChunk',
+						shapeId: 'node-1',
+						documentRef: input.documentRef,
+						revision: input.revision,
+						cursor: firstResult.nextCursor,
+						maxBytes: 1024,
+					},
+				],
+			}),
+			composition,
+			catalog
+		)
+		const secondResult = second.result as {
+			text: string
+			nextCursor: string
+			byteRange: { start: number; end: number }
+		}
+		expect(secondResult.byteRange.start).toBe(firstResult.byteRange.end)
+		expect(firstResult.text + secondResult.text).toBe(
+			markdown.slice(0, firstResult.text.length + secondResult.text.length)
+		)
+
+		const refreshed = createMarkdownDocumentInput(`${markdown}\nChanged`, 'architecture.md', {
+			documentRef: input.documentRef,
+		})
+		Object.assign(selected.props, refreshed)
+		const refreshedInspection = await executeCompanionCanvasToolRequest(
+			agent,
+			request({ id: 'markdown-inspect-refreshed', catalogRevision: catalog.catalogRevision }),
+			composition,
+			catalog
+		)
+		const refreshedContextRef = (refreshedInspection.result as { contextRef: string }).contextRef
+		await expect(
+			executeCompanionCanvasToolRequest(
+				agent,
+				request({
+					id: 'markdown-read-stale-cursor',
+					capabilityId: 'canvas.markdown.read',
+					catalogRevision: catalog.catalogRevision,
+					contextRef: refreshedContextRef,
+					actions: [
+						{
+							_type: 'readMarkdownChunk',
+							shapeId: 'node-1',
+							documentRef: refreshed.documentRef,
+							revision: refreshed.revision,
+							cursor: secondResult.nextCursor,
+						},
+					],
+				}),
+				composition,
+				catalog
+			)
+		).rejects.toThrow('cursor is stale')
 	})
 
 	it('hashes every shape authorized by a dense area, including shapes omitted from projection', async () => {

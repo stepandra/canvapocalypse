@@ -52,8 +52,9 @@ describe('companion canvas binding identity', () => {
 })
 
 describe('companion canvas client kind', () => {
-	it('identifies the packaged tldraw Offline file surface', () => {
+	it('identifies both legacy and current packaged tldraw Offline surfaces', () => {
 		expect(resolveCompanionCanvasClientKind('file:')).toBe('offline-desktop')
+		expect(resolveCompanionCanvasClientKind('tldraw-app:')).toBe('offline-desktop')
 	})
 
 	it('treats localhost and unknown browser surfaces as web previews', () => {

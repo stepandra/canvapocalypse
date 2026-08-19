@@ -54,6 +54,8 @@ test('generation succeeds with default registry and embeds required furniture', 
 	}
 	assert.match(script, /PageRecordType\.createId/)
 	assert.match(script, /editor\.createPage/)
+	assert.match(script, /meta:\s*\{\s*lens:\s*domain\.id\s*\}/)
+	assert.match(script, /editor\.updatePage/)
 	assert.doesNotMatch(script, /deletePage|deletePages/)
 })
 

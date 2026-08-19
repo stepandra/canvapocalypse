@@ -20,6 +20,9 @@ import {
 } from '../agent/companionCanvasTool'
 import type { TldrawAgent } from '../agent/TldrawAgent'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
+import { getPublishedCompanionCanvasCapabilityCatalog } from '../agent/companionCanvasBinding'
+import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../canvas-studio/host'
+import type { CanvasRuntimeCapabilityCatalog } from '../canvas-studio/runtimeCapabilityCatalog'
 
 const POLL_INTERVAL_MS = 1_500
 
@@ -297,7 +300,17 @@ export function CompanionCanvasBridgeController({
 				processingRef.current = true
 				setState('applying')
 				try {
-					const outcome = await executeCompanionCanvasRequestLocally(agent, request)
+					const outcome = await executeCompanionCanvasRequestLocally(
+						agent,
+						request,
+						(currentAgent, currentRequest) =>
+							executeCompanionCanvasToolRequest(
+								currentAgent,
+								currentRequest,
+								CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+								getPublishedCompanionCanvasCapabilityCatalog<CanvasRuntimeCapabilityCatalog>()
+							)
+					)
 					deliveryQueue.stage(outcome)
 					if (mountedRef.current) {
 						setLatestReceipt(outcome.receipt as CompanionCanvasToolReceipt)

@@ -7,9 +7,12 @@ import {
 } from './architectureTemplates'
 
 describe('architecture templates', () => {
-	it('exposes the three deterministic native architecture starters', () => {
+	it('exposes the deterministic native architecture starters', () => {
 		expect(ARCHITECTURE_TEMPLATE_IDS).toEqual([
 			'system-context',
+			'c4-container',
+			'c4-component',
+			'service-data-flow',
 			'decision-graph',
 			'change-radar',
 		])
@@ -91,6 +94,29 @@ describe('architecture templates', () => {
 				.filter((node) => node.meta.workbenchArtifact.role === 'change')
 				.map((node) => node.meta.workbenchArtifact.status)
 		).toEqual(expect.arrayContaining(['in-progress', 'planned']))
+
+		expect(
+			ARCHITECTURE_TEMPLATES['c4-container'].nodes.map(
+				(node) => node.meta.workbenchArtifact.role
+			)
+		).toEqual(
+			expect.arrayContaining(['actor', 'boundary', 'container', 'data-store'])
+		)
+		expect(
+			ARCHITECTURE_TEMPLATES['c4-component'].nodes.map(
+				(node) => node.meta.workbenchArtifact.role
+			)
+		).toEqual(expect.arrayContaining(['boundary', 'interface', 'component']))
+		expect(
+			ARCHITECTURE_TEMPLATES['service-data-flow'].relations.map(
+				(relation) => relation.meta.workbenchArtifact.relation
+			)
+		).toEqual(expect.arrayContaining(['calls', 'publishes', 'subscribes', 'reads', 'writes']))
+		expect(
+			ARCHITECTURE_TEMPLATES['decision-graph'].nodes.some(
+				(node) => node.meta.workbenchArtifact.role === 'adr'
+			)
+		).toBe(true)
 	})
 
 	it('contains no implicit Isoflow surface, project, view, bridge, or action contract', () => {

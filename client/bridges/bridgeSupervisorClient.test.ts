@@ -89,6 +89,34 @@ describe('bridge supervisor client', () => {
 		expect(fetchMock).not.toHaveBeenCalled()
 	})
 
+	it('uses the same-origin proxy from an Amp portal renderer', async () => {
+		vi.stubGlobal('location', {
+			protocol: 'https:',
+			origin: 'https://canvas.onamp.dev',
+		})
+		const fetchMock = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ capability: CAPABILITY }), {
+					status: 200,
+				})
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ services: [] }), { status: 200 })
+			)
+		vi.stubGlobal('fetch', fetchMock)
+		const client = await import('./bridgeSupervisorClient')
+
+		await client.listBridgeServices()
+
+		expect(String(fetchMock.mock.calls[0][0])).toBe(
+			'https://canvas.onamp.dev/__canvas-bridge-supervisor/api/session'
+		)
+		expect(String(fetchMock.mock.calls[1][0])).toBe(
+			'https://canvas.onamp.dev/__canvas-bridge-supervisor/api/services'
+		)
+	})
+
 	it('accepts Offline authority only through the module-level installer', async () => {
 		vi.stubGlobal('location', { protocol: 'file:', origin: 'null' })
 		const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(

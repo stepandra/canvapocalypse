@@ -27,6 +27,9 @@ export type WorkbenchBlueprintKind =
 	| 'product-roadmap'
 	| 'delivery-timeline'
 	| 'opportunity-decision'
+	| 'opportunity-solution-tree'
+	| 'impact-map'
+	| 'service-blueprint'
 export type WorkbenchBlueprintVisualRole = 'lane' | 'bar' | 'milestone' | 'risk' | 'decision'
 export type WorkbenchBlueprintTone = 'neutral' | 'teal' | 'cyan' | 'violet' | 'amber' | 'red'
 
@@ -220,9 +223,7 @@ function finalizeBlueprint(blueprint: WorkbenchBlueprint): WorkbenchBlueprint {
 	return blueprint
 }
 
-export function buildProductRoadmapBlueprint(
-	options: WorkbenchBlueprintOptions
-): WorkbenchBlueprint {
+export function buildProductRoadmapBlueprint(options: WorkbenchBlueprintOptions): WorkbenchBlueprint {
 	const { scope, startDate, owner, title } = parseOptions(options, DEFAULT_ROADMAP_OWNER)
 	const through = (days: number) => addDays(startDate, days)
 	const artifacts: WorkbenchBlueprintArtifact[] = []
@@ -429,9 +430,7 @@ export function buildProductRoadmapBlueprint(
 	})
 }
 
-export function buildDeliveryTimelineBlueprint(
-	options: WorkbenchBlueprintOptions
-): WorkbenchBlueprint {
+export function buildDeliveryTimelineBlueprint(options: WorkbenchBlueprintOptions): WorkbenchBlueprint {
 	const { scope, startDate, owner, title } = parseOptions(options, DEFAULT_DELIVERY_OWNER)
 	const through = (days: number) => addDays(startDate, days)
 	const artifacts: WorkbenchBlueprintArtifact[] = []
@@ -585,13 +584,13 @@ export function buildDeliveryTimelineBlueprint(
 	})
 
 	const relations = [
-		createRelation(scope, 'scope-lock-after-baseline', 'milestone-of', scopeLock, scopeBaseline),
-		createRelation(scope, 'implementation-after-scope', 'depends-on', implementation, scopeLock),
-		createRelation(scope, 'validation-after-implementation', 'depends-on', validation, implementation),
-		createRelation(scope, 'candidate-after-validation', 'milestone-of', releaseCandidate, validation),
-		createRelation(scope, 'rollout-decided-by-go-no-go', 'decided-by', stagedRollout, goNoGo),
-		createRelation(scope, 'rollout-after-candidate', 'depends-on', stagedRollout, releaseCandidate),
-		createRelation(scope, 'drift-blocks-validation', 'blocks', scheduleRisk, validation),
+		createRelation(scope, 'baseline-informs-scope-lock', 'informs', scopeBaseline, scopeLock, undefined, 'straight'),
+		createRelation(scope, 'scope-lock-informs-implementation', 'informs', scopeLock, implementation, undefined, 'straight'),
+		createRelation(scope, 'implementation-informs-validation', 'informs', implementation, validation, undefined, 'straight'),
+		createRelation(scope, 'validation-surfaces-drift', 'informs', validation, scheduleRisk, undefined, 'straight'),
+		createRelation(scope, 'validation-informs-candidate', 'informs', validation, releaseCandidate, undefined, 'straight'),
+		createRelation(scope, 'candidate-informs-go-no-go', 'informs', releaseCandidate, goNoGo, undefined, 'straight'),
+		createRelation(scope, 'go-no-go-informs-rollout', 'informs', goNoGo, stagedRollout, undefined, 'straight'),
 	]
 
 	return finalizeBlueprint({
@@ -606,9 +605,7 @@ export function buildDeliveryTimelineBlueprint(
 	})
 }
 
-export function buildOpportunityDecisionBlueprint(
-	options: WorkbenchBlueprintOptions
-): WorkbenchBlueprint {
+export function buildOpportunityDecisionBlueprint(options: WorkbenchBlueprintOptions): WorkbenchBlueprint {
 	const { scope, startDate, owner, title } = parseOptions(options, DEFAULT_OPPORTUNITY_OWNER)
 	const through = (days: number) => addDays(startDate, days)
 	const artifacts: WorkbenchBlueprintArtifact[] = []
@@ -621,7 +618,7 @@ export function buildOpportunityDecisionBlueprint(
 	const activationOpportunity = add({
 		key: 'opportunity-activation',
 		kind: 'opportunity',
-		title: 'Reduce time to first value',
+		title: 'Option A · First value',
 		summary: 'Help a new team move from an empty canvas to a useful plan in one session.',
 		status: 'proposed',
 		owner,
@@ -637,7 +634,7 @@ export function buildOpportunityDecisionBlueprint(
 	const collaborationOpportunity = add({
 		key: 'opportunity-collaboration',
 		kind: 'opportunity',
-		title: 'Make decisions inspectable',
+		title: 'Option B · Inspectable decisions',
 		summary: 'Keep rationale, evidence, and agent mutations visible beside the work.',
 		status: 'proposed',
 		owner,
@@ -653,7 +650,7 @@ export function buildOpportunityDecisionBlueprint(
 	const continuityOpportunity = add({
 		key: 'opportunity-continuity',
 		kind: 'opportunity',
-		title: 'Preserve planning continuity',
+		title: 'Option C · Planning continuity',
 		summary: 'Let teams resume a roadmap or decision cycle without reconstructing context.',
 		status: 'proposed',
 		owner,
@@ -670,7 +667,7 @@ export function buildOpportunityDecisionBlueprint(
 	const userValueCriterion = add({
 		key: 'criterion-user-value',
 		kind: 'assumption',
-		title: 'Criterion: user value',
+		title: 'Evidence · activation interviews',
 		summary: 'Prefer the option that removes the largest recurring planning friction.',
 		status: 'active',
 		owner,
@@ -686,7 +683,7 @@ export function buildOpportunityDecisionBlueprint(
 	const evidenceCriterion = add({
 		key: 'criterion-evidence',
 		kind: 'assumption',
-		title: 'Criterion: evidence quality',
+		title: 'Evidence · decision audit',
 		summary: 'Require observable usage evidence and a measurable target outcome.',
 		status: 'active',
 		owner,
@@ -702,7 +699,7 @@ export function buildOpportunityDecisionBlueprint(
 	const feasibilityCriterion = add({
 		key: 'criterion-feasibility',
 		kind: 'assumption',
-		title: 'Criterion: bounded delivery',
+		title: 'Evidence · return sessions',
 		summary: 'Prefer a reversible slice that fits the current capability and context budgets.',
 		status: 'active',
 		owner,
@@ -719,7 +716,7 @@ export function buildOpportunityDecisionBlueprint(
 	const decision = add({
 		key: 'decision-priority',
 		kind: 'decision',
-		title: 'Choose the next product bet',
+		title: 'Choose product bet',
 		summary: 'Record the selected opportunity, rejected alternatives, and review trigger.',
 		status: 'proposed',
 		owner,
@@ -735,7 +732,7 @@ export function buildOpportunityDecisionBlueprint(
 	const outcome = add({
 		key: 'outcome-adoption',
 		kind: 'outcome',
-		title: 'Outcome: repeatable adoption',
+		title: 'Repeatable weekly adoption',
 		summary: 'Teams create, revise, and resume one useful planning artifact each week.',
 		status: 'planned',
 		owner,
@@ -751,7 +748,7 @@ export function buildOpportunityDecisionBlueprint(
 	const evidenceRisk = add({
 		key: 'risk-proxy-metric',
 		kind: 'risk',
-		title: 'Risk: optimize a proxy',
+		title: 'Proxy metric risk',
 		summary: 'Template creation may rise without improving repeated product decisions.',
 		status: 'active',
 		owner,
@@ -766,37 +763,12 @@ export function buildOpportunityDecisionBlueprint(
 	})
 
 	const relations = [
-		createRelation(
-			scope,
-			'activation-informs-user-value',
-			'informs',
-			activationOpportunity,
-			userValueCriterion
-		),
-		createRelation(
-			scope,
-			'collaboration-informs-evidence',
-			'informs',
-			collaborationOpportunity,
-			evidenceCriterion
-		),
-		createRelation(
-			scope,
-			'continuity-informs-feasibility',
-			'informs',
-			continuityOpportunity,
-			feasibilityCriterion
-		),
+		createRelation(scope, 'activation-informs-user-value', 'informs', activationOpportunity, userValueCriterion),
+		createRelation(scope, 'collaboration-informs-evidence', 'informs', collaborationOpportunity, evidenceCriterion),
+		createRelation(scope, 'continuity-informs-feasibility', 'informs', continuityOpportunity, feasibilityCriterion),
 		createRelation(scope, 'user-value-informs-decision', 'informs', userValueCriterion, decision),
 		createRelation(scope, 'evidence-informs-decision', 'informs', evidenceCriterion, decision),
 		createRelation(scope, 'feasibility-informs-decision', 'informs', feasibilityCriterion, decision),
-		createRelation(
-			scope,
-			'activation-decided-by-priority',
-			'decided-by',
-			activationOpportunity,
-			decision
-		),
 		createRelation(scope, 'decision-implements-outcome', 'implements', decision, outcome),
 		createRelation(scope, 'proxy-risk-blocks-outcome', 'blocks', evidenceRisk, outcome),
 	]
@@ -810,6 +782,673 @@ export function buildOpportunityDecisionBlueprint(
 		bounds: { w: 1225, h: 600 },
 		artifacts,
 		relations,
+	})
+}
+
+export function buildOpportunitySolutionTreeBlueprint(options: WorkbenchBlueprintOptions): WorkbenchBlueprint {
+	const { scope, startDate, owner, title } = parseOptions(options, DEFAULT_OPPORTUNITY_OWNER)
+	const artifacts: WorkbenchBlueprintArtifact[] = []
+	const add = (input: ArtifactInput) => {
+		const artifact = createArtifact(scope, input)
+		artifacts.push(artifact)
+		return artifact
+	}
+
+	const outcome = add({
+		key: 'desired-outcome',
+		kind: 'outcome',
+		title: 'Increase weekly activated teams',
+		summary: 'A measurable customer outcome, not a feature output.',
+		status: 'active',
+		owner,
+		startAt: startDate,
+		tags: ['desired-outcome', 'metric'],
+		visual: {
+			role: 'milestone',
+			tone: 'teal',
+			geometry: { x: 490, y: 35, w: 300, h: 115, geo: 'diamond' },
+		},
+	})
+	const firstValue = add({
+		key: 'first-value',
+		kind: 'opportunity',
+		title: 'Reach first value faster',
+		summary: 'New teams need a useful artifact in their first session.',
+		status: 'proposed',
+		owner,
+		startAt: startDate,
+		tags: ['opportunity'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 70, y: 220, w: 270, h: 110, geo: 'rectangle' },
+		},
+	})
+	const confidence = add({
+		key: 'confidence',
+		kind: 'opportunity',
+		title: 'Increase decision confidence',
+		summary: 'Teams need evidence and rationale beside each decision.',
+		status: 'proposed',
+		owner,
+		startAt: startDate,
+		tags: ['opportunity'],
+		visual: {
+			role: 'bar',
+			tone: 'violet',
+			geometry: { x: 505, y: 220, w: 270, h: 110, geo: 'rectangle' },
+		},
+	})
+	const continuity = add({
+		key: 'continuity',
+		kind: 'opportunity',
+		title: 'Resume without reconstruction',
+		summary: 'Teams lose momentum when context must be rebuilt.',
+		status: 'proposed',
+		owner,
+		startAt: startDate,
+		tags: ['opportunity'],
+		visual: {
+			role: 'bar',
+			tone: 'amber',
+			geometry: { x: 940, y: 220, w: 270, h: 110, geo: 'rectangle' },
+		},
+	})
+	const guidedStarter = add({
+		key: 'guided-starter',
+		kind: 'initiative',
+		title: 'Guided native starter',
+		status: 'planned',
+		owner,
+		tags: ['solution'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 35, y: 425, w: 220, h: 90, geo: 'rectangle' },
+		},
+	})
+	const intentPrompt = add({
+		key: 'intent-prompt',
+		kind: 'initiative',
+		title: 'Intent-first prompt',
+		status: 'planned',
+		owner,
+		tags: ['solution'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 285, y: 425, w: 220, h: 90, geo: 'rectangle' },
+		},
+	})
+	const evidencePanel = add({
+		key: 'evidence-panel',
+		kind: 'initiative',
+		title: 'Evidence + rationale panel',
+		status: 'planned',
+		owner,
+		tags: ['solution'],
+		visual: {
+			role: 'bar',
+			tone: 'violet',
+			geometry: { x: 530, y: 425, w: 220, h: 90, geo: 'rectangle' },
+		},
+	})
+	const branchAlternatives = add({
+		key: 'branch-alternatives',
+		kind: 'initiative',
+		title: 'Branch alternatives',
+		status: 'planned',
+		owner,
+		tags: ['solution'],
+		visual: {
+			role: 'bar',
+			tone: 'violet',
+			geometry: { x: 780, y: 425, w: 220, h: 90, geo: 'rectangle' },
+		},
+	})
+	const durableSnapshot = add({
+		key: 'durable-snapshot',
+		kind: 'initiative',
+		title: 'Durable canvas snapshot',
+		status: 'planned',
+		owner,
+		tags: ['solution'],
+		visual: {
+			role: 'bar',
+			tone: 'amber',
+			geometry: { x: 1025, y: 425, w: 220, h: 90, geo: 'rectangle' },
+		},
+	})
+	const experiment = add({
+		key: 'activation-experiment',
+		kind: 'assumption',
+		title: 'Experiment: first-value cohort',
+		summary: 'Compare completion and week-two return for guided vs blank starts.',
+		status: 'planned',
+		owner,
+		tags: ['experiment', 'evidence'],
+		visual: {
+			role: 'decision',
+			tone: 'teal',
+			geometry: { x: 410, y: 620, w: 460, h: 95, geo: 'rectangle' },
+		},
+	})
+
+	return finalizeBlueprint({
+		schema: WORKBENCH_BLUEPRINT_SCHEMA,
+		blueprintId: scope,
+		pack: 'product',
+		kind: 'opportunity-solution-tree',
+		title: title || 'Opportunity Solution Tree',
+		bounds: { w: 1280, h: 760 },
+		artifacts,
+		relations: [
+			createRelation(scope, 'outcome-contains-first-value', 'contains', outcome, firstValue, undefined, 'straight'),
+			createRelation(scope, 'outcome-contains-confidence', 'contains', outcome, confidence, undefined, 'straight'),
+			createRelation(scope, 'outcome-contains-continuity', 'contains', outcome, continuity, undefined, 'straight'),
+			createRelation(
+				scope,
+				'first-value-contains-starter',
+				'contains',
+				firstValue,
+				guidedStarter,
+				undefined,
+				'straight'
+			),
+			createRelation(scope, 'first-value-contains-prompt', 'contains', firstValue, intentPrompt, undefined, 'straight'),
+			createRelation(
+				scope,
+				'confidence-contains-evidence',
+				'contains',
+				confidence,
+				evidencePanel,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'confidence-contains-branches',
+				'contains',
+				confidence,
+				branchAlternatives,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'continuity-contains-snapshot',
+				'contains',
+				continuity,
+				durableSnapshot,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'experiment-validates-starter',
+				'validates',
+				experiment,
+				guidedStarter,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'experiment-validates-branches',
+				'validates',
+				experiment,
+				branchAlternatives,
+				undefined,
+				'straight'
+			),
+		],
+	})
+}
+
+export function buildImpactMapBlueprint(options: WorkbenchBlueprintOptions): WorkbenchBlueprint {
+	const { scope, startDate, owner, title } = parseOptions(options, DEFAULT_OPPORTUNITY_OWNER)
+	const artifacts: WorkbenchBlueprintArtifact[] = []
+	const add = (input: ArtifactInput) => {
+		const artifact = createArtifact(scope, input)
+		artifacts.push(artifact)
+		return artifact
+	}
+	const lanes = [
+		{ key: 'lane-why', title: 'WHY · Goal', x: 20 },
+		{ key: 'lane-who', title: 'WHO · Actors', x: 340 },
+		{ key: 'lane-how', title: 'HOW · Impacts', x: 660 },
+		{ key: 'lane-what', title: 'WHAT · Deliverables', x: 980 },
+	].map((lane) =>
+		add({
+			key: lane.key,
+			kind: 'timeline-lane',
+			title: lane.title,
+			status: 'active',
+			owner,
+			startAt: startDate,
+			visual: {
+				role: 'lane',
+				tone: 'neutral',
+				geometry: { x: lane.x, y: 35, w: 300, h: 560, geo: 'rectangle' },
+			},
+		})
+	)
+	const goal = add({
+		key: 'goal',
+		kind: 'outcome',
+		title: 'Reduce planning cycle time 30%',
+		status: 'active',
+		owner,
+		laneKey: 'lane-why',
+		tags: ['goal', 'metric'],
+		visual: {
+			role: 'milestone',
+			tone: 'teal',
+			geometry: { x: 65, y: 275, w: 210, h: 125, geo: 'diamond' },
+		},
+	})
+	const productTeam = add({
+		key: 'product-team',
+		kind: 'opportunity',
+		title: 'Product team',
+		status: 'active',
+		owner,
+		laneKey: 'lane-who',
+		tags: ['actor'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 385, y: 165, w: 210, h: 100, geo: 'rectangle' },
+		},
+	})
+	const architect = add({
+		key: 'architect',
+		kind: 'opportunity',
+		title: 'Architect / tech lead',
+		status: 'active',
+		owner,
+		laneKey: 'lane-who',
+		tags: ['actor'],
+		visual: {
+			role: 'bar',
+			tone: 'violet',
+			geometry: { x: 385, y: 430, w: 210, h: 100, geo: 'rectangle' },
+		},
+	})
+	const compareEarlier = add({
+		key: 'compare-earlier',
+		kind: 'outcome',
+		title: 'Compare alternatives earlier',
+		status: 'proposed',
+		owner,
+		laneKey: 'lane-how',
+		tags: ['impact'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 705, y: 145, w: 210, h: 100, geo: 'rectangle' },
+		},
+	})
+	const preserveRationale = add({
+		key: 'preserve-rationale',
+		kind: 'outcome',
+		title: 'Preserve rationale in context',
+		status: 'proposed',
+		owner,
+		laneKey: 'lane-how',
+		tags: ['impact'],
+		visual: {
+			role: 'bar',
+			tone: 'violet',
+			geometry: { x: 705, y: 300, w: 210, h: 100, geo: 'rectangle' },
+		},
+	})
+	const boundChanges = add({
+		key: 'bound-changes',
+		kind: 'outcome',
+		title: 'Bound risky canvas changes',
+		status: 'proposed',
+		owner,
+		laneKey: 'lane-how',
+		tags: ['impact'],
+		visual: {
+			role: 'bar',
+			tone: 'amber',
+			geometry: { x: 705, y: 455, w: 210, h: 100, geo: 'rectangle' },
+		},
+	})
+	const branchCompare = add({
+		key: 'branch-compare',
+		kind: 'initiative',
+		title: 'Branch comparison graph',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-what',
+		tags: ['deliverable'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 1025, y: 130, w: 210, h: 90, geo: 'rectangle' },
+		},
+	})
+	const adrOutcome = add({
+		key: 'adr-outcome',
+		kind: 'decision',
+		title: 'ADR-style outcome',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-what',
+		tags: ['deliverable'],
+		visual: {
+			role: 'decision',
+			tone: 'violet',
+			geometry: { x: 1025, y: 290, w: 210, h: 100, geo: 'rectangle' },
+		},
+	})
+	const scopedMutation = add({
+		key: 'scoped-mutation',
+		kind: 'initiative',
+		title: 'Scoped mutation receipt',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-what',
+		tags: ['deliverable'],
+		visual: {
+			role: 'bar',
+			tone: 'amber',
+			geometry: { x: 1025, y: 465, w: 210, h: 90, geo: 'rectangle' },
+		},
+	})
+
+	return finalizeBlueprint({
+		schema: WORKBENCH_BLUEPRINT_SCHEMA,
+		blueprintId: scope,
+		pack: 'product',
+		kind: 'impact-map',
+		title: title || 'Impact Map',
+		bounds: { w: 1300, h: 630 },
+		artifacts,
+		relations: [
+			createRelation(scope, 'goal-contains-product-team', 'contains', goal, productTeam, undefined, 'straight'),
+			createRelation(scope, 'goal-contains-architect', 'contains', goal, architect, undefined, 'straight'),
+			createRelation(
+				scope,
+				'product-team-informs-compare',
+				'informs',
+				productTeam,
+				compareEarlier,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'product-team-informs-rationale',
+				'informs',
+				productTeam,
+				preserveRationale,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'architect-informs-rationale',
+				'informs',
+				architect,
+				preserveRationale,
+				undefined,
+				'straight'
+			),
+			createRelation(scope, 'architect-informs-bounds', 'informs', architect, boundChanges, undefined, 'straight'),
+			createRelation(
+				scope,
+				'compare-implements-branch',
+				'implements',
+				compareEarlier,
+				branchCompare,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'rationale-implements-adr',
+				'implements',
+				preserveRationale,
+				adrOutcome,
+				undefined,
+				'straight'
+			),
+			createRelation(
+				scope,
+				'bounds-implements-receipt',
+				'implements',
+				boundChanges,
+				scopedMutation,
+				undefined,
+				'straight'
+			),
+		],
+	})
+}
+
+export function buildServiceBlueprint(options: WorkbenchBlueprintOptions): WorkbenchBlueprint {
+	const { scope, startDate, owner, title } = parseOptions(options, DEFAULT_OPPORTUNITY_OWNER)
+	const artifacts: WorkbenchBlueprintArtifact[] = []
+	const add = (input: ArtifactInput) => {
+		const artifact = createArtifact(scope, input)
+		artifacts.push(artifact)
+		return artifact
+	}
+	for (const lane of [
+		{ key: 'lane-customer', title: 'CUSTOMER', y: 55 },
+		{
+			key: 'lane-frontstage',
+			title: 'FRONTSTAGE',
+			y: 220,
+		},
+		{ key: 'lane-backstage', title: 'BACKSTAGE', y: 385 },
+		{ key: 'lane-support', title: 'SUPPORT', y: 550 },
+	]) {
+		add({
+			key: lane.key,
+			kind: 'timeline-lane',
+			title: lane.title,
+			status: 'active',
+			owner,
+			startAt: startDate,
+			visual: {
+				role: 'lane',
+				tone: 'neutral',
+				geometry: { x: 35, y: lane.y, w: 1250, h: 135, geo: 'rectangle' },
+			},
+		})
+	}
+	const discover = add({
+		key: 'discover',
+		kind: 'milestone',
+		title: 'Discover',
+		status: 'active',
+		owner,
+		laneKey: 'lane-customer',
+		tags: ['journey-step'],
+		visual: {
+			role: 'milestone',
+			tone: 'cyan',
+			geometry: { x: 105, y: 95, w: 160, h: 72, geo: 'rectangle' },
+		},
+	})
+	const decide = add({
+		key: 'decide',
+		kind: 'milestone',
+		title: 'Decide',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-customer',
+		tags: ['journey-step'],
+		visual: {
+			role: 'milestone',
+			tone: 'violet',
+			geometry: { x: 445, y: 95, w: 160, h: 72, geo: 'rectangle' },
+		},
+	})
+	const act = add({
+		key: 'act',
+		kind: 'milestone',
+		title: 'Act',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-customer',
+		tags: ['journey-step'],
+		visual: {
+			role: 'milestone',
+			tone: 'teal',
+			geometry: { x: 785, y: 95, w: 160, h: 72, geo: 'rectangle' },
+		},
+	})
+	const learn = add({
+		key: 'learn',
+		kind: 'milestone',
+		title: 'Learn',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-customer',
+		tags: ['journey-step'],
+		visual: {
+			role: 'milestone',
+			tone: 'amber',
+			geometry: { x: 1120, y: 95, w: 120, h: 72, geo: 'rectangle' },
+		},
+	})
+	const starter = add({
+		key: 'starter',
+		kind: 'initiative',
+		title: 'Choose a visual starter',
+		status: 'active',
+		owner,
+		laneKey: 'lane-frontstage',
+		tags: ['touchpoint'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 75, y: 260, w: 220, h: 72, geo: 'rectangle' },
+		},
+	})
+	const compare = add({
+		key: 'compare',
+		kind: 'initiative',
+		title: 'Compare branch alternatives',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-frontstage',
+		tags: ['touchpoint'],
+		visual: {
+			role: 'bar',
+			tone: 'violet',
+			geometry: { x: 415, y: 260, w: 220, h: 72, geo: 'rectangle' },
+		},
+	})
+	const receipt = add({
+		key: 'receipt',
+		kind: 'initiative',
+		title: 'Review change receipt',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-frontstage',
+		tags: ['touchpoint'],
+		visual: {
+			role: 'bar',
+			tone: 'teal',
+			geometry: { x: 755, y: 260, w: 220, h: 72, geo: 'rectangle' },
+		},
+	})
+	const agent = add({
+		key: 'agent',
+		kind: 'initiative',
+		title: 'Bounded agent context',
+		status: 'active',
+		owner,
+		laneKey: 'lane-backstage',
+		tags: ['backstage'],
+		visual: {
+			role: 'bar',
+			tone: 'cyan',
+			geometry: { x: 75, y: 425, w: 220, h: 72, geo: 'rectangle' },
+		},
+	})
+	const decisionGraph = add({
+		key: 'decision-graph',
+		kind: 'decision',
+		title: 'Decision + ADR',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-backstage',
+		tags: ['backstage'],
+		visual: {
+			role: 'decision',
+			tone: 'violet',
+			geometry: { x: 415, y: 425, w: 220, h: 72, geo: 'rectangle' },
+		},
+	})
+	const executor = add({
+		key: 'executor',
+		kind: 'initiative',
+		title: 'Validated canvas executor',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-backstage',
+		tags: ['backstage'],
+		visual: {
+			role: 'bar',
+			tone: 'teal',
+			geometry: { x: 755, y: 425, w: 220, h: 72, geo: 'rectangle' },
+		},
+	})
+	const memory = add({
+		key: 'memory',
+		kind: 'assumption',
+		title: 'Artifact metadata + branch lineage',
+		status: 'active',
+		owner,
+		laneKey: 'lane-support',
+		tags: ['support-process'],
+		visual: {
+			role: 'bar',
+			tone: 'amber',
+			geometry: { x: 385, y: 590, w: 280, h: 72, geo: 'rectangle' },
+		},
+	})
+	const measures = add({
+		key: 'measures',
+		kind: 'outcome',
+		title: 'Activation + confidence',
+		status: 'planned',
+		owner,
+		laneKey: 'lane-support',
+		tags: ['evidence'],
+		visual: {
+			role: 'milestone',
+			tone: 'teal',
+			geometry: { x: 1040, y: 590, w: 240, h: 72, geo: 'rectangle' },
+		},
+	})
+
+	return finalizeBlueprint({
+		schema: WORKBENCH_BLUEPRINT_SCHEMA,
+		blueprintId: scope,
+		pack: 'product',
+		kind: 'service-blueprint',
+		title: title || 'User Journey / Service Blueprint',
+		bounds: { w: 1320, h: 730 },
+		artifacts,
+		relations: [
+			createRelation(scope, 'starter-supports-discover', 'implements', starter, discover),
+			createRelation(scope, 'compare-supports-decide', 'implements', compare, decide),
+			createRelation(scope, 'receipt-supports-act', 'implements', receipt, act),
+			createRelation(scope, 'agent-supports-starter', 'implements', agent, starter),
+			createRelation(scope, 'graph-supports-compare', 'implements', decisionGraph, compare),
+			createRelation(scope, 'executor-supports-receipt', 'implements', executor, receipt),
+			createRelation(scope, 'memory-informs-graph', 'informs', memory, decisionGraph),
+			createRelation(scope, 'measures-validate-learn', 'validates', measures, learn),
+		],
 	})
 }
 
@@ -874,9 +1513,7 @@ export function validateWorkbenchBlueprint(blueprint: WorkbenchBlueprint): strin
 		] as const) {
 			const artifact = artifactsById.get(binding.artifactId)
 			if (!artifact) {
-				errors.push(
-					`Relation ${item.relation.relationId} ${terminal} targets missing artifact ${binding.artifactId}`
-				)
+				errors.push(`Relation ${item.relation.relationId} ${terminal} targets missing artifact ${binding.artifactId}`)
 			} else if (artifact.shapeId !== binding.shapeId) {
 				errors.push(
 					`Relation ${item.relation.relationId} ${terminal} binding does not match artifact shape ${artifact.shapeId}`
@@ -888,9 +1525,7 @@ export function validateWorkbenchBlueprint(blueprint: WorkbenchBlueprint): strin
 	for (const item of blueprint.artifacts) {
 		for (const reference of item.artifact.refs) {
 			if (reference.kind === 'artifact' && !artifactsById.has(reference.target)) {
-				errors.push(
-					`Artifact ${item.artifact.artifactId} references missing artifact ${reference.target}`
-				)
+				errors.push(`Artifact ${item.artifact.artifactId} references missing artifact ${reference.target}`)
 			}
 		}
 	}

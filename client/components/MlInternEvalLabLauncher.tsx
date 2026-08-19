@@ -241,7 +241,7 @@ export function MlInternEvalLabLauncher() {
 					<TldrawUiPopoverTrigger>
 						<TldrawUiButton
 							type="tool"
-							className="ml-intern-eval-launcher-toggle"
+							className="workbench-rail-trigger ml-intern-eval-launcher-toggle"
 							isActive={expanded}
 							aria-label="ML-Intern terminal bridge"
 							aria-expanded={expanded}

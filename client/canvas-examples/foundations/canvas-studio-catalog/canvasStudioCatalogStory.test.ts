@@ -12,7 +12,10 @@ describe('Canvas Studio catalog story', () => {
 
 	beforeEach(() => {
 		cleanupDom = installCanvasExamplesTestDom()
-		editor = new CanvasExamplesTestEditor()
+		editor = new CanvasExamplesTestEditor({
+			shapeUtils: [...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.shapeUtils],
+			bindingUtils: [...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils],
+		})
 		editor.updatePage({
 			id: editor.getCurrentPageId(),
 			name: 'Architecture',
@@ -47,10 +50,10 @@ describe('Canvas Studio catalog story', () => {
 		)
 		expect(
 			receipt.shapeIds.map((shapeId) => editor.getShape(shapeId)?.type)
-		).toContain('geo')
+		).toContain('architecture-diagram-surface')
 		expect(
 			receipt.shapeIds.map((shapeId) => editor.getShape(shapeId)?.type)
-		).toContain('arrow')
+		).toContain('architecture-service')
 		expect(receipt.bindingIds.every((bindingId) => editor.getBinding(bindingId))).toBe(
 			true
 		)

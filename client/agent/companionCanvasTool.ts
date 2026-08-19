@@ -13,8 +13,13 @@ import type { ContextItem } from '../../shared/types/ContextItem'
 import type { Streaming } from '../../shared/types/Streaming'
 import { convertTldrawShapeToBlurryShape } from '../../shared/format/convertTldrawShapeToBlurryShape'
 import { convertTldrawShapeToFocusedShape } from '../../shared/format/convertTldrawShapeToFocusedShape'
-import { convertTldrawShapesToPeripheralShapes } from '../../shared/format/convertTldrawShapesToPeripheralShapes'
 import { AgentHelpers } from '../AgentHelpers'
+import type { CanvasRuntimeCapabilityCatalog } from '../canvas-studio/runtimeCapabilityCatalog'
+import type {
+	CanvasKitAgentCapability,
+	CanvasKitComposition,
+} from '../canvas-studio/types'
+import { isMarkdownDocumentShape } from '../markdown/MarkdownDocumentShape'
 import type { TldrawAgent } from './TldrawAgent'
 import {
 	COMPANION_CANVAS_BINDING,
@@ -36,7 +41,8 @@ export const COMPANION_TLDRAW_CAPABILITY_IDS = [
 ] as const
 
 export type CompanionTldrawCapabilityId =
-	(typeof COMPANION_TLDRAW_CAPABILITY_IDS)[number]
+	| (typeof COMPANION_TLDRAW_CAPABILITY_IDS)[number]
+	| string
 export type CompanionCanvasContextPolicy = 'selection' | 'selection-or-area'
 
 export interface CompanionCanvasToolRequest {
@@ -49,6 +55,7 @@ export interface CompanionCanvasToolRequest {
 	execution?: 'direct-actions'
 	actions?: unknown[]
 	contextRef?: string
+	catalogRevision?: string
 	actor?: string
 	source?: string
 	leaseToken?: string
@@ -90,7 +97,10 @@ const MAX_LABEL_CHARS = 120
 const MAX_DIRECT_ACTIONS = 24
 const CONTEXT_SNAPSHOT_TTL_MS = 5 * 60_000
 const MAX_CONTEXT_SNAPSHOTS = 32
-const contextSnapshots = new Map<string, { digest: string; expiresAt: number }>()
+const contextSnapshots = new Map<
+	string,
+	{ digest: string; expiresAt: number; catalogRevision?: string }
+>()
 const DIRECT_NATIVE_ACTION_TYPES = new Set<AgentAction['_type']>([
 	'align',
 	'bringToFront',
@@ -143,20 +153,63 @@ export async function leaseCompanionCanvasToolRequest(
 
 export async function executeCompanionCanvasToolRequest(
 	agent: TldrawAgent,
-	request: CompanionCanvasToolRequest
+	request: CompanionCanvasToolRequest,
+	composition?: CanvasKitComposition,
+	runtimeCatalog?: CanvasRuntimeCapabilityCatalog
 ): Promise<CompanionCanvasToolReceipt> {
-	if (!COMPANION_TLDRAW_CAPABILITY_IDS.includes(request.capabilityId)) {
+	const staticCapability = COMPANION_TLDRAW_CAPABILITY_IDS.includes(
+		request.capabilityId as (typeof COMPANION_TLDRAW_CAPABILITY_IDS)[number]
+	)
+	const runtimeCapability = composition?.getAgentCapability(request.capabilityId)
+	if (!staticCapability && !runtimeCapability) {
 		throw new Error('Companion requested an unknown native tldraw capability')
+	}
+	if (
+		runtimeCatalog &&
+		request.catalogRevision !== runtimeCatalog.catalogRevision
+	) {
+		throw new Error('Companion canvas capability catalog is stale or unavailable')
+	}
+	if (runtimeCapability) {
+		if (!runtimeCatalog) {
+			throw new Error('Companion canvas capability catalog is stale or unavailable')
+		}
+		const publishedDescriptor = runtimeCatalog.capabilities.find(
+			(capability) => capability.id === request.capabilityId
+		)
+		if (
+			!publishedDescriptor ||
+			publishedDescriptor.version !== runtimeCapability.descriptor.version
+		) {
+			throw new Error(
+				'Companion requested a capability outside the published canvas catalog'
+			)
+		}
+		if (!runtimeCapability.descriptor.contexts.includes(request.context)) {
+			throw new Error(
+				'Companion requested a context policy this canvas capability does not allow'
+			)
+		}
 	}
 
 	const isReadOnly =
 		request.capabilityId === 'canvas.inspect' ||
-		request.capabilityId === 'canvas.result.read'
+		request.capabilityId === 'canvas.result.read' ||
+		runtimeCapability?.descriptor.mode === 'read'
 	// Finish any active text edit / pointer interaction before validating a
 	// mutation against its bounded snapshot. If completion changes geometry,
 	// the context digest will drift and the caller must inspect again.
 	if (!isReadOnly) agent.editor.complete()
-	const bounded = resolveExplicitCanvasContext(agent, request.context)
+	const allowedShapeTypes = runtimeCatalog
+		? new Set(
+				runtimeCatalog.registrations.shapeTypes.map((registration) => registration.id)
+			)
+		: undefined
+	const bounded = resolveExplicitCanvasContext(
+		agent,
+		request.context,
+		allowedShapeTypes
+	)
 	if (
 		request.capabilityId === 'canvas.inspect' ||
 		request.capabilityId === 'canvas.result.read'
@@ -167,7 +220,11 @@ export async function executeCompanionCanvasToolRequest(
 			bounded
 		)
 		const contextRef = projection.contextDigest
-		rememberContextSnapshot(contextRef, projection.contextDigest)
+		rememberContextSnapshot(
+			contextRef,
+			projection.contextDigest,
+			request.catalogRevision
+		)
 		const { contextDigest: _contextDigest, ...visibleProjection } = projection
 		const result = { ...visibleProjection, contextRef }
 		return {
@@ -177,6 +234,24 @@ export async function executeCompanionCanvasToolRequest(
 			summary: `${request.capabilityId === 'canvas.result.read' ? 'Read' : 'Inspected'} focused ${result.focused.length} / blurry ${result.blurry.length} / peripheral ${result.peripheral.length} (${result.boundary}).`,
 			result,
 		}
+	}
+	if (runtimeCapability) {
+		if (runtimeCapability.descriptor.mode === 'read') {
+			return executeRuntimeReadCanvasCapability(
+				agent,
+				request,
+				bounded,
+				runtimeCapability,
+				runtimeCatalog!
+			)
+		}
+		return executeRuntimeCanvasCapability(
+			agent,
+			request,
+			bounded,
+			runtimeCapability,
+			runtimeCatalog!
+		)
 	}
 
 	const actions = validateDirectCompanionActions(agent, request, bounded)
@@ -232,13 +307,17 @@ export interface ExplicitCompanionCanvasContext {
 	boundary: 'selection' | 'area'
 	contextItems: ContextItem[]
 	explicitShapes: TLShape[]
+	allowedShapeTypes?: ReadonlySet<string>
 }
 
 export function resolveExplicitCanvasContext(
 	agent: TldrawAgent,
-	policy: CompanionCanvasContextPolicy
+	policy: CompanionCanvasContextPolicy,
+	allowedShapeTypes?: ReadonlySet<string>
 ): ExplicitCompanionCanvasContext {
-	const selectedShapes = agent.editor.getSelectedShapes()
+	const isAllowedShape = (shape: TLShape) =>
+		!allowedShapeTypes || allowedShapeTypes.has(shape.type)
+	const selectedShapes = agent.editor.getSelectedShapes().filter(isAllowedShape)
 	const explicitItems = agent.context
 		.getItems()
 		.filter(
@@ -249,7 +328,7 @@ export function resolveExplicitCanvasContext(
 		(item) => item.type === 'shape' || item.type === 'shapes'
 	)
 	const areaItem = explicitItems.find((item) => item.type === 'area')
-	const contextShapes = getContextShapes(agent, shapeItems)
+	const contextShapes = getContextShapes(agent, shapeItems).filter(isAllowedShape)
 	const explicitShapes = uniqueShapes([...selectedShapes, ...contextShapes])
 
 	if (policy === 'selection' && explicitShapes.length === 0) {
@@ -276,6 +355,7 @@ export function resolveExplicitCanvasContext(
 		boundary: selectionBounds ? 'selection' : 'area',
 		contextItems: explicitItems.slice(0, 12),
 		explicitShapes,
+		...(allowedShapeTypes ? { allowedShapeTypes } : {}),
 	}
 }
 
@@ -300,22 +380,16 @@ export function buildBoundedSemanticInspectionResult(
 	const authorizedCandidates =
 		context.explicitShapes.length > 0
 			? context.explicitShapes
-			: getShapesInsideBounds(agent, context.bounds)
+			: getShapesInsideBounds(agent, context.bounds, context.allowedShapeTypes)
 	const authorized = uniqueShapes(authorizedCandidates).sort((a, b) => a.id.localeCompare(b.id))
-	const pageShapes = uniqueShapes(agent.editor.getCurrentPageShapesSorted()).sort((a, b) =>
-		a.id.localeCompare(b.id)
-	)
 	const focusedCandidates = uniqueShapes(context.explicitShapes).sort((a, b) =>
 		a.id.localeCompare(b.id)
 	)
-	const blurryCandidates = pageShapes.filter((shape) => {
-		const bounds = getShapeBounds(agent, shape)
-		return bounds ? boxInsideBox(bounds, context.bounds) : false
-	})
-	const peripheralCandidates = pageShapes.filter((shape) => {
-		const bounds = getShapeBounds(agent, shape)
-		return bounds ? !boxInsideBox(bounds, context.bounds) : false
-	})
+	// Selection authority covers only the selected records, not unrelated shapes
+	// that happen to sit inside the selection's union rectangle. A user-approved
+	// area may project records inside that area, but neither policy discloses
+	// aggregate information about records outside its explicit boundary.
+	const blurryCandidates = context.boundary === 'area' ? authorized : []
 	const focusedShapes = focusedCandidates.slice(0, MAX_INSPECTION_SHAPES)
 	const blurryShapes = blurryCandidates.slice(0, MAX_INSPECTION_SHAPES)
 	const projection = {
@@ -325,10 +399,30 @@ export function buildBoundedSemanticInspectionResult(
 		bounds: roundBox(context.bounds),
 		truncated:
 			focusedCandidates.length + blurryCandidates.length >
-			focusedShapes.length + blurryShapes.length,
-		focused: focusedShapes.map((shape) =>
-			sanitizeFocusedShape(convertTldrawShapeToFocusedShape(agent.editor, shape))
-		),
+				focusedShapes.length + blurryShapes.length ||
+			false,
+		focused: focusedShapes.map((shape) => {
+			const focused = sanitizeFocusedShape(
+				convertTldrawShapeToFocusedShape(agent.editor, shape)
+			)
+			if (!isMarkdownDocumentShape(shape)) return focused
+			return {
+				...focused,
+				_type: 'markdown-document',
+				documentRef: shape.props.documentRef,
+				revision: shape.props.revision,
+				bytes: shape.props.bytes,
+				title: safePlainLabel(shape.props.title) ?? 'Untitled Markdown',
+				...(shape.props.sourceName
+					? { sourceName: safePlainLabel(shape.props.sourceName) ?? '' }
+					: {}),
+				links: shape.props.links
+					.slice(0, 24)
+					.map((link) => safePlainLabel(link) ?? '')
+					.filter(Boolean),
+				readCapability: 'canvas.markdown.read',
+			}
+		}),
 		blurry: blurryShapes.flatMap((shape) => {
 			const blurry = convertTldrawShapeToBlurryShape(agent.editor, shape)
 			if (!blurry) return []
@@ -339,14 +433,7 @@ export function buildBoundedSemanticInspectionResult(
 				}),
 			]
 		}),
-		peripheral: convertTldrawShapesToPeripheralShapes(
-			agent.editor,
-			peripheralCandidates,
-			{ padding: 75 }
-		).map((cluster) => ({
-			numberOfShapes: cluster.numberOfShapes,
-			bounds: roundBox(cluster.bounds),
-		})),
+		peripheral: [],
 	}
 
 	return {
@@ -380,7 +467,74 @@ export function buildBoundedSemanticInspectionResult(
 	}
 }
 
-function rememberContextSnapshot(contextRef: string, digest: string) {
+function executeRuntimeReadCanvasCapability(
+	agent: TldrawAgent,
+	request: CompanionCanvasToolRequest,
+	context: ExplicitCompanionCanvasContext,
+	capability: CanvasKitAgentCapability,
+	runtimeCatalog: CanvasRuntimeCapabilityCatalog
+): CompanionCanvasToolReceipt {
+	if (request.execution !== 'direct-actions') {
+		throw new Error(
+			'External companion reads require execution=direct-actions; planner delegation is disabled'
+		)
+	}
+	if (
+		!Array.isArray(request.actions) ||
+		request.actions.length === 0 ||
+		request.actions.length > capability.descriptor.actionPlan.maxActions
+	) {
+		throw new Error(
+			`Canvas capability ${request.capabilityId} requires 1..${capability.descriptor.actionPlan.maxActions} read actions`
+		)
+	}
+
+	const currentProjection = buildBoundedSemanticInspectionResult(
+		agent,
+		'canvas.inspect',
+		context
+	)
+	const snapshot = request.contextRef ? getContextSnapshot(request.contextRef) : null
+	if (
+		!snapshot ||
+		snapshot.digest !== currentProjection.contextDigest ||
+		snapshot.catalogRevision !== runtimeCatalog.catalogRevision
+	) {
+		throw new Error(
+			'Companion canvas context or capability catalog drifted; inspect the explicit selection again'
+		)
+	}
+
+	let receipt: ReturnType<CanvasKitAgentCapability['execute']> | undefined
+	const diff = agent.editor.store.extractingChanges(() => {
+		receipt = capability.execute(agent.editor, request.actions!, {
+			pageId: agent.editor.getCurrentPageId(),
+			boundary: context.boundary,
+			bounds: context.bounds,
+			shapeIds: [...authorizedShapeIds(agent, context)],
+			contextRef: request.contextRef!,
+		})
+	})
+	if (!isRecordsDiffEmpty(diff)) {
+		throw new Error(`Read capability ${request.capabilityId} changed canvas records`)
+	}
+	if (!receipt?.summary.trim() || receipt.shapeIds.length || receipt.bindingIds.length) {
+		throw new Error(`Read capability ${request.capabilityId} returned an invalid receipt`)
+	}
+	return {
+		requestId: request.id,
+		status: 'succeeded',
+		capabilityId: request.capabilityId,
+		summary: compactReceiptText(receipt.summary),
+		...(receipt.result ? { result: receipt.result } : {}),
+	}
+}
+
+function rememberContextSnapshot(
+	contextRef: string,
+	digest: string,
+	catalogRevision?: string
+) {
 	const now = Date.now()
 	for (const [key, snapshot] of contextSnapshots) {
 		if (snapshot.expiresAt <= now) contextSnapshots.delete(key)
@@ -393,6 +547,7 @@ function rememberContextSnapshot(contextRef: string, digest: string) {
 	contextSnapshots.set(contextRef, {
 		digest,
 		expiresAt: now + CONTEXT_SNAPSHOT_TTL_MS,
+		...(catalogRevision ? { catalogRevision } : {}),
 	})
 }
 
@@ -421,6 +576,158 @@ function sanitizeProjectedText<T extends object>(shape: T): T {
 	return result
 }
 
+function executeRuntimeCanvasCapability(
+	agent: TldrawAgent,
+	request: CompanionCanvasToolRequest,
+	context: ExplicitCompanionCanvasContext,
+	capability: CanvasKitAgentCapability,
+	runtimeCatalog: CanvasRuntimeCapabilityCatalog
+): CompanionCanvasToolReceipt {
+	if (request.execution !== 'direct-actions') {
+		throw new Error(
+			'External companion mutations require execution=direct-actions; planner delegation is disabled'
+		)
+	}
+	if (
+		!Array.isArray(request.actions) ||
+		request.actions.length === 0 ||
+		request.actions.length > capability.descriptor.actionPlan.maxActions
+	) {
+		throw new Error(
+			`Canvas capability ${request.capabilityId} requires 1..${capability.descriptor.actionPlan.maxActions} actions`
+		)
+	}
+
+	const currentProjection = buildBoundedSemanticInspectionResult(
+		agent,
+		'canvas.inspect',
+		context
+	)
+	const snapshot = request.contextRef ? getContextSnapshot(request.contextRef) : null
+	if (
+		!snapshot ||
+		snapshot.digest !== currentProjection.contextDigest ||
+		snapshot.catalogRevision !== runtimeCatalog.catalogRevision
+	) {
+		throw new Error(
+			'Companion canvas context or capability catalog drifted; inspect the explicit boundary again'
+		)
+	}
+
+	const authorizedExistingIds = authorizedShapeIds(agent, context)
+	const historyMark = agent.editor.markHistoryStoppingPoint(
+		`Before companion ${request.capabilityId}`
+	)
+	try {
+		let receipt: ReturnType<CanvasKitAgentCapability['execute']> | undefined
+		const diff = agent.editor.store.extractingChanges(() => {
+			agent.editor.run(
+				() => {
+					receipt = capability.execute(agent.editor, request.actions!, {
+						pageId: agent.editor.getCurrentPageId(),
+						boundary: context.boundary,
+						bounds: context.bounds,
+						shapeIds: [...authorizedExistingIds],
+						contextRef: request.contextRef!,
+					})
+				},
+				{ ignoreShapeLock: true }
+			)
+		})
+		if (!receipt) {
+			throw new Error(`Canvas capability ${request.capabilityId} returned no receipt`)
+		}
+		assertRuntimeCapabilityReceipt(capability, receipt, diff)
+		assertMutationStayedInsideBoundary(
+			agent,
+			context,
+			diff,
+			authorizedExistingIds,
+			new Set(receipt.shapeIds)
+		)
+		agent.editor.squashToMark(historyMark)
+		if (request.contextRef) contextSnapshots.delete(request.contextRef)
+		return {
+			requestId: request.id,
+			status: 'succeeded',
+			capabilityId: request.capabilityId,
+			summary: compactReceiptText(receipt.summary),
+			result: {
+				contextRef: request.contextRef,
+				operationCount: request.actions.length,
+				actionTypes: request.actions.map((action) =>
+					typeof action === 'object' && action && typeof Reflect.get(action, '_type') === 'string'
+						? Reflect.get(action, '_type')
+						: 'unknown'
+				),
+				shapeIds: [...receipt.shapeIds].sort(),
+				bindingIds: [...receipt.bindingIds].sort(),
+				undoable: true,
+			},
+		}
+	} catch (error) {
+		agent.editor.bailToMark(historyMark)
+		throw error
+	}
+}
+
+function assertRuntimeCapabilityReceipt(
+	capability: CanvasKitAgentCapability,
+	receipt: ReturnType<CanvasKitAgentCapability['execute']>,
+	diff: RecordsDiff<TLRecord>
+) {
+	if (isRecordsDiffEmpty(diff)) {
+		throw new Error(
+			`Canvas capability ${capability.descriptor.id} produced an empty record diff`
+		)
+	}
+	if (!receipt.summary.trim()) {
+		throw new Error(`Canvas capability ${capability.descriptor.id} returned an empty summary`)
+	}
+	const changed = [
+		...Object.values(diff.added),
+		...Object.values(diff.updated).map(([, after]) => after),
+		...Object.values(diff.removed),
+	]
+	const allowedRecordTypes = new Set(capability.descriptor.effects.recordTypes)
+	for (const record of changed) {
+		if (
+			(record.typeName !== 'shape' && record.typeName !== 'binding') ||
+			!allowedRecordTypes.has(record.typeName)
+		) {
+			throw new Error(
+				`Canvas capability ${capability.descriptor.id} changed unauthorized ${record.typeName} records`
+			)
+		}
+	}
+	const changedShapeIds = new Set(
+		changed.flatMap((record) => (record.typeName === 'shape' ? [record.id] : []))
+	)
+	const changedBindingIds = new Set(
+		changed.flatMap((record) => (record.typeName === 'binding' ? [record.id] : []))
+	)
+	if (
+		!sameStringSet(changedShapeIds, receipt.shapeIds) ||
+		!sameStringSet(changedBindingIds, receipt.bindingIds)
+	) {
+		throw new Error(
+			`Canvas capability ${capability.descriptor.id} receipt does not match its record diff`
+		)
+	}
+}
+
+function sameStringSet(
+	actual: ReadonlySet<string>,
+	expected: readonly string[]
+) {
+	const expectedSet = new Set(expected)
+	return (
+		expectedSet.size === expected.length &&
+		actual.size === expectedSet.size &&
+		[...actual].every((id) => expectedSet.has(id))
+	)
+}
+
 function validateDirectCompanionActions(
 	agent: TldrawAgent,
 	request: CompanionCanvasToolRequest,
@@ -446,9 +753,13 @@ function validateDirectCompanionActions(
 		context
 	)
 	const snapshot = request.contextRef ? getContextSnapshot(request.contextRef) : null
-	if (!snapshot || snapshot.digest !== currentProjection.contextDigest) {
+	if (
+		!snapshot ||
+		snapshot.digest !== currentProjection.contextDigest ||
+		snapshot.catalogRevision !== request.catalogRevision
+	) {
 		throw new Error(
-			'Companion canvas context drifted or has no matching live snapshot; inspect the explicit boundary again'
+			'Companion canvas context drifted or capability catalog drifted; inspect the explicit boundary again'
 		)
 	}
 
@@ -698,7 +1009,7 @@ function authorizedShapeIds(
 	return new Set(
 		(context.boundary === 'selection'
 			? context.explicitShapes
-			: getShapesInsideBounds(agent, context.bounds)
+			: getShapesInsideBounds(agent, context.bounds, context.allowedShapeTypes)
 		).map((shape) => shape.id)
 	)
 }
@@ -900,8 +1211,13 @@ function getShapeBounds(agent: TldrawAgent, shape: TLShape) {
 	)
 }
 
-function getShapesInsideBounds(agent: TldrawAgent, bounds: BoxModel) {
+function getShapesInsideBounds(
+	agent: TldrawAgent,
+	bounds: BoxModel,
+	allowedShapeTypes?: ReadonlySet<string>
+) {
 	return agent.editor.getCurrentPageShapesSorted().filter((shape) => {
+		if (allowedShapeTypes && !allowedShapeTypes.has(shape.type)) return false
 		const shapeBounds =
 			agent.editor.getShapeMaskedPageBounds(shape) ??
 			agent.editor.getShapePageBounds(shape.id)

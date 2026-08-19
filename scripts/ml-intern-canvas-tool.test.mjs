@@ -36,6 +36,103 @@ function leaseAuthorization(request) {
 	}
 }
 
+function runtimeCapabilityCatalog({
+	pageMode = 'architecture',
+	revision = 'catalog-test-architecture',
+	contexts = ['selection'],
+} = {}) {
+	const capabilityId = 'workbench.architecture.preset.insert'
+	return {
+		schema: 'canvas-studio-runtime-capabilities/v1',
+		version: 1,
+		catalogRevision: revision,
+		surface: 'tldraw',
+		pageMode,
+		contextPolicies: ['selection', 'selection-or-area'],
+		registrations: {
+			shapeTypes: [{ id: 'geo', owner: 'canvapocalypse.host' }],
+			bindingTypes: [{ id: 'arrow', owner: 'canvapocalypse.host' }],
+			toolIds: [],
+			recordTypes: [],
+		},
+		kits: [
+			{
+				id: 'workbench.architecture',
+				title: 'Architecture pack',
+				tags: ['architecture'],
+				presets: [
+					{
+						id: 'workbench.system-context',
+						title: 'System context',
+						tags: ['c4'],
+					},
+				],
+				capabilityIds: [capabilityId],
+			},
+		],
+		capabilities: [
+			{
+				id: capabilityId,
+				version: 1,
+				kitId: 'workbench.architecture',
+				mode: 'mutate',
+				summary: 'Insert one architecture preset.',
+				contexts,
+				actionPlan: {
+					coordinateSystem: 'absolute-page',
+					maxActions: 1,
+					actionTypes: ['insertPreset'],
+					schema: { type: 'array' },
+				},
+				effects: {
+					recordTypes: ['shape', 'binding'],
+					atomic: true,
+					undoable: true,
+				},
+			},
+		],
+	}
+}
+
+function markdownRuntimeCapabilityCatalog() {
+	const catalog = runtimeCapabilityCatalog()
+	const capabilityId = 'canvas.markdown.read'
+	return {
+		...catalog,
+		catalogRevision: 'catalog-test-markdown',
+		kits: [
+			{
+				id: 'canvas.markdown',
+				title: 'Markdown documents',
+				tags: ['markdown'],
+				presets: [],
+				capabilityIds: [capabilityId],
+			},
+		],
+		capabilities: [
+			{
+				id: capabilityId,
+				version: 1,
+				kitId: 'canvas.markdown',
+				mode: 'read',
+				summary: 'Read selected Markdown in revision-bound chunks.',
+				contexts: ['selection'],
+				actionPlan: {
+					coordinateSystem: 'absolute-page',
+					maxActions: 1,
+					actionTypes: ['readMarkdownChunk'],
+					schema: { type: 'array', minItems: 1, maxItems: 1 },
+				},
+				effects: {
+					recordTypes: [],
+					atomic: true,
+					undoable: false,
+				},
+			},
+		],
+	}
+}
+
 test('discovers compact native-tldraw capability ids and hydrates one capability', () => {
 	const now = Date.parse('2026-07-27T00:00:00.000Z')
 	const manifest = issueMlInternCanvasCapabilityManifest(now)
@@ -55,6 +152,236 @@ test('discovers compact native-tldraw capability ids and hydrates one capability
 	assert.equal(hydrated.capability.id, 'canvas.layout')
 	assert.equal(hydrated.capability.mode, 'mutate')
 	assert.equal('canvas.shape.basic' in hydrated.capability, false)
+})
+
+test('discovers only the current page catalog and hydrates custom contracts on demand', () => {
+	const now = Date.parse('2026-07-27T00:00:00.000Z')
+	const catalog = runtimeCapabilityCatalog()
+	const manifest = issueCompanionCanvasCapabilityManifest(
+		now,
+		'canvas-a',
+		catalog
+	)
+
+	assert.equal('binding' in manifest, false)
+	assert.equal(manifest.catalog.pageMode, 'architecture')
+	assert.deepEqual(manifest.capabilities, [
+		{
+			id: 'workbench.architecture.preset.insert',
+			version: 1,
+			kitId: 'workbench.architecture',
+			mode: 'mutate',
+			summary: 'Insert one architecture preset.',
+			contexts: ['selection'],
+		},
+	])
+	assert.equal('registrations' in manifest, false)
+
+	const described = describeCompanionCanvasCapability(
+		{
+			manifestId: manifest.manifestId,
+			capabilityId: 'canvas.catalog',
+		},
+		now + 1
+	)
+	assert.deepEqual(described.capability.catalog.registrations, catalog.registrations)
+	assert.equal(
+		describeCompanionCanvasCapability(
+			{
+				manifestId: manifest.manifestId,
+				capabilityId: 'workbench.architecture.preset.insert',
+			},
+			now + 1
+		).capability.actionPlan.schema.type,
+		'array'
+	)
+})
+
+test('binds custom execution to its page catalog, manifest, and allowed context', () => {
+	const now = Date.parse('2026-07-27T00:00:00.000Z')
+	registerMlInternCanvasClient('canvas-a', now, 'offline-desktop')
+	const catalog = runtimeCapabilityCatalog()
+	const manifest = issueCompanionCanvasCapabilityManifest(now, 'canvas-a', catalog)
+	const inspect = executeCompanionCanvasCapability(
+		{
+			manifestId: manifest.manifestId,
+			capabilityId: 'canvas.inspect',
+			context: 'selection',
+			idempotencyKey: 'catalog-inspect',
+		},
+		now + 1
+	)
+	const inspectLease = leaseNextMlInternCanvasTool(
+		now + 2,
+		'canvas-a',
+		'direct-actions'
+	)
+	assert.equal(inspectLease.catalogRevision, catalog.catalogRevision)
+	const contextRef = 'ctx-v1-89abcdef'
+	recordMlInternCanvasToolReceipt(
+		{
+			requestId: inspect.id,
+			status: 'succeeded',
+			summary: 'Inspected architecture target.',
+			result: { contextRef },
+			...leaseAuthorization(inspectLease),
+		},
+		now + 3
+	)
+
+	const action = {
+		_type: 'insertPreset',
+		presetId: 'workbench.system-context',
+	}
+	const queued = executeCompanionCanvasCapability(
+		{
+			manifestId: manifest.manifestId,
+			capabilityId: 'workbench.architecture.preset.insert',
+			context: 'selection',
+			contextRef,
+			idempotencyKey: 'catalog-insert',
+			actions: [action],
+		},
+		now + 4
+	)
+	assert.equal(queued.capabilityId, 'workbench.architecture.preset.insert')
+	const mutationLease = leaseNextMlInternCanvasTool(
+		now + 5,
+		'canvas-a',
+		'direct-actions'
+	)
+	assert.equal(mutationLease.catalogRevision, catalog.catalogRevision)
+	assert.deepEqual(mutationLease.actions, [action])
+
+	assert.throws(
+		() =>
+			executeCompanionCanvasCapability(
+				{
+					manifestId: manifest.manifestId,
+					capabilityId: 'workbench.architecture.preset.insert',
+					context: 'selection-or-area',
+					contextRef,
+					actions: [action],
+				},
+				now + 6
+			),
+		/does not allow context/
+	)
+	const otherManifest = issueCompanionCanvasCapabilityManifest(
+		now + 7,
+		'canvas-a',
+		catalog
+	)
+	assert.throws(
+		() =>
+			executeCompanionCanvasCapability(
+				{
+					manifestId: otherManifest.manifestId,
+					capabilityId: 'workbench.architecture.preset.insert',
+					context: 'selection',
+					contextRef,
+					actions: [action],
+				},
+				now + 8
+			),
+		/contextRef is missing, incomplete, or belongs to another manifest or canvas/
+	)
+})
+
+test('binds a custom semantic read to inspection evidence and carries one bounded query', () => {
+	const now = Date.parse('2026-07-27T00:00:00.000Z')
+	registerMlInternCanvasClient('canvas-a', now, 'offline-desktop')
+	const catalog = markdownRuntimeCapabilityCatalog()
+	const manifest = issueCompanionCanvasCapabilityManifest(now, 'canvas-a', catalog)
+	const described = describeCompanionCanvasCapability(
+		{
+			manifestId: manifest.manifestId,
+			capabilityId: 'canvas.markdown.read',
+		},
+		now + 1
+	)
+	assert.equal(described.capability.mode, 'read')
+	assert.match(described.capability.input.contextRef, /canvas\.inspect/)
+	assert.match(described.capability.input.actions, /read queries/)
+
+	const inspect = executeCompanionCanvasCapability(
+		{
+			manifestId: manifest.manifestId,
+			capabilityId: 'canvas.inspect',
+			context: 'selection',
+			idempotencyKey: 'markdown-inspect',
+		},
+		now + 2
+	)
+	const inspectLease = leaseNextMlInternCanvasTool(
+		now + 3,
+		'canvas-a',
+		'direct-actions'
+	)
+	const contextRef = 'ctx-v1-10203040'
+	recordMlInternCanvasToolReceipt(
+		{
+			requestId: inspect.id,
+			status: 'succeeded',
+			summary: 'Inspected selected Markdown.',
+			result: { contextRef },
+			...leaseAuthorization(inspectLease),
+		},
+		now + 4
+	)
+	const action = {
+		_type: 'readMarkdownChunk',
+		shapeId: 'architecture-note',
+		documentRef: 'markdown-architecture-note',
+		revision: `sha256:${'a'.repeat(64)}`,
+		maxBytes: 4096,
+	}
+	const queued = executeCompanionCanvasCapability(
+		{
+			manifestId: manifest.manifestId,
+			capabilityId: 'canvas.markdown.read',
+			context: 'selection',
+			contextRef,
+			idempotencyKey: 'markdown-read',
+			actions: [action],
+		},
+		now + 5
+	)
+	assert.equal(queued.capabilityId, 'canvas.markdown.read')
+	const readLease = leaseNextMlInternCanvasTool(
+		now + 6,
+		'canvas-a',
+		'direct-actions'
+	)
+	assert.equal(readLease.contextRef, contextRef)
+	assert.deepEqual(readLease.actions, [action])
+	assert.throws(
+		() =>
+			executeCompanionCanvasCapability(
+				{
+					manifestId: manifest.manifestId,
+					capabilityId: 'canvas.markdown.read',
+					context: 'selection',
+					actions: [action],
+				},
+				now + 7
+			),
+		/semantic companion operation requires contextRef/
+	)
+})
+
+test('Freeform manifests expose only the existing base capabilities', () => {
+	const catalog = runtimeCapabilityCatalog({ pageMode: 'freeform' })
+	catalog.kits = []
+	catalog.capabilities = []
+	const manifest = issueCompanionCanvasCapabilityManifest(
+		Date.parse('2026-07-27T00:00:00.000Z'),
+		'canvas-a',
+		catalog
+	)
+	assert.deepEqual(manifest.capabilityIds, ML_INTERN_TLDRAW_CAPABILITY_IDS)
+	assert.equal('catalog' in manifest, false)
+	assert.equal('capabilities' in manifest, false)
 })
 
 test('carries a validated terminal-requested bounded area only to the leased request', () => {

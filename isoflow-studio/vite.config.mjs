@@ -5,6 +5,9 @@ import { isoflowBridgePlugin } from './scripts/lib/isoflow-bridge-vite.mjs';
 const root = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+  server: {
+    allowedHosts: ['.onamp.dev']
+  },
   plugins: [
     isoflowBridgePlugin({
       root,

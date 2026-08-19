@@ -78,9 +78,12 @@ function LayoutCreationControls() {
 }
 
 export function CanvasLayoutControls() {
+	return <LayoutCreationControls />
+}
+
+export function CanvasLayoutSelectionControls() {
 	return (
 		<>
-			<LayoutCreationControls />
 			<FlexLayoutControls />
 			<ConstraintLayoutControls />
 		</>

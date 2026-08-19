@@ -145,6 +145,83 @@ test('workflow/llm for compatible provider normalizes controls and returns 400 f
 	assert.match(await response.text(), /Base URL/)
 })
 
+test('tldraw Offline may access only the companion resident renderer routes', { timeout: 15_000 }, async (t) => {
+	const port = await reserveLoopbackPort()
+	const { child, getOutput } = startBridge(t, port)
+	await waitForBridge(port, child, getOutput)
+
+	const origin = 'tldraw-app://app'
+	const bridgeUrl = `http://127.0.0.1:${port}`
+	const binding = 'offline-cors-test'
+	const residentRoutes = [
+		{ path: `/companion/canvas-tool/status?canvasBinding=${binding}&clientKind=offline-desktop`, method: 'GET' },
+		{ path: `/companion/canvas-tool/next?canvasBinding=${binding}&clientKind=offline-desktop`, method: 'GET' },
+		{ path: '/companion/canvas-tool/receipt', method: 'POST' },
+	]
+	for (const route of residentRoutes) {
+		const preflight = await fetch(`${bridgeUrl}${route.path}`, {
+			method: 'OPTIONS',
+			headers: {
+				origin,
+				'access-control-request-method': route.method,
+				...(route.method === 'POST'
+					? { 'access-control-request-headers': 'content-type' }
+					: {}),
+			},
+		})
+		assert.equal(preflight.status, 204, route.path)
+		assert.equal(preflight.headers.get('access-control-allow-origin'), origin)
+	}
+
+	const status = await fetch(`${bridgeUrl}${residentRoutes[0].path}`, {
+		headers: { origin },
+	})
+	assert.equal(status.status, 200)
+	assert.equal(status.headers.get('access-control-allow-origin'), origin)
+
+	const next = await fetch(`${bridgeUrl}${residentRoutes[1].path}`, {
+		headers: { origin },
+	})
+	assert.equal(next.status, 200)
+	assert.equal(next.headers.get('access-control-allow-origin'), origin)
+
+	const receipt = await fetch(`${bridgeUrl}/companion/canvas-tool/receipt`, {
+		method: 'POST',
+		headers: { origin, 'content-type': 'application/json' },
+		body: '{}',
+	})
+	assert.equal(receipt.status, 404)
+	assert.equal(receipt.headers.get('access-control-allow-origin'), origin)
+
+	const deniedRoutes = [
+		{ path: '/companion/canvas-tool/capabilities', method: 'GET' },
+		{ path: '/companion/canvas-tool/capabilities/describe', method: 'POST' },
+		{ path: '/companion/canvas-tool/execute', method: 'POST' },
+		{ path: '/health', method: 'GET' },
+	]
+	for (const route of deniedRoutes) {
+		const preflight = await fetch(`${bridgeUrl}${route.path}`, {
+			method: 'OPTIONS',
+			headers: {
+				origin,
+				'access-control-request-method': route.method,
+			},
+		})
+		assert.equal(preflight.status, 403, `${route.path} preflight`)
+
+		const response = await fetch(`${bridgeUrl}${route.path}`, {
+			method: route.method,
+			headers: {
+				origin,
+				...(route.method === 'POST' ? { 'content-type': 'application/json' } : {}),
+			},
+			...(route.method === 'POST' ? { body: '{}' } : {}),
+		})
+		assert.equal(response.status, 403, route.path)
+		assert.equal(response.headers.get('access-control-allow-origin'), null)
+	}
+})
+
 test('the workflow bridge exposes only registered local HTML mockups', { timeout: 15_000 }, async (t) => {
 	const root = await mkdtemp(join(tmpdir(), 'canvapocalypse-bridge-html-'))
 	await writeFile(join(root, 'screen.html'), '<main><h1>Bridge screen</h1></main>')

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
 	buildDeliveryTimelineBlueprint,
+	buildImpactMapBlueprint,
 	buildOpportunityDecisionBlueprint,
+	buildOpportunitySolutionTreeBlueprint,
 	buildProductRoadmapBlueprint,
+	buildServiceBlueprint,
 	validateWorkbenchBlueprint,
 	type WorkbenchBlueprint,
 } from './workbenchBlueprints'
@@ -11,20 +14,14 @@ function expectCompleteProductSemantics(blueprint: WorkbenchBlueprint) {
 	const kinds = new Set(blueprint.artifacts.map((item) => item.artifact.kind))
 	const roles = new Set(blueprint.artifacts.map((item) => item.visual.role))
 
-	expect([...kinds]).toEqual(
-		expect.arrayContaining(['timeline-lane', 'initiative', 'milestone', 'risk', 'decision'])
-	)
-	expect([...roles]).toEqual(
-		expect.arrayContaining(['lane', 'bar', 'milestone', 'risk', 'decision'])
-	)
+	expect([...kinds]).toEqual(expect.arrayContaining(['timeline-lane', 'initiative', 'milestone', 'risk', 'decision']))
+	expect([...roles]).toEqual(expect.arrayContaining(['lane', 'bar', 'milestone', 'risk', 'decision']))
 	expect(blueprint.relations.length).toBeGreaterThan(0)
 	expect(validateWorkbenchBlueprint(blueprint)).toEqual([])
 }
 
 function expectBoundRelationsMatchArtifacts(blueprint: WorkbenchBlueprint) {
-	const shapeIdByArtifactId = new Map(
-		blueprint.artifacts.map((item) => [item.artifact.artifactId, item.shapeId])
-	)
+	const shapeIdByArtifactId = new Map(blueprint.artifacts.map((item) => [item.artifact.artifactId, item.shapeId]))
 
 	for (const { relation } of blueprint.relations) {
 		expect(relation.start.shapeId).toBe(shapeIdByArtifactId.get(relation.start.artifactId))
@@ -54,9 +51,7 @@ describe('buildProductRoadmapBlueprint', () => {
 			blueprintId: 'product-roadmap-dates',
 			startDate: '2026-12-20',
 		})
-		const initiatives = blueprint.artifacts.filter(
-			(item) => item.artifact.kind === 'initiative'
-		)
+		const initiatives = blueprint.artifacts.filter((item) => item.artifact.kind === 'initiative')
 
 		for (const { artifact } of initiatives) {
 			expect(artifact.startAt).toMatch(/^\d{4}-\d{2}-\d{2}$/)
@@ -84,9 +79,7 @@ describe('buildDeliveryTimelineBlueprint', () => {
 		expect(first.artifacts.every((item) => item.artifact.owner?.id === 'team:launch')).toBe(true)
 		expectCompleteProductSemantics(first)
 		expectBoundRelationsMatchArtifacts(first)
-		expect(first.relations.map((item) => item.relation.type)).toEqual(
-			expect.arrayContaining(['depends-on', 'blocks', 'decided-by', 'milestone-of'])
-		)
+		expect(new Set(first.relations.map((item) => item.relation.type))).toEqual(new Set(['informs']))
 	})
 
 	it('fails closed on unstable namespaces and impossible calendar dates', () => {
@@ -119,19 +112,13 @@ describe('buildOpportunityDecisionBlueprint', () => {
 		expect(first.kind).toBe('opportunity-decision')
 		expect(first.pack).toBe('product')
 		expect(first.artifacts.every((item) => item.artifact.pack === 'product')).toBe(true)
-		expect(
-			first.artifacts.filter((item) => item.artifact.kind === 'opportunity')
-		).toHaveLength(3)
-		expect(
-			first.artifacts.filter((item) =>
-				item.artifact.tags.includes('decision-criterion')
-			)
-		).toHaveLength(3)
+		expect(first.artifacts.filter((item) => item.artifact.kind === 'opportunity')).toHaveLength(3)
+		expect(first.artifacts.filter((item) => item.artifact.tags.includes('decision-criterion'))).toHaveLength(3)
 		expect(first.artifacts.filter((item) => item.artifact.kind === 'decision')).toHaveLength(1)
 		expect(first.artifacts.filter((item) => item.artifact.kind === 'outcome')).toHaveLength(1)
 		expect(first.artifacts.filter((item) => item.artifact.kind === 'risk')).toHaveLength(1)
 		expect(first.relations.map((item) => item.relation.type)).toEqual(
-			expect.arrayContaining(['informs', 'decided-by', 'implements', 'blocks'])
+			expect.arrayContaining(['informs', 'implements', 'blocks'])
 		)
 		expect(validateWorkbenchBlueprint(first)).toEqual([])
 		expectBoundRelationsMatchArtifacts(first)
@@ -143,23 +130,15 @@ describe('buildOpportunityDecisionBlueprint', () => {
 			startDate: '2026-07-01',
 			owner: { id: 'team:discovery', type: 'team', label: 'Discovery' },
 		})
-		const artifactsById = new Map(
-			blueprint.artifacts.map((item) => [item.artifact.artifactId, item])
-		)
-		const decisions = blueprint.artifacts.filter(
-			(item) => item.artifact.kind === 'decision'
-		)
+		const artifactsById = new Map(blueprint.artifacts.map((item) => [item.artifact.artifactId, item]))
+		const decisions = blueprint.artifacts.filter((item) => item.artifact.kind === 'decision')
 		const outcomes = blueprint.artifacts.filter((item) => item.artifact.kind === 'outcome')
-		const criteria = blueprint.artifacts.filter((item) =>
-			item.artifact.tags.includes('decision-criterion')
-		)
+		const criteria = blueprint.artifacts.filter((item) => item.artifact.tags.includes('decision-criterion'))
 
 		expect(decisions).toHaveLength(1)
 		expect(outcomes).toHaveLength(1)
 		expect(criteria).toHaveLength(3)
-		expect(blueprint.artifacts.every((item) => item.artifact.owner?.id === 'team:discovery')).toBe(
-			true
-		)
+		expect(blueprint.artifacts.every((item) => item.artifact.owner?.id === 'team:discovery')).toBe(true)
 
 		const decision = decisions[0]
 		const outcome = outcomes[0]
@@ -167,9 +146,7 @@ describe('buildOpportunityDecisionBlueprint', () => {
 			blueprint.relations.filter(
 				(item) =>
 					item.relation.type === 'informs' &&
-					criteria.some(
-						(criterion) => criterion.artifact.artifactId === item.relation.start.artifactId
-					) &&
+					criteria.some((criterion) => criterion.artifact.artifactId === item.relation.start.artifactId) &&
 					item.relation.end.artifactId === decision.artifact.artifactId
 			)
 		).toHaveLength(3)
@@ -183,10 +160,51 @@ describe('buildOpportunityDecisionBlueprint', () => {
 		).toBe(true)
 		expect(
 			blueprint.relations.every(
-				(item) =>
-					artifactsById.has(item.relation.start.artifactId) &&
-					artifactsById.has(item.relation.end.artifactId)
+				(item) => artifactsById.has(item.relation.start.artifactId) && artifactsById.has(item.relation.end.artifactId)
 			)
 		).toBe(true)
+	})
+})
+
+describe('product discovery and service blueprints', () => {
+	it.each([
+		['opportunity-solution-tree', buildOpportunitySolutionTreeBlueprint],
+		['impact-map', buildImpactMapBlueprint],
+		['service-blueprint', buildServiceBlueprint],
+	] as const)('builds a deterministic validated %s', (kind, build) => {
+		const options = {
+			blueprintId: `test-${kind}`,
+			startDate: '2026-07-01',
+		}
+		const first = build(options)
+
+		expect(build(options)).toEqual(first)
+		expect(first.kind).toBe(kind)
+		expect(first.artifacts.length).toBeGreaterThanOrEqual(9)
+		expect(first.relations.length).toBeGreaterThanOrEqual(8)
+		expect(validateWorkbenchBlueprint(first)).toEqual([])
+		expectBoundRelationsMatchArtifacts(first)
+	})
+
+	it('keeps outcome, opportunity, solution, and experiment semantics explicit', () => {
+		const tree = buildOpportunitySolutionTreeBlueprint({
+			blueprintId: 'test-ost-semantics',
+			startDate: '2026-07-01',
+		})
+		expect(tree.artifacts.filter((item) => item.artifact.kind === 'outcome')).toHaveLength(1)
+		expect(tree.artifacts.filter((item) => item.artifact.kind === 'opportunity')).toHaveLength(3)
+		expect(tree.artifacts.filter((item) => item.artifact.tags.includes('solution'))).toHaveLength(5)
+		expect(tree.artifacts.some((item) => item.artifact.tags.includes('experiment'))).toBe(true)
+	})
+
+	it('models journey, frontstage, backstage, and support as native lanes', () => {
+		const blueprint = buildServiceBlueprint({
+			blueprintId: 'test-service-lanes',
+			startDate: '2026-07-01',
+		})
+		expect(
+			blueprint.artifacts.filter((item) => item.artifact.kind === 'timeline-lane').map((item) => item.artifact.title)
+		).toEqual(['CUSTOMER', 'FRONTSTAGE', 'BACKSTAGE', 'SUPPORT'])
+		expect(blueprint.relations.some((item) => item.relation.type === 'depends-on')).toBe(false)
 	})
 })

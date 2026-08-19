@@ -10,18 +10,20 @@ import {
 	TldrawUiToolbar,
 	TldrawUiToolbarButton,
 	useEditor,
+	useValue,
 } from 'tldraw'
 import { TldrawAgentApp } from '../agent/TldrawAgentApp'
 import { TldrawAgentAppContextProvider } from '../agent/TldrawAgentAppProvider'
+import { GrokToolboxLayer } from '../../scripts/tldraw-desktop-grok-config'
 import { BridgeCenter } from '../bridges/BridgeCenter'
 import { CanvasStudioPalette } from '../canvas-studio/CanvasStudioPalette'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../canvas-studio/host'
 import type { CanvasKitComposition } from '../canvas-studio/types'
+import { resolveCanvasRuntimePageMode } from '../canvas-studio/runtimeCapabilityCatalog'
 import { MlInternEvalLabLauncher } from '../components/MlInternEvalLabLauncher'
 import { CompanionCanvasBridgeController } from '../components/CompanionCanvasBridgeController'
 import { IsoflowOverlay } from '../isoflow/IsoflowOverlay'
 import { KanbanTracksControl } from '../kanban/KanbanTracksControl'
-import { TerminalSessionMonitor } from '../terminal/TerminalSessionMonitor'
 import { WorkflowOverlay } from '../workflow/WorkflowOverlay'
 import {
 	resolveWorkbenchDomainPack,
@@ -35,10 +37,12 @@ import {
 } from './workbenchState'
 import { WorkbenchAgentDock } from './WorkbenchAgentDock'
 import { insertWorkbenchTemplate } from './workbenchCanvas'
+import { getWorkbenchConversationContext } from './workbenchConversationVariants'
 import { WorkbenchDomainIcon } from './WorkbenchDomainIcon'
-import { WorkbenchEmojiPalette } from './WorkbenchEmojiPalette'
+import { WorkbenchTemplatePreview } from './WorkbenchTemplatePreview'
 import { UiuxProviderDock } from './UiuxProviderDock'
 import { resolveWorkbenchToolProfile } from './workbenchToolProfiles'
+import { ProductCreativeIdeationButton } from './ProductCreativeIdeationButton'
 import './workbench.css'
 
 interface WorkbenchShellProps {
@@ -59,8 +63,20 @@ export function WorkbenchShell({
 		title: string
 	} | null>(null)
 	const [domainMenuOpen, setDomainMenuOpen] = useState(false)
-	const activePack = resolveWorkbenchDomainPack(activeDomain)
-	const toolProfile = activePack.toolProfile
+	const currentPage = useValue(
+		'workbench current domain page',
+		() => editor.getCurrentPage(),
+		[editor]
+	)
+	const pageMode = resolveCanvasRuntimePageMode(currentPage)
+	const isGrokWorkspace = pageMode === 'agents-models'
+	const pageDomain = WORKBENCH_DOMAINS.includes(pageMode as WorkbenchDomain)
+		? (pageMode as WorkbenchDomain)
+		: null
+	const modeEnabled = pageDomain !== null
+	const effectiveDomain = pageDomain ?? activeDomain
+	const activePack = resolveWorkbenchDomainPack(effectiveDomain)
+	const toolProfile = modeEnabled && activePack.toolProfile
 		? resolveWorkbenchToolProfile(activePack.toolProfile)
 		: null
 
@@ -71,19 +87,33 @@ export function WorkbenchShell({
 		return () => window.removeEventListener('popstate', syncFromHistory)
 	}, [])
 
+	useEffect(() => {
+		if (pageDomain) setActiveDomain(pageDomain)
+	}, [pageDomain])
+
 	const selectDomain = useCallback((domain: WorkbenchDomain) => {
 		setActiveDomain(domain)
 		setTemplateStatus(null)
 		persistWorkbenchDomainSelection(domain)
-	}, [])
+		const page = editor
+			.getPages()
+			.find((candidate) => resolveCanvasRuntimePageMode(candidate) === domain)
+		if (page && page.id !== editor.getCurrentPageId()) {
+			editor.setCurrentPage(page.id)
+		}
+	}, [editor])
 
 	const createTemplate = useCallback(
 		(templateId: string, templateLabel: string) => {
 			try {
+				const branch = app?.agents.getAgent()?.chat.getActiveBranch()
 				const receipt = insertWorkbenchTemplate(
 					editor,
 					activeDomain,
-					templateId
+					templateId,
+					branch
+						? { conversation: getWorkbenchConversationContext(branch) }
+						: undefined
 				)
 				setTemplateStatus({
 					label: `Created ${receipt.shapeIds.length}`,
@@ -94,13 +124,30 @@ export function WorkbenchShell({
 				setTemplateStatus({ label: 'Create failed', title: message })
 			}
 		},
-		[activeDomain, editor]
+		[activeDomain, app, editor]
 	)
-
-	const chrome = (
+	const content = (
 		<>
-			<TldrawUiToolbar
+			{isGrokWorkspace && (
+				<>
+					<GrokToolboxLayer />
+					<TldrawUiToolbar
+						className="workbench-aux-rail grok-workspace-rail"
+						label="Grok workspace"
+						orientation="vertical"
+						onPointerDown={(event) => event.stopPropagation()}
+						onClick={(event) => event.stopPropagation()}
+					>
+						<CanvasStudioPalette composition={canvasKitComposition} />
+						{app && <BridgeCenter />}
+					</TldrawUiToolbar>
+				</>
+			)}
+			{!isGrokWorkspace && <TldrawUiToolbar
 				className="workbench-aux-rail workbench-pack-switcher"
+				data-domain-control={
+					activePack.overlays.isoflow || activePack.overlays.mlIntern
+				}
 				label="AI Workbench"
 				orientation="vertical"
 				onPointerDown={(event) => event.stopPropagation()}
@@ -114,7 +161,7 @@ export function WorkbenchShell({
 				>
 					<TldrawUiPopoverTrigger>
 						<TldrawUiToolbarButton
-							type="icon"
+							type="tool"
 							className="workbench-rail-trigger workbench-domain-trigger workbench-template-trigger"
 							title={`Domain · ${activePack.label}`}
 							aria-label={`Domain · ${activePack.label}`}
@@ -188,6 +235,16 @@ export function WorkbenchShell({
 								})}
 							</div>
 
+							{effectiveDomain === 'product' && app && (
+								<div className="workbench-popover-section workbench-mode-adjunct workbench-creative-ideation">
+									<div className="workbench-popover-section-heading">
+										<strong>Explore before drawing</strong>
+										<span>Product agent</span>
+									</div>
+									<ProductCreativeIdeationButton />
+								</div>
+							)}
+
 							<div className="workbench-popover-section workbench-template-control">
 								<div className="workbench-popover-section-heading">
 									<strong>Templates</strong>
@@ -208,7 +265,7 @@ export function WorkbenchShell({
 												className="workbench-template-option-icon"
 												aria-hidden="true"
 											>
-												<TldrawUiIcon icon={template.icon} label="" small />
+												<WorkbenchTemplatePreview templateId={template.id} />
 											</span>
 											<TldrawUiButtonLabel>
 												<span className="workbench-template-option-title">
@@ -272,33 +329,27 @@ export function WorkbenchShell({
 					</TldrawUiPopoverContent>
 				</TldrawUiPopover>
 				<CanvasStudioPalette composition={canvasKitComposition} />
-				<BridgeCenter />
-			</TldrawUiToolbar>
+				{app && <BridgeCenter />}
+			</TldrawUiToolbar>}
 
-			<WorkbenchEmojiPalette />
 			{toolProfile && (
 				<WorkflowOverlay key={toolProfile.id} profile={toolProfile} />
 			)}
-			{activePack.overlays.isoflow && <IsoflowOverlay />}
-			{activePack.overlays.terminalSession && (
-				<TerminalSessionMonitor
-					role={activeDomain === 'ml' ? 'ml' : 'architecture'}
-				/>
+			{modeEnabled && activePack.overlays.isoflow && <IsoflowOverlay />}
+			{app && modeEnabled && effectiveDomain !== 'architecture' && (
+				<WorkbenchAgentDock domainPack={effectiveDomain} />
 			)}
-			{app && (
-				<>
-					<WorkbenchAgentDock domainPack={activeDomain} />
-					{activePack.overlays.mlIntern && <MlInternEvalLabLauncher />}
-				</>
+			{app && modeEnabled && activePack.overlays.mlIntern && (
+				<MlInternEvalLabLauncher />
 			)}
 		</>
 	)
-
-	if (!app) return chrome
-
+	if (!app) return content
 	return (
 		<TldrawAgentAppContextProvider app={app}>
-			<CompanionCanvasBridgeController>{chrome}</CompanionCanvasBridgeController>
+			<CompanionCanvasBridgeController>
+				{content}
+			</CompanionCanvasBridgeController>
 		</TldrawAgentAppContextProvider>
 	)
 }

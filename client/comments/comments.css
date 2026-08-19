@@ -12,7 +12,8 @@
 	pointer-events: auto;
 }
 
-.canvas-comments button {
+.canvas-comments__card button,
+.canvas-comments__pin {
 	border: 1px solid var(--tl-color-muted-1);
 	border-radius: 6px;
 	background: var(--tl-color-panel);
@@ -20,32 +21,73 @@
 	cursor: pointer;
 }
 
-.canvas-comments button[data-active='true'] {
-	border-color: var(--tl-color-selected);
-	background: var(--tl-color-selected);
-	color: white;
-}
-
 .canvas-comments__toolbar {
 	position: absolute;
-	top: 52px;
-	left: 50%;
-	display: flex;
-	gap: 4px;
-	padding: 5px;
-	transform: translateX(-50%);
-	border-radius: 9px;
-	background: var(--tl-color-panel);
-	box-shadow: var(--tl-shadow-2);
+	z-index: var(--tl-layer-panels);
+	top: calc(var(--tl-space-10) + 192px);
+	left: var(--tl-space-4);
+	width: 48px;
+	height: 48px;
+	padding: 0;
+	border-top: 1px solid var(--tl-color-divider);
+	border-radius: 0 0 var(--tl-radius-4) var(--tl-radius-4);
+	background: transparent;
+	box-shadow: none;
 	pointer-events: auto;
 }
 
-.canvas-comments__toolbar button {
-	padding: 5px 8px;
+.tl-container:has(.workbench-aux-rail[data-domain-control='true']) .canvas-comments__toolbar {
+	top: calc(var(--tl-space-10) + 240px);
+}
+
+.canvas-comments__toolbar > .tlui-popover,
+.canvas-comments__trigger {
+	width: 48px;
+	height: 48px;
+	margin: 0;
+}
+
+.canvas-comments__trigger {
+	border-radius: 0 0 var(--tl-radius-4) var(--tl-radius-4);
+}
+
+.canvas-comments__menu {
+	box-sizing: border-box;
+	width: 256px;
+	padding: var(--tl-space-2);
+	color: var(--tl-color-text-1);
+	font-family: var(--tl-font-sans);
+}
+
+.canvas-comments__mode-toolbar.tlui-toolbar {
+	position: static;
+	display: flex;
+	width: auto;
+	height: 48px;
+	gap: 0;
+	padding: 0;
+	border-radius: var(--tl-radius-3);
+	box-shadow: none;
+}
+
+.canvas-comments__mode {
+	width: 48px;
+	min-width: 48px;
+	height: 48px;
+	padding: 0;
+}
+
+.canvas-comments__page-threads {
+	display: grid;
+	gap: var(--tl-space-1);
+	margin-top: var(--tl-space-2);
+	padding-top: var(--tl-space-2);
+	border-top: 1px solid var(--tl-color-divider);
 }
 
 .canvas-comments__page-thread {
-	margin-left: 4px;
+	justify-content: flex-start;
+	gap: var(--tl-space-2);
 }
 
 .canvas-comments__pin {

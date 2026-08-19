@@ -15,7 +15,7 @@ describe('tldraw Offline config parity', () => {
 			"import { TargetShapeTool } from '../client/tools/TargetShapeTool'"
 		)
 		expect(desktopConfigSource).toMatch(
-			/tools:\s*mergeUniqueRegistrations\(\s*config\.tools,\s*\[[\s\S]*TargetShapeTool,[\s\S]*TargetAreaTool,[\s\S]*\.\.\.WORKFLOW_TOOLS,[\s\S]*\],\s*'id'/
+			/const desktopTools = mergeUniqueRegistrations\(\s*config\.tools,\s*\[[\s\S]*TargetShapeTool,[\s\S]*TargetAreaTool,[\s\S]*\.\.\.WORKFLOW_TOOLS,[\s\S]*\],\s*'id'/
 		)
 	})
 
@@ -33,7 +33,7 @@ describe('tldraw Offline config parity', () => {
 			"import { LocalHtmlMockupShapeUtil } from '../client/html-mockup/LocalHtmlMockupShape'"
 		)
 		expect(desktopConfigSource).toMatch(
-			/shapeUtils:\s*mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*LocalHtmlMockupShapeUtil,[\s\S]*\],\s*'type'/
+			/const desktopShapeUtils = mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*LocalHtmlMockupShapeUtil,[\s\S]*\],\s*'type'/
 		)
 	})
 
@@ -41,16 +41,20 @@ describe('tldraw Offline config parity', () => {
 		expect(desktopConfigSource).toContain(
 			"import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'"
 		)
-		expect(desktopConfigSource).toMatch(
-			/shapeUtils:\s*mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*AgentsModelsShapeUtil,[\s\S]*\],\s*'type'/
+		expect(desktopConfigSource).toContain(
+			'...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil])'
 		)
 	})
 
 	it('keeps host-native registrations deduped after external registrations', () => {
 		expect(desktopConfigSource.indexOf('...desktopComposition.shapeUtils')).toBeLessThan(
-			desktopConfigSource.indexOf('AgentsModelsShapeUtil,')
+			desktopConfigSource.indexOf(
+				'...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil])'
+			)
 		)
-		expect(desktopConfigSource.indexOf('...desktopComposition.tools')).toBeLessThan(
+		expect(
+			desktopConfigSource.indexOf('...desktopComposition.tools')
+		).toBeLessThan(
 			desktopConfigSource.indexOf('TargetShapeTool,')
 		)
 	})
@@ -65,6 +69,16 @@ describe('tldraw Offline config parity', () => {
 		expect(desktopConfigSource).toContain(
 			'composition={desktopComposition}'
 		)
+	})
+
+	it('keeps the Grok Agents / Models util canonical and registers its port gesture', () => {
+		expect(desktopConfigSource).toContain(
+			'suppliesCanonicalAgentsModelsShape'
+		)
+		expect(desktopConfigSource).toContain(
+			'...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil])'
+		)
+		expect(desktopConfigSource).toContain('...desktopComposition.tools')
 	})
 
 	it('fails custom-record kits closed with an explicit diagnostic', () => {
@@ -85,16 +99,36 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
+	it('materializes mode pages and publishes their exact capability catalog in Offline', () => {
+		expect(desktopConfigSource).toContain(
+			"import { ensureWorkbenchModePages } from '../client/workbench/workbenchPages'"
+		)
+		expect(desktopConfigSource).toContain('ensureWorkbenchModePages(editor)')
+		expect(desktopConfigSource).toContain('resolveAgentPageRegistrations({')
+		expect(desktopConfigSource).toContain('buildCanvasRuntimeCapabilityCatalog({')
+		expect(desktopConfigSource).toContain('publishCompanionCanvasCapabilityCatalog(')
+	})
+
 	it('registers the C1-style experiment card shape used by both surfaces', () => {
 		expect(desktopConfigSource).toContain(
 			"import { ExperimentCardShapeUtil } from '../client/experiments/ExperimentCardShape'"
 		)
 		expect(desktopConfigSource).toMatch(
-			/shapeUtils:\s*mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*ExperimentCardShapeUtil,[\s\S]*\],\s*'type'/
+			/const desktopShapeUtils = mergeUniqueRegistrations\(\s*config\.shapeUtils,\s*\[[\s\S]*ExperimentCardShapeUtil,[\s\S]*\],\s*'type'/
 		)
 		expect(desktopConfigSource).toContain(
 			"import experimentCardStylesheet from '../client/experiments/experimentCard.css'"
 		)
+	})
+
+	it('installs the Markdown document surface and import toolbar in Offline', () => {
+		expect(desktopConfigSource).toContain(
+			"import markdownDocumentStylesheet from '../client/markdown/markdownDocument.css'"
+		)
+		expect(desktopConfigSource).toContain(
+			"import { WorkbenchToolbar } from '../client/workbench/WorkbenchToolbar'"
+		)
+		expect(desktopConfigSource).toContain('Toolbar: WorkbenchToolbar')
 	})
 
 	it('requires the Offline entry to install its resident HTML capability', () => {

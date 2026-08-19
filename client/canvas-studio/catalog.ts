@@ -151,12 +151,20 @@ function searchText(...values: Array<string | readonly string[] | undefined>) {
 function availabilityForKit(
 	kitId: string,
 	pageLens: string | undefined,
+	pageName: string,
 	catalog: CanvasStudioCatalog,
 	composition: CanvasKitComposition
 ): CanvasStudioCatalogKitAvailability {
 	if (!composition.getContribution(kitId)) return 'unavailable'
 	const pageKitIds = pageLens ? catalog.pages?.[pageLens] : undefined
 	if (pageKitIds && !pageKitIds.includes(kitId)) return 'unbound'
+	if (
+		!pageKitIds &&
+		catalog.kits.find((kit) => kit.id === kitId)?.defaultPage &&
+		catalog.kits.find((kit) => kit.id === kitId)?.defaultPage !== pageName
+	) {
+		return 'unbound'
+	}
 	return 'available'
 }
 
@@ -179,6 +187,7 @@ export function buildCanvasStudioPaletteModel({
 		const availability = availabilityForKit(
 			kit.id,
 			pageLens,
+			page.name,
 			catalog,
 			composition
 		)

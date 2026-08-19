@@ -44,7 +44,12 @@ export default function CanvasStudioCatalogStory() {
 
 	return (
 		<div className="canvas-example-story canvas-studio-story">
-			<Tldraw onMount={initialize} components={components} />
+			<Tldraw
+				onMount={initialize}
+				components={components}
+				shapeUtils={[...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.shapeUtils]}
+				bindingUtils={[...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils]}
+			/>
 		</div>
 	)
 }

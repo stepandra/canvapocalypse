@@ -15,6 +15,8 @@ export type ChatHistoryItem =
  */
 export interface ChatHistoryPromptItem {
 	type: 'prompt'
+	/** Stable lineage ID used when a conversation forks from this turn. */
+	turnId?: string
 	promptSource: AgentRequestSource
 	agentFacingMessage: string
 	userFacingMessage: string | null

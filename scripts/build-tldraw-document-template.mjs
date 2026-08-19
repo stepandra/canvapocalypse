@@ -273,12 +273,23 @@ export default function ({ editor, helpers, signal }) {
 			let page = pagesByName.get(domain.title)
 			if (!page) {
 				const pageId = PageRecordType.createId(\`canvapocalypse-\${domain.id}\`)
-				editor.createPage({ id: pageId, name: domain.title })
+				editor.createPage({
+					id: pageId,
+					name: domain.title,
+					meta: { lens: domain.id },
+				})
 				page = editor.getPage(pageId) ?? editor.getPages().find((p) => p.name === domain.title)
 				if (page) pagesByName.set(domain.title, page)
 				summary.pagesCreated += 1
 			} else {
 				summary.pagesExisting += 1
+			}
+			if (page && page.meta?.lens !== domain.id) {
+				editor.updatePage({
+					id: page.id,
+					meta: { ...page.meta, lens: domain.id },
+				})
+				page = editor.getPage(page.id) ?? page
 			}
 
 			if (!page || domain.unbound) continue

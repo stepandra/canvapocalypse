@@ -25,7 +25,6 @@ describe('workbench domain packs', () => {
 			designSystem: false,
 			stitch: false,
 			mlIntern: false,
-			terminalSession: true,
 		})
 		expect(WORKBENCH_DOMAIN_PACKS.ml.overlays).toEqual({
 			workflow: true,
@@ -34,7 +33,6 @@ describe('workbench domain packs', () => {
 			designSystem: false,
 			stitch: false,
 			mlIntern: true,
-			terminalSession: false,
 		})
 		expect(WORKBENCH_DOMAIN_PACKS.uiux.overlays).toEqual({
 			workflow: false,
@@ -43,7 +41,6 @@ describe('workbench domain packs', () => {
 			designSystem: true,
 			stitch: true,
 			mlIntern: false,
-			terminalSession: false,
 		})
 		expect(WORKBENCH_DOMAIN_PACKS.product.overlays).toEqual({
 			workflow: true,
@@ -52,7 +49,6 @@ describe('workbench domain packs', () => {
 			designSystem: false,
 			stitch: false,
 			mlIntern: false,
-			terminalSession: false,
 		})
 	})
 
@@ -101,10 +97,14 @@ describe('workbench domain packs', () => {
 		).toBe('product')
 	})
 
-	it('exposes exactly three native starter templates per canonical pack', () => {
+	it('exposes expanded diagram packs and compact specialist packs', () => {
 		for (const pack of Object.values(WORKBENCH_DOMAIN_PACKS)) {
-			expect(pack.templates).toHaveLength(3)
-			expect(new Set(pack.templates.map((template) => template.id)).size).toBe(3)
+			const expectedCount =
+				pack.id === 'architecture' || pack.id === 'product' ? 6 : 3
+			expect(pack.templates).toHaveLength(expectedCount)
+			expect(new Set(pack.templates.map((template) => template.id)).size).toBe(
+				expectedCount
+			)
 			expect(pack.icon).toBeTruthy()
 			expect('shortLabel' in pack).toBe(false)
 			for (const template of pack.templates) {

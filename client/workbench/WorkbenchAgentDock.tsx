@@ -8,9 +8,11 @@ import {
 	useValue,
 } from 'tldraw'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
+import { ChatBranchNavigator } from '../components/ChatBranchNavigator'
 import { getCompletedNativeTldrawMutationActions } from '../agent/nativeMutationEvidence'
 import { type CompanionBridgeState } from '../components/CompanionCanvasBridgeController'
 import { resolveWorkbenchDomainPack, WorkbenchDomain } from './domainPacks'
+import { insertBranchDecisionGraph } from './workbenchConversationVariants'
 import {
 	buildWorkbenchAgentInput,
 	isWorkbenchCanvasMutationRequest,
@@ -169,11 +171,37 @@ export function WorkbenchAgentDock({ domainPack }: WorkbenchAgentDockProps) {
 		event.currentTarget.form?.requestSubmit()
 	}
 
+	const compareBranchWithParent = (
+		branch: Parameters<typeof insertBranchDecisionGraph>[1],
+		parentBranch: Parameters<typeof insertBranchDecisionGraph>[2]
+	) => {
+		try {
+			const receipt = insertBranchDecisionGraph(
+				agent.editor,
+				branch,
+				parentBranch
+			)
+			setStatus('finished')
+			setFeedback(
+				`Created Decision Graph + ADR from ${parentBranch.name} and ${branch.name} (${receipt.shapeIds.length} shapes).`
+			)
+			setExpanded(false)
+			agent.editor.menus.clearOpenMenus()
+		} catch (error) {
+			setStatus('error')
+			setFeedback(
+				error instanceof Error ? error.message : 'The branch comparison could not be created.'
+			)
+		}
+	}
+
 	if (getWorkbenchAgentDockMode(domainPack) === 'hidden') {
 		return null
 	}
 
-	const indicator = getWorkbenchAgentDockIndicator(isGenerating ? 'running' : status)
+	const indicator = getWorkbenchAgentDockIndicator(
+		isGenerating ? 'running' : status
+	)
 	const triggerTitle = `${pack.label} AI companion: ${indicator}`
 
 	return (
@@ -231,6 +259,11 @@ export function WorkbenchAgentDock({ domainPack }: WorkbenchAgentDockProps) {
 									{selectedShapeCount} selected
 								</span>
 							</header>
+
+							<ChatBranchNavigator
+								agent={agent}
+								onCompareWithParent={compareBranchWithParent}
+							/>
 
 							<fieldset className="workbench-agent-context">
 								<legend>Context boundary</legend>

@@ -2,7 +2,7 @@ import type { PluginAPI } from '@ampcode/plugin'
 import { fileURLToPath } from 'node:url'
 import {
 	createAmpTldrawCompanionClient,
-	resolveProjectCanvasBinding,
+	resolveProjectCanvasTarget,
 	startWorkbenchBridge,
 } from '../../scripts/amp-tldraw-companion-runtime.mjs'
 import { loadOrCreateHtmlMockupResidentCapability } from '../../scripts/html-mockup-resident-capability.mjs'
@@ -32,10 +32,10 @@ export default function tldrawOfflineWorkbenchPlugin(amp: PluginAPI) {
 			if (!amp.system.workspaceRoot) {
 				throw new Error('tldraw project routing requires an Amp workspace')
 			}
-			const canvasBinding = await resolveProjectCanvasBinding({
+			const canvasTarget = await resolveProjectCanvasTarget({
 				workspaceRoot: amp.helpers.filePathFromURI(amp.system.workspaceRoot),
 			})
-			return render(await client.capabilities({ canvasBinding }))
+			return render(await client.capabilities(canvasTarget))
 		},
 	})
 
@@ -63,7 +63,7 @@ export default function tldrawOfflineWorkbenchPlugin(amp: PluginAPI) {
 	amp.registerTool({
 		name: 'tldraw_execute',
 		description:
-			'Inspect or mutate one explicit native-tldraw selection/area. Inspect first, then pass its contextRef with a bounded plan of complete validated AgentAction objects in absolute page coordinates. Waits for and returns the local canvas receipt.',
+			'Inspect, semantically read, or mutate one explicit native-tldraw selection/area. Inspect first, then pass its contextRef with the hydrated capability’s bounded query/action plan. Waits for and returns the local canvas receipt.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -72,7 +72,8 @@ export default function tldrawOfflineWorkbenchPlugin(amp: PluginAPI) {
 				context: { enum: ['selection', 'selection-or-area'] },
 				contextRef: {
 					type: 'string',
-					description: 'Required for mutation; returned by a succeeded canvas.inspect receipt.',
+					description:
+						'Required for mutation and custom semantic reads; returned by a succeeded canvas.inspect receipt.',
 				},
 				idempotencyKey: {
 					type: 'string',
@@ -82,7 +83,7 @@ export default function tldrawOfflineWorkbenchPlugin(amp: PluginAPI) {
 					type: 'array',
 					maxItems: 24,
 					description:
-						'Required for mutation, omitted for inspection. Must match the hydrated capability schema.',
+						'Required for mutation and custom semantic reads, omitted for base inspection. Must match the hydrated capability schema.',
 					items: { type: 'object' },
 				},
 			},

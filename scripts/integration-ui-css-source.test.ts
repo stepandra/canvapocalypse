@@ -44,11 +44,12 @@ describe('integration UI stylesheet ownership', () => {
 			'.ml-intern-eval-launcher-panel > div'
 		)
 		expect(integrationStyles).not.toContain('.workflow-tool-button.has-label')
+		expect(integrationStyles).not.toContain('.workflow-palette-toggle')
 		expect(integrationStyles).not.toContain('Inter')
 		expect(integrationStyles).not.toContain('#172033')
 		expect(integrationStyles).not.toContain('backdrop-filter')
 		expect(integrationStyles).toContain('flex-flow: row wrap')
-		expect(integrationStyles).toContain('.workflow-palette-toggle {')
+		expect(integrationStyles).toContain('.workflow-palette {')
 		expect(integrationStyles).toContain('max-height: 104px')
 		expect(integrationStyles).toContain('background: var(--tl-color-panel)')
 		expect(integrationStyles).toContain('box-shadow: var(--tl-shadow-2)')

@@ -2895,7 +2895,7 @@ export default function agentsModelsDocumentScript(ctx) {
       },
     });
 
-    // STAGE lane
+    // PHASE lane
     upsertNativeShape({
       id: createShapeId(`${ID_NS}-lane-stage`),
       type: "frame",
@@ -2904,12 +2904,12 @@ export default function agentsModelsDocumentScript(ctx) {
       props: {
         w: layout.stageLane.w,
         h: layout.stageLane.h,
-        name: "STAGE",
+        name: "PHASE",
         color: "grey",
       },
-      meta: { am: { role: "furniture", kind: "lane", lane: "STAGE" } },
+      meta: { am: { role: "furniture", kind: "lane", lane: "PHASE" } },
     });
-    // AGENT / PERSONA lane
+    // SUBAGENT RUN / PERSONA lane
     upsertNativeShape({
       id: createShapeId(`${ID_NS}-lane-subagent`),
       type: "frame",
@@ -2918,10 +2918,16 @@ export default function agentsModelsDocumentScript(ctx) {
       props: {
         w: layout.subagentLane.w,
         h: layout.subagentLane.h,
-        name: "AGENT / PERSONA",
+        name: "SUBAGENT RUN / PERSONA",
         color: "grey",
       },
-      meta: { am: { role: "furniture", kind: "lane", lane: "AGENT / PERSONA" } },
+      meta: {
+        am: {
+          role: "furniture",
+          kind: "lane",
+          lane: "SUBAGENT RUN / PERSONA",
+        },
+      },
     });
     // Native frames render their own names. Remove the superseded duplicate
     // text labels from the stock-geo implementation.

@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import IsoflowPackage from 'isoflow';
+import '@fontsource/ibm-plex-sans/latin-300.css';
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-sans/cyrillic-300.css';
+import '@fontsource/ibm-plex-sans/cyrillic-400.css';
+import '@fontsource/ibm-plex-sans/cyrillic-600.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-600.css';
 import { convertProExport } from '../scripts/lib/pro-export.mjs';
 import { deriveLegend, WorkspaceDrawer, WorkspaceNavigation } from './project-workspace.jsx';
+import { ProjectOverview } from './project-document.jsx';
 import './styles.css';
 
 const Isoflow = IsoflowPackage.default ?? IsoflowPackage.Isoflow ?? IsoflowPackage;
@@ -32,7 +41,9 @@ function ProjectSession({ projectId, config }) {
   const query = new URLSearchParams(window.location.search);
   const isEmbed = query.get('embed') === '1';
   const requestedViewId = query.get('view');
+  const [surface, setSurface] = useState(isEmbed || query.get('mode') === 'editor' ? 'editor' : 'document');
   const [model, setModel] = useState(null);
+  const [projectSource, setProjectSource] = useState(null);
   const [activeViewId, setActiveViewId] = useState(null);
   const [error, setError] = useState(null);
   const [renderKey, setRenderKey] = useState(0);
@@ -68,6 +79,7 @@ function ProjectSession({ projectId, config }) {
       if (!response.ok) throw new Error(`Export not found: ${config.source}`);
       return response.json();
     });
+    setProjectSource(source);
     const fresh = convertProExport(source);
     const saved = restoreSaved ? readCompatibleSessionModel(storageKey, fresh) : null;
     let nextModel = saved ?? fresh;
@@ -83,9 +95,13 @@ function ProjectSession({ projectId, config }) {
     } catch {
       bridgeRevision.current = null;
     }
-    if (requestedViewId && nextModel.views.some((view) => view.id === requestedViewId)) {
-      nextModel = { ...nextModel, view: requestedViewId, fitToView: true };
-    }
+    nextModel = {
+      ...nextModel,
+      ...(requestedViewId && nextModel.views.some((view) => view.id === requestedViewId)
+        ? { view: requestedViewId }
+        : {}),
+      fitToView: true,
+    };
     lastPersistedModel.current = JSON.stringify(nextModel);
     suppressBridgePersistUntil.current = Date.now() + 1500;
     editedModel.current = nextModel;
@@ -203,9 +219,13 @@ function ProjectSession({ projectId, config }) {
       try {
         const bridge = await fetchBridgeState(projectId);
         if (cancelled || bridge.revision === bridgeRevision.current) return;
-        const nextModel = requestedViewId && bridge.model.views.some((view) => view.id === requestedViewId)
-          ? { ...bridge.model, view: requestedViewId, fitToView: true }
-          : bridge.model;
+        const nextModel = {
+          ...bridge.model,
+          ...(requestedViewId && bridge.model.views.some((view) => view.id === requestedViewId)
+            ? { view: requestedViewId }
+            : {}),
+          fitToView: true,
+        };
         const serialized = JSON.stringify(nextModel);
         bridgeRevision.current = bridge.revision;
         lastPersistedModel.current = serialized;
@@ -365,6 +385,39 @@ function ProjectSession({ projectId, config }) {
     setRenderKey((value) => value + 1);
   };
 
+  const openEditor = (viewId) => {
+    selectView(viewId);
+    setSurface('editor');
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('project', projectId);
+    nextUrl.searchParams.set('mode', 'editor');
+    nextUrl.searchParams.set('view', viewId);
+    window.history.replaceState(null, '', nextUrl);
+  };
+
+  const openProjectOverview = () => {
+    setSurface('document');
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('project', projectId);
+    nextUrl.searchParams.delete('mode');
+    nextUrl.searchParams.delete('view');
+    window.history.replaceState(null, '', nextUrl);
+  };
+
+  if (!isEmbed && surface === 'document') {
+    return (
+      <ProjectOverview
+        projectId={projectId}
+        projects={SESSION_PROJECTS}
+        model={model}
+        source={projectSource}
+        workspace={workspaceDraft}
+        bridgeStatus={saveStatus}
+        onOpenEditor={openEditor}
+      />
+    );
+  }
+
   return (
     <div className={`session-shell${isEmbed ? ' embed-mode' : ''}`}>
       {!isEmbed && <header className="topbar session-topbar">
@@ -384,6 +437,7 @@ function ProjectSession({ projectId, config }) {
           <Metric label="ITEMS" value={model.items.length} tone="purple" />
           <Metric label="EDGES" value={connectorCount} tone="green" />
           <Metric label="INFRA" value={workspaceCounts.nodes} tone="amber" />
+          <button onClick={openProjectOverview}>PROJECT OVERVIEW</button>
           <button className="save-button" onClick={persistDraft}>SAVE DRAFT <kbd>⌘S</kbd></button>
           <button onClick={downloadModel}>DOWNLOAD JSON <kbd>⇧⌘S</kbd></button>
           <button onClick={resetSession}>RESET SOURCE</button>

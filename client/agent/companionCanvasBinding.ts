@@ -7,6 +7,9 @@
 const COMPANION_CANVAS_BINDING_SLOT = Symbol.for(
 	'canvapocalypse.renderer.companionCanvasBinding'
 )
+const COMPANION_CANVAS_CAPABILITY_CATALOG_SLOT = Symbol.for(
+	'canvapocalypse.renderer.companionCanvasCapabilityCatalog'
+)
 
 function createCompanionCanvasBinding() {
 	return `canvas-${
@@ -38,6 +41,34 @@ function resolveRendererCompanionCanvasBinding() {
 export const COMPANION_CANVAS_BINDING =
 	resolveRendererCompanionCanvasBinding()
 
+/** Publish the exact mounted runtime catalog for trusted Offline /exec discovery. */
+export function publishCompanionCanvasCapabilityCatalog<
+	Catalog extends { catalogRevision: string },
+>(catalog: Catalog) {
+	Reflect.deleteProperty(globalThis, COMPANION_CANVAS_CAPABILITY_CATALOG_SLOT)
+	Object.defineProperty(globalThis, COMPANION_CANVAS_CAPABILITY_CATALOG_SLOT, {
+		value: structuredClone(catalog),
+		configurable: true,
+		enumerable: false,
+		writable: false,
+	})
+	return () => {
+		const current = Reflect.get(globalThis, COMPANION_CANVAS_CAPABILITY_CATALOG_SLOT)
+		if (current?.catalogRevision === catalog.catalogRevision) {
+			Reflect.deleteProperty(globalThis, COMPANION_CANVAS_CAPABILITY_CATALOG_SLOT)
+		}
+	}
+}
+
+export function getPublishedCompanionCanvasCapabilityCatalog<
+	Catalog extends { catalogRevision: string },
+>(): Catalog | undefined {
+	return Reflect.get(
+		globalThis,
+		COMPANION_CANVAS_CAPABILITY_CATALOG_SLOT
+	) as Catalog | undefined
+}
+
 export type CompanionCanvasClientKind = 'offline-desktop' | 'web-preview'
 
 /**
@@ -48,7 +79,9 @@ export type CompanionCanvasClientKind = 'offline-desktop' | 'web-preview'
 export function resolveCompanionCanvasClientKind(
 	protocol = globalThis.location?.protocol
 ): CompanionCanvasClientKind {
-	return protocol === 'file:' ? 'offline-desktop' : 'web-preview'
+	return protocol === 'file:' || protocol === 'tldraw-app:'
+		? 'offline-desktop'
+		: 'web-preview'
 }
 
 export const COMPANION_CANVAS_CLIENT_KIND =

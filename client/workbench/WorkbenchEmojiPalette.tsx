@@ -1,17 +1,21 @@
+import { useId } from 'react'
 import {
 	TldrawUiButton,
-	TldrawUiButtonIcon,
 	TldrawUiDropdownMenuContent,
 	TldrawUiDropdownMenuGroup,
 	TldrawUiDropdownMenuItem,
 	TldrawUiDropdownMenuRoot,
 	TldrawUiDropdownMenuTrigger,
-	TldrawUiToolbar,
 	TldrawUiToolbarButton,
 	useEditor,
+	useValue,
 } from 'tldraw'
 import {
-	insertWorkbenchEmoji,
+	activateEmojiStamp,
+	EmojiStampTool,
+	getEmojiStampState,
+} from './EmojiStampTool'
+import {
 	WorkbenchEmojiDefinition,
 	WORKBENCH_EMOJIS,
 } from './workbenchEmoji'
@@ -25,38 +29,48 @@ function EmojiGlyph({ definition }: { definition: WorkbenchEmojiDefinition }) {
 
 export function WorkbenchEmojiPalette() {
 	const editor = useEditor()
+	const menuId = useId()
+	const selectedEmojiId = useValue(
+		'selected workbench emoji stamp',
+		() => getEmojiStampState(editor).get(),
+		[editor]
+	)
+	const currentToolId = useValue(
+		'workbench emoji current tool',
+		() => editor.getCurrentToolId(),
+		[editor]
+	)
+	const selectedEmoji =
+		WORKBENCH_EMOJIS.find((definition) => definition.id === selectedEmojiId) ??
+		WORKBENCH_EMOJIS[0]
 
-	const insert = (definition: WorkbenchEmojiDefinition) => {
-		insertWorkbenchEmoji(editor, definition.id)
+	const selectStamp = (definition: WorkbenchEmojiDefinition) => {
+		activateEmojiStamp(editor, definition.id)
 	}
 
 	return (
-		<aside
+		<div
 			className="workbench-emoji-control"
 			onPointerDown={(event) => event.stopPropagation()}
 			onClick={(event) => event.stopPropagation()}
 		>
-			<TldrawUiDropdownMenuRoot id="workbench-emoji-palette">
-				<TldrawUiToolbar
-					className="workbench-emoji-toolbar"
-					label="Canvas emoji"
-					orientation="horizontal"
-				>
-					<TldrawUiDropdownMenuTrigger>
-						<TldrawUiToolbarButton
-							type="tool"
-							className="workbench-emoji-trigger"
-							aria-label="Emoji palette"
-							title="Emoji palette"
-						>
-							<TldrawUiButtonIcon icon="geo-star" />
-						</TldrawUiToolbarButton>
-					</TldrawUiDropdownMenuTrigger>
-				</TldrawUiToolbar>
+			<TldrawUiDropdownMenuRoot id={`workbench-emoji-palette-${menuId}`}>
+				<TldrawUiDropdownMenuTrigger>
+					<TldrawUiToolbarButton
+						type="tool"
+						className="workbench-emoji-trigger"
+						isActive={currentToolId === EmojiStampTool.id}
+						aria-label={`Emoji stamp · ${selectedEmoji.label}`}
+						aria-pressed={currentToolId === EmojiStampTool.id}
+						title={`Emoji stamp · ${selectedEmoji.label}`}
+					>
+						<EmojiGlyph definition={selectedEmoji} />
+					</TldrawUiToolbarButton>
+				</TldrawUiDropdownMenuTrigger>
 				<TldrawUiDropdownMenuContent
 					className="workbench-emoji-palette"
 					side="top"
-					align="start"
+					align="center"
 					alignOffset={0}
 					sideOffset={8}
 					collisionPadding={8}
@@ -71,8 +85,9 @@ export function WorkbenchEmojiPalette() {
 									type="icon"
 									className="workbench-emoji-item"
 									title={definition.label}
-									aria-label={`Insert ${definition.label}`}
-									onClick={() => insert(definition)}
+									aria-label={`Use ${definition.label} stamp`}
+									aria-pressed={selectedEmojiId === definition.id}
+									onClick={() => selectStamp(definition)}
 								>
 									<EmojiGlyph definition={definition} />
 								</TldrawUiButton>
@@ -81,6 +96,6 @@ export function WorkbenchEmojiPalette() {
 					</TldrawUiDropdownMenuGroup>
 				</TldrawUiDropdownMenuContent>
 			</TldrawUiDropdownMenuRoot>
-		</aside>
+		</div>
 	)
 }
