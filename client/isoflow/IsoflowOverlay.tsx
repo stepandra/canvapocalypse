@@ -36,6 +36,15 @@ import {
 } from './isoflowProvider'
 
 export function IsoflowOverlay() {
+	return (
+		<>
+			<IsoflowProviderControl />
+			<IsoflowSelectionInspector />
+		</>
+	)
+}
+
+export function IsoflowProviderControl() {
 	const editor = useEditor()
 	const selected = useValue(
 		'selected Isoflow embed',
@@ -93,83 +102,91 @@ export function IsoflowOverlay() {
 	}, [])
 
 	return (
-		<>
-			<div
-				className="isoflow-provider-toolbar"
-				onPointerDown={(event) => event.stopPropagation()}
-				onClick={(event) => event.stopPropagation()}
+		<div
+			className="isoflow-provider-toolbar"
+			onPointerDown={(event) => event.stopPropagation()}
+			onClick={(event) => event.stopPropagation()}
+		>
+			<TldrawUiPopover
+				id="isoflow-provider-picker"
+				open={pickerOpen}
+				onOpenChange={setPickerOpen}
 			>
-				<TldrawUiPopover
-					id="isoflow-provider-picker"
-					open={pickerOpen}
-					onOpenChange={setPickerOpen}
+				<TldrawUiTooltip
+					content="Isoflow embeds"
+					side="right"
+					sideOffset={8}
+					delayDuration={350}
 				>
-					<TldrawUiTooltip
-						content="Isoflow embeds"
-						side="right"
-						sideOffset={8}
-						delayDuration={350}
-					>
-						<TldrawUiPopoverTrigger>
-							<TldrawUiButton
-								type="tool"
-								className="workbench-rail-trigger isoflow-provider-button"
-								aria-label="Isoflow embeds"
-								aria-expanded={pickerOpen}
-								isActive={pickerOpen || Boolean(selected)}
-							>
-								<IsoflowMark />
-							</TldrawUiButton>
-						</TldrawUiPopoverTrigger>
-					</TldrawUiTooltip>
-					<TldrawUiPopoverContent
-						side="right"
-						align="start"
-						sideOffset={8}
-						collisionPadding={8}
-					>
-						<div
-							className="isoflow-provider-picker"
-							onPointerDown={(event) => event.stopPropagation()}
-							onClick={(event) => event.stopPropagation()}
+					<TldrawUiPopoverTrigger>
+						<TldrawUiButton
+							type="tool"
+							className="workbench-rail-trigger isoflow-provider-button"
+							aria-label="Isoflow embeds"
+							aria-expanded={pickerOpen}
+							isActive={pickerOpen || Boolean(selected)}
 						>
-							<div className="isoflow-picker-kicker">EMBED PROVIDER</div>
-							<div className="isoflow-picker-title">
-								<span>Isoflow</span>
-								<small>{status}</small>
-							</div>
-							<div className="isoflow-picker-section">SOURCE DIAGRAMS</div>
-							{ISOFLOW_PROJECTS.map((project) => (
-								<TldrawUiButton
-									type="menu"
-									className="isoflow-project-option"
-									key={project.id}
-									disabled={creating}
-									onClick={() =>
-										createProject(
-											project.id,
-											'preferredViewId' in project
-												? project.preferredViewId
-												: undefined
-										)
-									}
-								>
-									<span>
-										<strong>{project.label}</strong>
-										<small>{project.description}</small>
-									</span>
-								</TldrawUiButton>
-							))}
+							<IsoflowMark />
+						</TldrawUiButton>
+					</TldrawUiPopoverTrigger>
+				</TldrawUiTooltip>
+				<TldrawUiPopoverContent
+					side="right"
+					align="start"
+					sideOffset={8}
+					collisionPadding={8}
+				>
+					<div
+						className="isoflow-provider-picker"
+						onPointerDown={(event) => event.stopPropagation()}
+						onClick={(event) => event.stopPropagation()}
+				>
+						<div className="isoflow-picker-kicker">EMBED PROVIDER</div>
+						<div className="isoflow-picker-title">
+							<span>Isoflow</span>
+							<small>{status}</small>
 						</div>
-					</TldrawUiPopoverContent>
-				</TldrawUiPopover>
-				<span className="workflow-sr-only" role="status">
-					{status}
-				</span>
-			</div>
-			{selected && <IsoflowInspector key={selected.id} shape={selected} />}
-		</>
+						<div className="isoflow-picker-section">SOURCE DIAGRAMS</div>
+						{ISOFLOW_PROJECTS.map((project) => (
+							<TldrawUiButton
+								type="menu"
+								className="isoflow-project-option"
+								key={project.id}
+								disabled={creating}
+								onClick={() =>
+									createProject(
+										project.id,
+										'preferredViewId' in project
+											? project.preferredViewId
+											: undefined
+									)
+								}
+							>
+								<span>
+									<strong>{project.label}</strong>
+									<small>{project.description}</small>
+								</span>
+							</TldrawUiButton>
+						))}
+					</div>
+				</TldrawUiPopoverContent>
+			</TldrawUiPopover>
+			<span className="workflow-sr-only" role="status">
+				{status}
+			</span>
+		</div>
 	)
+}
+
+export function IsoflowSelectionInspector() {
+	const editor = useEditor()
+	const selected = useValue(
+		'selected Isoflow inspector embed',
+		() => editor.getSelectedShapes().find(isIsoflowEmbedShape) ?? null,
+		[editor]
+	)
+
+	return selected ? <IsoflowInspector key={selected.id} shape={selected} /> : null
 }
 
 function IsoflowInspector({ shape }: { shape: TLEmbedShape }) {

@@ -20,6 +20,8 @@ describe('IsoflowOverlay external Architect handoff', () => {
 		expect(overlaySource).toContain('TldrawUiButton')
 		expect(overlaySource).toContain('TldrawUiInput')
 		expect(overlaySource).toContain('TldrawUiSelect')
+		expect(overlaySource).toContain('export function IsoflowProviderControl()')
+		expect(overlaySource).toContain('export function IsoflowSelectionInspector()')
 		expect(overlaySource).toContain('className="tlui-menu isoflow-inspector"')
 		expect(overlaySource).not.toContain('<button')
 		expect(overlaySource).not.toContain('<select')

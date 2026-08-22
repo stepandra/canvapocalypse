@@ -79,7 +79,9 @@ describe('native tldraw workbench chrome', () => {
 			'<CanvasStudioPalette composition={canvasKitComposition} />'
 		)
 		expect(shellSource).toContain('<GrokWorkflowToolbox inToolbar />')
-		expect(shellSource).toContain('aria-label="Open Grok workspace"')
+		expect(shellSource).toContain('<IsoflowProviderControl />')
+		expect(shellSource).toContain('<IsoflowSelectionInspector />')
+		expect(shellSource).not.toContain('aria-label="Open Grok workspace"')
 		expect(shellSource).toContain('<CanvasLayoutControls />')
 		expect(shellSource).toContain('showCommentTools && <CanvasCommentControls />')
 		expect(shellSource).toContain('<BridgeCenter')
@@ -91,6 +93,14 @@ describe('native tldraw workbench chrome', () => {
 		expect(css).toMatch(
 			/\.workbench-rail-trigger\s*\{[^}]*width:\s*48px;[^}]*min-width:\s*48px;[^}]*height:\s*48px;/s
 		)
+		const isoflowToolbarRule = workflowCss.match(
+			/\.isoflow-provider-toolbar\s*\{([^}]*)\}/s
+		)?.[1]
+		expect(isoflowToolbarRule).toContain('width: 48px')
+		expect(isoflowToolbarRule).toContain('height: 48px')
+		expect(isoflowToolbarRule).not.toContain('position: absolute')
+		expect(isoflowToolbarRule).not.toContain('top:')
+		expect(isoflowToolbarRule).not.toContain('left:')
 	})
 
 	it('extends the native style panel with selection-aware workflow and layout context', () => {

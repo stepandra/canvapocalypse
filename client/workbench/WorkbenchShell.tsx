@@ -15,7 +15,6 @@ import {
 import { TldrawAgentApp } from '../agent/TldrawAgentApp'
 import { TldrawAgentAppContextProvider } from '../agent/TldrawAgentAppProvider'
 import {
-	GrokMark,
 	GrokToolboxLayer,
 	GrokWorkflowToolbox,
 } from '../../scripts/tldraw-desktop-grok-config'
@@ -27,7 +26,10 @@ import { resolveCanvasRuntimePageMode } from '../canvas-studio/runtimeCapability
 import { CanvasCommentControls } from '../comments/CommentOverlay'
 import { MlInternEvalLabLauncher } from '../components/MlInternEvalLabLauncher'
 import { CompanionCanvasBridgeController } from '../components/CompanionCanvasBridgeController'
-import { IsoflowOverlay } from '../isoflow/IsoflowOverlay'
+import {
+	IsoflowProviderControl,
+	IsoflowSelectionInspector,
+} from '../isoflow/IsoflowOverlay'
 import { KanbanTracksControl } from '../kanban/KanbanTracksControl'
 import { CanvasLayoutControls } from '../layout/components'
 import { WorkflowOverlay } from '../workflow/WorkflowOverlay'
@@ -110,15 +112,6 @@ export function WorkbenchShell({
 			editor.setCurrentPage(page.id)
 		}
 	}, [editor])
-	const openGrokWorkspace = useCallback(() => {
-		const page = editor
-			.getPages()
-			.find((candidate) => resolveCanvasRuntimePageMode(candidate) === 'agents-models')
-		if (page && page.id !== editor.getCurrentPageId()) {
-			editor.setCurrentPage(page.id)
-		}
-	}, [editor])
-
 	const createTemplate = useCallback(
 		(templateId: string, templateLabel: string) => {
 			try {
@@ -347,15 +340,9 @@ export function WorkbenchShell({
 						</section>
 					</TldrawUiPopoverContent>
 				</TldrawUiPopover>
-				<TldrawUiToolbarButton
-					type="tool"
-					className="workbench-rail-trigger grok-workspace-trigger"
-					title="Open Grok workspace"
-					aria-label="Open Grok workspace"
-					onClick={openGrokWorkspace}
-				>
-					<GrokMark />
-				</TldrawUiToolbarButton>
+				{modeEnabled && activePack.overlays.isoflow && (
+					<IsoflowProviderControl />
+					)}
 				<CanvasStudioPalette composition={canvasKitComposition} />
 				{app && <BridgeCenter />}
 				<CanvasLayoutControls />
@@ -365,7 +352,9 @@ export function WorkbenchShell({
 			{toolProfile && (
 				<WorkflowOverlay key={toolProfile.id} profile={toolProfile} />
 			)}
-			{modeEnabled && activePack.overlays.isoflow && <IsoflowOverlay />}
+			{modeEnabled && activePack.overlays.isoflow && (
+				<IsoflowSelectionInspector />
+			)}
 			{app && modeEnabled && effectiveDomain !== 'architecture' && (
 				<WorkbenchAgentDock domainPack={effectiveDomain} />
 			)}

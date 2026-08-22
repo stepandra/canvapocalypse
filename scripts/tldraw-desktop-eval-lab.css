@@ -2078,15 +2078,10 @@
 }
 
 .isoflow-provider-toolbar {
-  position: absolute;
-  z-index: var(--tl-layer-panels);
-  top: calc(var(--tl-space-10) + 144px);
-  left: var(--tl-space-4);
   width: 48px;
   height: 48px;
   padding: 0;
   border: 0;
-  border-top: 1px solid var(--tl-color-divider);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
