@@ -17,6 +17,7 @@ function runtime(
 ): CanvasStudioPortalRuntime {
 	return {
 		projectApi: '/__canvas/project',
+		sourceApi: '/__canvas/source',
 		inventorySha256: 'a'.repeat(64),
 		bridges,
 	}

@@ -184,6 +184,7 @@ function LockedCanvasStudioPortal() {
 			registrations={portalRegistrations}
 			store={store}
 			mountStandaloneGrokRuntime={false}
+			sourceApi={CANVAS_STUDIO_PORTAL_RUNTIME.sourceApi}
 		/>
 	)
 }
@@ -193,11 +194,13 @@ function CanvasStudioApp({
 	registrations,
 	store,
 	mountStandaloneGrokRuntime,
+	sourceApi,
 }: {
 	composition: CanvasKitComposition
 	registrations: ReturnType<typeof createCanvasRegistrations>
 	store: TLStoreWithStatus
 	mountStandaloneGrokRuntime: boolean
+	sourceApi?: string
 }) {
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
 	const disposeCanvasKits = useRef<(() => void) | undefined>(undefined)
@@ -297,6 +300,7 @@ function CanvasStudioApp({
 						app={app}
 						canvasKitComposition={composition}
 						showCommentTools={Boolean(composition.getContribution('canvas.comments'))}
+						sourceApi={sourceApi}
 					/>
 					<CommentOverlay />
 				</>
@@ -311,7 +315,7 @@ function CanvasStudioApp({
 			Toolbar: WorkbenchToolbar,
 			LoadingScreen: () => null,
 		}
-	}, [app, composition])
+	}, [app, composition, sourceApi])
 
 	return (
 		<TldrawUiToastsProvider>

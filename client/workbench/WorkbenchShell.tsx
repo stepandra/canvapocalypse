@@ -20,6 +20,7 @@ import {
 } from '../../scripts/tldraw-desktop-grok-config'
 import { BridgeCenter } from '../bridges/BridgeCenter'
 import { CanvasStudioPalette } from '../canvas-studio/CanvasStudioPalette'
+import { CanvasStudioSourceControl } from '../canvas-studio/CanvasStudioSourceControl'
 import type { CanvasKitComposition } from '../canvas-studio/types'
 import { resolveCanvasRuntimePageMode } from '../canvas-studio/runtimeCapabilityCatalog'
 import { CanvasCommentControls } from '../comments/CommentOverlay'
@@ -56,12 +57,14 @@ interface WorkbenchShellProps {
 	app: TldrawAgentApp | null
 	canvasKitComposition: CanvasKitComposition
 	showCommentTools?: boolean
+	sourceApi?: string
 }
 
 export function WorkbenchShell({
 	app,
 	canvasKitComposition,
 	showCommentTools = false,
+	sourceApi,
 }: WorkbenchShellProps) {
 	const editor = useEditor()
 	const [activeDomain, setActiveDomain] = useState<WorkbenchDomain>(
@@ -150,6 +153,7 @@ export function WorkbenchShell({
 						onClick={(event) => event.stopPropagation()}
 					>
 						{!hasCanonicalGrok && <GrokWorkflowToolbox inToolbar />}
+						{app && sourceApi && <CanvasStudioSourceControl app={app} endpoint={sourceApi} />}
 						<CanvasStudioPalette composition={canvasKitComposition} />
 						{app && <BridgeCenter />}
 						<CanvasLayoutControls />
@@ -345,6 +349,7 @@ export function WorkbenchShell({
 				{modeEnabled && activePack.overlays.isoflow && (
 					<IsoflowProviderControl />
 					)}
+				{app && sourceApi && <CanvasStudioSourceControl app={app} endpoint={sourceApi} />}
 				<CanvasStudioPalette composition={canvasKitComposition} />
 				{app && <BridgeCenter />}
 				<CanvasLayoutControls />

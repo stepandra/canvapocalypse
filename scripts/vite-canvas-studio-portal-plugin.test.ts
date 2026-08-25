@@ -77,6 +77,7 @@ function portalBuildConfig(path: string) {
 		contributions: [path],
 		runtime: {
 			projectApi: '/__canvas/project',
+			sourceApi: '/__canvas/source',
 			inventorySha256: 'a'.repeat(64),
 			publicUrl: 'https://canvas.example',
 			bridges: [
@@ -129,6 +130,7 @@ describe('Canvas Studio locked portal module', () => {
 			'.filter((contribution) => ["grok.workflow","hermes.flight-deck"].includes(contribution.kitId))'
 		)
 		expect(source).toContain('CANVAS_STUDIO_PORTAL_RUNTIME')
+		expect(source).toContain('/__canvas/source')
 		expect(source).toContain('/__canvas-grok-supervisor')
 		expect(source).toContain('/__canvas-hermes')
 		expect(source).not.toContain('127.0.0.1')

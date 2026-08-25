@@ -12,6 +12,7 @@ const DEFAULT_DEBOUNCE_MS = 500
 const CANVAS_PROJECT_SCHEMA = 'canvas.portal-project/v1'
 const CANVAS_PROJECT_UPDATE_SCHEMA = 'canvas.portal-project-update/v1'
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
+const openProjectStores = new WeakMap<TLStore, CanvasStudioProjectStoreController>()
 
 export type CanvasStudioProjectStoreOptions = TLStoreOptions & {
 	readonly inventorySha256: string
@@ -28,6 +29,13 @@ export interface CanvasStudioProjectStoreController {
 	readonly error: Error | null
 	flush(options?: { keepalive?: boolean }): Promise<void>
 	dispose(): Promise<void>
+}
+
+/** Flushes only a store opened by the locked project portal. */
+export function flushCanvasStudioProjectStore(store: TLStore) {
+	const controller = openProjectStores.get(store)
+	if (!controller) throw new Error('Canvas source import requires the locked project store')
+	return controller.flush()
 }
 
 function strongEtag(response: Response, operation: string) {
@@ -213,7 +221,7 @@ export async function openCanvasStudioProjectStore(
 		source: 'all',
 	})
 
-	return {
+	const controller: CanvasStudioProjectStoreController = {
 		store,
 		get revision() {
 			return revision
@@ -228,11 +236,14 @@ export async function openCanvasStudioProjectStore(
 			try {
 				await flush({ keepalive: true })
 			} finally {
+				openProjectStores.delete(store)
 				if (timer) clearTimeout(timer)
 				stopListening()
 			}
 		},
 	}
+	openProjectStores.set(store, controller)
+	return controller
 }
 
 /** React adapter for the locked portal. It never falls back to IndexedDB. */

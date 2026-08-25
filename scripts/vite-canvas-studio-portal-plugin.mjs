@@ -20,6 +20,7 @@ export function createCanvasStudioPortalPlugin(manifestJson, portalBuildConfigJs
 	const locked = Boolean(buildConfig) || manifest.length > 0
 	const runtime = buildConfig?.runtime ?? {
 		projectApi: '/__canvas/project',
+		sourceApi: '/__canvas/source',
 		inventorySha256: '',
 		bridges: [],
 	}
@@ -245,12 +246,15 @@ function parseCatalog(value) {
 function parseRuntime(value, enabledKitIds) {
 	assertObjectShape(
 		value,
-		['projectApi', 'inventorySha256'],
+		['projectApi', 'sourceApi', 'inventorySha256'],
 		['publicUrl', 'bridges'],
 		'Canvas Studio portal runtime'
 	)
 	if (!validPortalRoutePrefix(value.projectApi)) {
 		throw new Error('Canvas Studio portal runtime projectApi must be a safe same-origin prefix')
+	}
+	if (!validPortalRoutePrefix(value.sourceApi) || value.sourceApi === value.projectApi) {
+		throw new Error('Canvas Studio portal runtime sourceApi must be a distinct safe same-origin prefix')
 	}
 	if (typeof value.inventorySha256 !== 'string' || !SHA256_PATTERN.test(value.inventorySha256)) {
 		throw new Error('Canvas Studio portal runtime inventorySha256 must be lowercase SHA-256')
@@ -260,7 +264,7 @@ function parseRuntime(value, enabledKitIds) {
 		throw new Error('Canvas Studio portal runtime bridges must be an array')
 	}
 	const serviceIds = new Set()
-	const routePrefixes = new Set([value.projectApi])
+	const routePrefixes = new Set([value.projectApi, value.sourceApi])
 	const bridges = (value.bridges ?? []).map((bridge, index) => {
 		assertObjectShape(
 			bridge,
@@ -305,6 +309,7 @@ function parseRuntime(value, enabledKitIds) {
 	})
 	return Object.freeze({
 		projectApi: value.projectApi,
+		sourceApi: value.sourceApi,
 		inventorySha256: value.inventorySha256,
 		...(value.publicUrl !== undefined ? { publicUrl: value.publicUrl } : {}),
 		bridges: Object.freeze(bridges),

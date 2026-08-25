@@ -19,6 +19,7 @@ export interface CanvasStudioPortalBridge {
 
 export interface CanvasStudioPortalRuntime {
 	readonly projectApi: string
+	readonly sourceApi: string
 	readonly inventorySha256: string
 	readonly publicUrl?: string
 	readonly bridges: readonly CanvasStudioPortalBridge[]
