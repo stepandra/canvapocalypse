@@ -20,7 +20,6 @@ import {
 } from '../../scripts/tldraw-desktop-grok-config'
 import { BridgeCenter } from '../bridges/BridgeCenter'
 import { CanvasStudioPalette } from '../canvas-studio/CanvasStudioPalette'
-import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../canvas-studio/host'
 import type { CanvasKitComposition } from '../canvas-studio/types'
 import { resolveCanvasRuntimePageMode } from '../canvas-studio/runtimeCapabilityCatalog'
 import { CanvasCommentControls } from '../comments/CommentOverlay'
@@ -55,13 +54,13 @@ import './workbench.css'
 
 interface WorkbenchShellProps {
 	app: TldrawAgentApp | null
-	canvasKitComposition?: CanvasKitComposition
+	canvasKitComposition: CanvasKitComposition
 	showCommentTools?: boolean
 }
 
 export function WorkbenchShell({
 	app,
-	canvasKitComposition = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+	canvasKitComposition,
 	showCommentTools = false,
 }: WorkbenchShellProps) {
 	const editor = useEditor()
@@ -80,6 +79,9 @@ export function WorkbenchShell({
 	)
 	const pageMode = resolveCanvasRuntimePageMode(currentPage)
 	const isGrokWorkspace = pageMode === 'agents-models'
+	const hasCanonicalGrok = Boolean(
+		canvasKitComposition.getContribution('grok.workflow')
+	)
 	const pageDomain = WORKBENCH_DOMAINS.includes(pageMode as WorkbenchDomain)
 		? (pageMode as WorkbenchDomain)
 		: null
@@ -139,7 +141,7 @@ export function WorkbenchShell({
 		<>
 			{isGrokWorkspace && (
 				<>
-					<GrokToolboxLayer showToolbox={false} />
+					{!hasCanonicalGrok && <GrokToolboxLayer showToolbox={false} />}
 					<TldrawUiToolbar
 						className="workbench-aux-rail grok-workspace-rail"
 						label="Grok workspace"
@@ -147,7 +149,7 @@ export function WorkbenchShell({
 						onPointerDown={(event) => event.stopPropagation()}
 						onClick={(event) => event.stopPropagation()}
 					>
-						<GrokWorkflowToolbox inToolbar />
+						{!hasCanonicalGrok && <GrokWorkflowToolbox inToolbar />}
 						<CanvasStudioPalette composition={canvasKitComposition} />
 						{app && <BridgeCenter />}
 						<CanvasLayoutControls />
@@ -366,7 +368,7 @@ export function WorkbenchShell({
 	if (!app) return content
 	return (
 		<TldrawAgentAppContextProvider app={app}>
-			<CompanionCanvasBridgeController>
+			<CompanionCanvasBridgeController composition={canvasKitComposition}>
 				{content}
 			</CompanionCanvasBridgeController>
 		</TldrawAgentAppContextProvider>

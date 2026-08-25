@@ -24,6 +24,22 @@ export interface CanvasPresetInsertReceipt {
 	bindingIds: TLBindingId[]
 }
 
+export const CANVAS_KIT_RUNTIME_SCHEMA = 'canvas.kit-runtime/v1' as const
+export const CANVAS_KIT_TLDRAW_VERSION = '5.2.5' as const
+
+/** Canonical owner inventory validated by the composing host before registration. */
+export interface CanvasKitRuntimeContract {
+	readonly schema: typeof CANVAS_KIT_RUNTIME_SCHEMA
+	readonly owner: string
+	readonly tldrawVersion: typeof CANVAS_KIT_TLDRAW_VERSION
+	/** Full state-chart paths, including nested and lifecycle-installed tools. */
+	readonly toolPaths: readonly string[]
+	readonly migrationIds: readonly string[]
+	readonly schemaIds: readonly string[]
+	readonly lifecycleIds: readonly string[]
+	readonly bridgeIds: readonly string[]
+}
+
 export type CanvasAgentContextPolicy = 'selection' | 'selection-or-area'
 
 /** Serializable contract hydrated on demand by an external canvas companion. */
@@ -83,6 +99,7 @@ export interface CanvasKitAgentCapability {
  */
 export interface CanvasKitContribution {
 	readonly kitId: string
+	readonly runtimeContract: CanvasKitRuntimeContract
 	readonly presetIds: readonly string[]
 	readonly shapeUtils: readonly TLAnyShapeUtilConstructor[]
 	readonly bindingUtils: readonly TLAnyBindingUtilConstructor[]

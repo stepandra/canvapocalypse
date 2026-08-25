@@ -11,11 +11,9 @@ import {
 } from 'tldraw'
 import { TldrawAgentApp } from '../client/agent/TldrawAgentApp'
 import { publishCompanionCanvasCapabilityCatalog } from '../client/agent/companionCanvasBinding'
-import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'
 import { resolveAgentPageRegistrations } from '../client/canvas-studio/agentPageRegistrations'
 import { readEmbeddedCanvasStudioCatalog } from '../client/canvas-studio/catalog'
-import { composeCanvasKitContributions } from '../client/canvas-studio/compose'
-import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../client/canvas-studio/host'
+import { createCanvapocalypseOfflineCanvasKitComposition } from '../client/canvas-studio/host'
 import {
 	buildCanvasRuntimeCapabilityCatalog,
 	resolveCanvasRuntimePageMode,
@@ -63,13 +61,11 @@ const desktopStylesheet = [
 
 function WorkbenchDesktopLayer({
 	composition,
-	unsupportedKitIds,
 	shapeUtils,
 	bindingUtils,
 	tools,
 }: {
 	composition: CanvasKitComposition
-	unsupportedKitIds: readonly string[]
 	shapeUtils: readonly TLAnyShapeUtilConstructor[]
 	bindingUtils: readonly TLAnyBindingUtilConstructor[]
 	tools: readonly TLStateNodeConstructor[]
@@ -132,54 +128,28 @@ function WorkbenchDesktopLayer({
 	return (
 		<>
 			<style>{desktopStylesheet}</style>
-			{unsupportedKitIds.length > 0 && (
-				<div
-					role="status"
-					style={{
-						position: 'absolute',
-						right: 12,
-						bottom: 12,
-						zIndex: 500,
-						maxWidth: 320,
-						padding: '8px 10px',
-						borderRadius: 8,
-						background: 'var(--color-panel)',
-						boxShadow: 'var(--shadow-2)',
-						fontSize: 12,
-					}}
-				>
-					Unavailable in tldraw Offline: {unsupportedKitIds.join(', ')} requires custom
-					document records, which its document-script host cannot register.
-				</div>
-			)}
 			<WorkbenchShell app={app} canvasKitComposition={composition} />
 		</>
 	)
 }
 
 export function createTldrawDesktopEvalLabConfig(
-	composition: CanvasKitComposition = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION
+	composition: CanvasKitComposition = createCanvapocalypseOfflineCanvasKitComposition()
 ) {
-	const unsupportedKitIds = composition.contributions
+	const recordKitIds = composition.contributions
 		.filter((contribution) => Object.keys(contribution.records ?? {}).length > 0)
 		.map((contribution) => contribution.kitId)
-	const desktopComposition = unsupportedKitIds.length
-		? composeCanvasKitContributions(
-				composition.contributions.filter(
-					(contribution) => Object.keys(contribution.records ?? {}).length === 0
-				)
-			)
-		: composition
+	if (recordKitIds.length > 0) {
+		throw new Error(
+			`tldraw Offline cannot register custom records required by Canvas Studio kits: ${recordKitIds.join(', ')}`
+		)
+	}
 
 	return function applyTldrawDesktopEvalLabConfig({ config }: { config: any }) {
-		const suppliesCanonicalAgentsModelsShape = desktopComposition.shapeUtils.some(
-			(shapeUtil) => shapeUtil.type === AgentsModelsShapeUtil.type
-		)
 		const desktopShapeUtils = mergeUniqueRegistrations(
 			config.shapeUtils,
 			[
-				...desktopComposition.shapeUtils,
-				...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil]),
+				...composition.shapeUtils,
 				ExperimentCardShapeUtil,
 				WorkflowNodeShapeUtil,
 				WorkflowRichOutputShapeUtil,
@@ -191,13 +161,13 @@ export function createTldrawDesktopEvalLabConfig(
 		)
 		const desktopBindingUtils = mergeUniqueRegistrations(
 			config.bindingUtils,
-			desktopComposition.bindingUtils,
+			composition.bindingUtils,
 			'type'
 		)
 		const desktopTools = mergeUniqueRegistrations(
 			config.tools,
 			[
-				...desktopComposition.tools,
+				...composition.tools,
 				TargetShapeTool,
 				TargetAreaTool,
 				EmojiStampTool,
@@ -224,8 +194,7 @@ export function createTldrawDesktopEvalLabConfig(
 				<>
 					{PreviousInFrontOfTheCanvas && <PreviousInFrontOfTheCanvas />}
 					<WorkbenchDesktopLayer
-						composition={desktopComposition}
-						unsupportedKitIds={unsupportedKitIds}
+						composition={composition}
 						shapeUtils={desktopCatalogShapeUtils}
 						bindingUtils={desktopCatalogBindingUtils}
 						tools={desktopTools}

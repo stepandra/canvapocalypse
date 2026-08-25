@@ -70,6 +70,16 @@ const GrokWorkflowShapeUtil = class {
 
 const grokWorkflowContribution: CanvasKitContribution = {
 	kitId: 'grok.workflow',
+	runtimeContract: {
+		schema: 'canvas.kit-runtime/v1',
+		owner: 'grok.workflow',
+		tldrawVersion: '5.2.5',
+		toolPaths: [],
+		migrationIds: [],
+		schemaIds: ['grok.workflow/agents-models-node/v1'],
+		lifecycleIds: [],
+		bridgeIds: [],
+	},
 	presetIds: [],
 	shapeUtils: [GrokWorkflowShapeUtil],
 	bindingUtils: [],

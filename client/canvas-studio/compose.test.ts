@@ -6,17 +6,32 @@ import type {
 } from 'tldraw'
 import { describe, expect, it, vi } from 'vitest'
 import { composeCanvasKitContributions } from './compose'
-import type { CanvasKitContribution } from './types'
+import {
+	CANVAS_KIT_RUNTIME_SCHEMA,
+	CANVAS_KIT_TLDRAW_VERSION,
+	type CanvasKitContribution,
+} from './types'
 
 function contribution(
 	overrides: Partial<CanvasKitContribution> & Pick<CanvasKitContribution, 'kitId'>
 ): CanvasKitContribution {
+	const tools = overrides.tools ?? []
 	return {
 		kitId: overrides.kitId,
+		runtimeContract: overrides.runtimeContract ?? {
+			schema: CANVAS_KIT_RUNTIME_SCHEMA,
+			owner: overrides.kitId,
+			tldrawVersion: CANVAS_KIT_TLDRAW_VERSION,
+			toolPaths: tools.map((tool) => tool.id),
+			migrationIds: [],
+			schemaIds: [],
+			lifecycleIds: overrides.onMount ? [`${overrides.kitId}.mount`] : [],
+			bridgeIds: [],
+		},
 		presetIds: overrides.presetIds ?? [`${overrides.kitId}.preset`],
 		shapeUtils: overrides.shapeUtils ?? [],
 		bindingUtils: overrides.bindingUtils ?? [],
-		tools: overrides.tools ?? [],
+		tools,
 		records: overrides.records,
 		agentCapabilities: overrides.agentCapabilities,
 		onMount: overrides.onMount,
@@ -32,22 +47,43 @@ function contribution(
 }
 
 describe('Canvas Studio kit composition', () => {
-	it('mounts every live contribution once for an editor mount', () => {
+	it('mounts in contribution order and disposes once in reverse order', () => {
 		const editor = {} as Editor
-		const firstOnMount = vi.fn()
-		const secondOnMount = vi.fn()
+		const calls: string[] = []
+		const firstOnMount = vi.fn((_editor: Editor) => () => calls.push('dispose.alpha'))
+		const secondOnMount = vi.fn((_editor: Editor) => () => calls.push('dispose.gamma'))
 		const composition = composeCanvasKitContributions([
-			contribution({ kitId: 'kit.alpha', onMount: firstOnMount }),
+			contribution({
+				kitId: 'kit.alpha',
+				onMount: (mountedEditor) => {
+					calls.push('mount.alpha')
+					return firstOnMount(mountedEditor)
+				},
+			}),
 			contribution({ kitId: 'kit.beta' }),
-			contribution({ kitId: 'kit.gamma', onMount: secondOnMount }),
+			contribution({
+				kitId: 'kit.gamma',
+				onMount: (mountedEditor) => {
+					calls.push('mount.gamma')
+					return secondOnMount(mountedEditor)
+				},
+			}),
 		])
 
-		composition.onMount(editor)
+		const dispose = composition.onMount(editor)
+		dispose?.()
+		dispose?.()
 
 		expect(firstOnMount).toHaveBeenCalledOnce()
 		expect(firstOnMount).toHaveBeenCalledWith(editor)
 		expect(secondOnMount).toHaveBeenCalledOnce()
 		expect(secondOnMount).toHaveBeenCalledWith(editor)
+		expect(calls).toEqual([
+			'mount.alpha',
+			'mount.gamma',
+			'dispose.gamma',
+			'dispose.alpha',
+		])
 	})
 
 	it('disposes every cleanup returned by a live contribution', () => {
@@ -190,6 +226,193 @@ describe('Canvas Studio kit composition', () => {
 				}),
 			])
 		).toThrow(/Duplicate Canvas Studio tool id tool.same/)
+	})
+
+	it('requires the exact owner runtime schema and tldraw version', () => {
+		const valid = contribution({ kitId: 'kit.valid' })
+		const contract = valid.runtimeContract
+		const invalidCases = [
+			{ label: 'missing', contract: undefined, error: /missing runtimeContract/ },
+			{
+				label: 'schema',
+				contract: { ...contract, schema: 'canvas.kit-runtime/v0' },
+				error: /must use runtime schema canvas.kit-runtime\/v1/,
+			},
+			{
+				label: 'owner',
+				contract: { ...contract, owner: 'kit.someone-else' },
+				error: /must equal kit id kit.valid/,
+			},
+			{
+				label: 'version',
+				contract: { ...contract, tldrawVersion: '5.2.4' },
+				error: /requires tldraw 5.2.5/,
+			},
+		]
+
+		for (const invalid of invalidCases) {
+			expect(() =>
+				composeCanvasKitContributions([
+					{
+						...valid,
+						runtimeContract: invalid.contract,
+					} as unknown as CanvasKitContribution,
+				])
+			).toThrow(invalid.error)
+		}
+	})
+
+	it('rejects extra contract fields, duplicate inventory ids, and an untracked mount', () => {
+		const valid = contribution({ kitId: 'kit.valid' })
+		expect(() =>
+			composeCanvasKitContributions([
+				{
+					...valid,
+					runtimeContract: { ...valid.runtimeContract, inferredSchemas: [] },
+				} as CanvasKitContribution,
+			])
+		).toThrow(/runtimeContract has an invalid shape/)
+		expect(() =>
+			composeCanvasKitContributions([
+				contribution({
+					kitId: 'kit.duplicate',
+					runtimeContract: {
+						...valid.runtimeContract,
+						owner: 'kit.duplicate',
+						schemaIds: ['schema/v1', 'schema/v1'],
+					},
+				}),
+			])
+		).toThrow(/runtimeContract.schemaIds contains duplicate id schema\/v1/)
+		expect(() =>
+			composeCanvasKitContributions([
+				contribution({
+					kitId: 'kit.mount',
+					onMount: () => undefined,
+					runtimeContract: {
+						...valid.runtimeContract,
+						owner: 'kit.mount',
+					},
+				}),
+			])
+		).toThrow(/onMount requires a lifecycle id/)
+	})
+
+	it('validates full recursively traversed tool paths', () => {
+		class RegionDragging { static id = 'region-dragging' }
+		class CommentIdle { static id = 'idle' }
+		class CommentTool {
+			static id = 'comment'
+			static children() {
+				return [CommentIdle, RegionDragging]
+			}
+		}
+		const tools = [CommentTool as unknown as TLStateNodeConstructor]
+		const valid = contribution({
+			kitId: 'canvas.comment-fixture',
+			tools,
+			runtimeContract: {
+				schema: CANVAS_KIT_RUNTIME_SCHEMA,
+				owner: 'canvas.comment-fixture',
+				tldrawVersion: CANVAS_KIT_TLDRAW_VERSION,
+				toolPaths: ['comment', 'comment.idle', 'comment.region-dragging'],
+				migrationIds: [],
+				schemaIds: [],
+				lifecycleIds: [],
+				bridgeIds: [],
+			},
+		})
+
+		expect(composeCanvasKitContributions([valid]).tools).toEqual(tools)
+		expect(() =>
+			composeCanvasKitContributions([
+				{
+					...valid,
+					runtimeContract: {
+						...valid.runtimeContract,
+						toolPaths: ['comment', 'comment.idle'],
+					},
+				},
+			])
+		).toThrow(/must declare tool path comment.region-dragging/)
+	})
+
+	it('rejects duplicate canonical lifecycle-installed tool paths', () => {
+		const first = contribution({
+			kitId: 'kit.alpha',
+			runtimeContract: {
+				schema: CANVAS_KIT_RUNTIME_SCHEMA,
+				owner: 'kit.alpha',
+				tldrawVersion: CANVAS_KIT_TLDRAW_VERSION,
+				toolPaths: ['select.pointing-port'],
+				migrationIds: [],
+				schemaIds: [],
+				lifecycleIds: [],
+				bridgeIds: [],
+			},
+		})
+		const second = contribution({
+			kitId: 'kit.beta',
+			runtimeContract: {
+				...first.runtimeContract,
+				owner: 'kit.beta',
+			},
+		})
+		expect(() => composeCanvasKitContributions([first, second])).toThrow(
+			/Duplicate Canvas Studio tool path select.pointing-port/
+		)
+	})
+
+	it('mounts and disposes the lifecycle-owned Grok select child exactly once', () => {
+		class PointingWorkflowPort { static id = 'pointing_workflow_port' }
+		const select = {}
+		const editor = {
+			getStateDescendant: vi.fn((_path: string) => select),
+			setTool: vi.fn((_tool: TLStateNodeConstructor, _parent: object) => undefined),
+			removeTool: vi.fn((_tool: TLStateNodeConstructor, _parent: object) => undefined),
+		}
+		const tool = PointingWorkflowPort as unknown as TLStateNodeConstructor
+		const grok = contribution({
+			kitId: 'grok.workflow',
+			tools: [],
+			runtimeContract: {
+				schema: CANVAS_KIT_RUNTIME_SCHEMA,
+				owner: 'grok.workflow',
+				tldrawVersion: CANVAS_KIT_TLDRAW_VERSION,
+				toolPaths: ['select.pointing_workflow_port'],
+				migrationIds: ['workflow-ports-v5'],
+				schemaIds: [
+					'grok.workflow/agents-models-node/v1',
+					'grok-config-supervisor/v1',
+					'grok-config/v1',
+				],
+				lifecycleIds: ['grok.workflow.mount.select-tool-child'],
+				bridgeIds: [],
+			},
+			onMount: (mountedEditor) => {
+				const parent = (mountedEditor as unknown as typeof editor).getStateDescendant(
+					'select'
+				)
+				;(mountedEditor as unknown as typeof editor).setTool(
+					tool,
+					parent
+				)
+				return () =>
+					(mountedEditor as unknown as typeof editor).removeTool(
+						tool,
+						parent
+					)
+			},
+		})
+
+		const composition = composeCanvasKitContributions([grok])
+		expect(composition.tools).toEqual([])
+		const dispose = composition.onMount(editor as unknown as Editor)
+		dispose?.()
+		dispose?.()
+
+		expect((editor as unknown as typeof editor).setTool).toHaveBeenCalledOnce()
+		expect((editor as unknown as typeof editor).removeTool).toHaveBeenCalledOnce()
 	})
 
 	it('composes custom records and rejects duplicate type names', () => {

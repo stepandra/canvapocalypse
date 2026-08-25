@@ -1,11 +1,22 @@
 import type { Editor } from 'tldraw'
+import {
+	WORKBENCH_ARTIFACT_SCHEMA,
+	WORKBENCH_RELATION_SCHEMA,
+} from '../../shared/types/WorkbenchArtifact'
 import { ARCHITECTURE_DIAGRAM_SHAPE_UTILS } from '../workbench/architecture/ArchitectureDiagramShapes'
+import {
+	WORKBENCH_ARTIFACT_SCHEMA as ARCHITECTURE_WORKBENCH_ARTIFACT_SCHEMA,
+} from '../workbench/architecture/architectureTemplates'
 import type { WorkbenchDomain } from '../workbench/domainPacks'
 import { WORKBENCH_DOMAIN_PACKS } from '../workbench/domainPacks'
+import { ML_WORKBENCH_TEMPLATE_SCHEMA } from '../workbench/ml/mlTemplates'
+import { UIUX_BLUEPRINT_SCHEMA } from '../workbench/uiux/uiuxTemplates'
 import {
 	applyWorkbenchTemplate,
 	insertWorkbenchTemplate,
+	WORKBENCH_NATIVE_SHAPE_SCHEMA,
 } from '../workbench/workbenchCanvas'
+import { WORKBENCH_BLUEPRINT_SCHEMA } from '../workbench/workbenchBlueprints'
 import type {
 	CanvasKitAgentCapability,
 	CanvasKitContribution,
@@ -114,6 +125,33 @@ const WORKBENCH_KITS = [
 	{ kitId: 'workbench.product', pack: 'product' },
 ] as const
 
+const WORKBENCH_RUNTIME_SCHEMA_IDS: Readonly<Record<WorkbenchDomain, readonly string[]>> = {
+	architecture: [
+		WORKBENCH_NATIVE_SHAPE_SCHEMA,
+		WORKBENCH_ARTIFACT_SCHEMA,
+		WORKBENCH_RELATION_SCHEMA,
+		ARCHITECTURE_WORKBENCH_ARTIFACT_SCHEMA,
+	],
+	ml: [
+		WORKBENCH_NATIVE_SHAPE_SCHEMA,
+		WORKBENCH_ARTIFACT_SCHEMA,
+		WORKBENCH_RELATION_SCHEMA,
+		ML_WORKBENCH_TEMPLATE_SCHEMA,
+	],
+	uiux: [
+		WORKBENCH_NATIVE_SHAPE_SCHEMA,
+		WORKBENCH_ARTIFACT_SCHEMA,
+		WORKBENCH_RELATION_SCHEMA,
+		UIUX_BLUEPRINT_SCHEMA,
+	],
+	product: [
+		WORKBENCH_NATIVE_SHAPE_SCHEMA,
+		WORKBENCH_ARTIFACT_SCHEMA,
+		WORKBENCH_RELATION_SCHEMA,
+		WORKBENCH_BLUEPRINT_SCHEMA,
+	],
+}
+
 function insertMappedWorkbenchPreset(
 	editor: Editor,
 	presetId: string,
@@ -162,7 +200,7 @@ function createWorkbenchPresetAgentCapability(
 						required: ['_type', 'presetId'],
 						properties: {
 							_type: { const: 'insertPreset' },
-							presetId: { enum: presetIds },
+							presetId: { enum: [...presetIds] },
 						},
 					},
 				},
@@ -231,6 +269,16 @@ function createWorkbenchContribution(kitId: string, pack: WorkbenchDomain): Canv
 	}
 	return {
 		kitId,
+		runtimeContract: {
+			schema: 'canvas.kit-runtime/v1',
+			owner: kitId,
+			tldrawVersion: '5.2.5',
+			toolPaths: [],
+			migrationIds: [],
+			schemaIds: WORKBENCH_RUNTIME_SCHEMA_IDS[pack],
+			lifecycleIds: [],
+			bridgeIds: [],
+		},
 		presetIds,
 		shapeUtils: pack === 'architecture' ? ARCHITECTURE_DIAGRAM_SHAPE_UTILS : [],
 		bindingUtils: [],

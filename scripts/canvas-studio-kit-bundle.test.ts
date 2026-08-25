@@ -22,9 +22,9 @@ describe('Canvas Studio kit export boundary', () => {
 	})
 
 	it('wires one supplied composition into registrations and palette dispatch', () => {
-		expect(offlineConfigFactory).toContain('...desktopComposition.shapeUtils')
-		expect(offlineConfigFactory).toContain('desktopComposition.bindingUtils')
-		expect(offlineConfigFactory).toContain('...desktopComposition.tools')
+		expect(offlineConfigFactory).toContain('...composition.shapeUtils')
+		expect(offlineConfigFactory).toContain('composition.bindingUtils')
+		expect(offlineConfigFactory).toContain('...composition.tools')
 		expect(offlineConfigFactory).toContain(
 			'<WorkbenchShell app={app} canvasKitComposition={composition} />'
 		)
@@ -34,7 +34,7 @@ describe('Canvas Studio kit export boundary', () => {
 		expect(offlineBuilder).toContain("readArguments('--contribution')")
 		expect(offlineBuilder).toContain('CANVAS_KIT_CONTRIBUTIONS as contribution')
 		expect(offlineBuilder).toContain(
-			'createCanvapocalypseCanvasKitComposition(externalContributions)'
+			'createCanvapocalypseOfflineCanvasKitComposition(externalContributions)'
 		)
 		expect(offlineBuilder).toContain('contributionPreflightModule')
 		expect(offlineBuilder).toContain('contributionLoaderModule')

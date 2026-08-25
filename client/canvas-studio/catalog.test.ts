@@ -130,6 +130,11 @@ describe('Canvas Studio catalog palette model', () => {
 			'flight-deck': expect.arrayContaining(['hermes.flight-deck']),
 			freeform: [],
 		})
+		expect(
+			CANVAPOCALYPSE_DEFAULT_CANVAS_STUDIO_CATALOG.kits
+				.find((kit) => kit.id === 'hermes.flight-deck')
+				?.presets.map((preset) => preset.id)
+		).toEqual(['hermes.profile-canvas'])
 	})
 
 	it('installs the web catalog without replacing document-embedded metadata', () => {

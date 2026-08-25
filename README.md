@@ -20,51 +20,79 @@ Each pack inserts editable native tldraw templates:
 - **Product / PM:** Product Roadmap, Delivery Timeline, Opportunity Decision,
   Opportunity Solution Tree, Impact Map, User Journey / Service Blueprint.
 
-### Canvas Studio Offline composition
+### Canvas Studio host composition
 
-Trusted local kit modules export a named `CANVAS_KIT_CONTRIBUTIONS` array. The
-tldraw Offline builder accepts the module path repeatedly and bundles one static
-composition before the document loads:
+Trusted owner modules export a named `CANVAS_KIT_CONTRIBUTIONS` array. Every
+contribution must include an exact `canvas.kit-runtime/v1` contract whose owner
+equals its kit id, whose tldraw version is `5.2.5`, and whose inventories list
+all tool paths, migrations, schemas, lifecycles, and bridges. The composer
+recursively validates static tool state charts, rejects undeclared nested paths
+and duplicate canonical registrations, mounts kits in contribution order, and
+disposes them in reverse order. It never guesses semantic inventory from
+generated or minified JavaScript.
+
+`client/canvas-studio/host.ts` has no external default and imports no generated
+owner artifact. Its normal standalone composition is the four Workbench kits
+plus comments, layout, and Markdown; the standalone app persists those records
+in browser IndexedDB. Canonical Grok, Hermes, Botflow, and other owner modules
+must be supplied by the caller.
+
+Canvas Studio locks and rebuilds owner artifacts, then invokes the browser host
+with a private `canvas.portal-build/v1` configuration:
+
+```sh
+npm run canvas-studio:build-portal -- \
+  --config /private/temp/portal-build.json \
+  --out /private/temp/public
+```
+
+The build validates the project, catalog, canonical absolute module paths,
+inventory digest, project API, public URL, and optional `runtime.bridges` before
+preflighting contracts in a bounded child process. Bridge descriptors contain
+only `serviceId`, optional enabled `kitId`, and safe same-origin route prefixes;
+targets, commands, repository paths, and health URLs are rejected. There is no
+tracked vendor copy or stale fallback. React and tldraw stay host-owned.
+
+Before editor mount, locked mode maps the declared `grok-config-supervisor`
+strip-prefix route to `globalThis.__AM_GROK_SUPERVISOR_BASE__`; an optional
+declared `grok-config` route similarly sets `__AM_GROK_CONFIG_BASE__` without
+overwriting an existing value when absent. The `hermes-flight-deck-bridge`
+strip-prefix route sets `window.__HERMES_FLIGHT_DECK_RUNTIME__.apiBase` while
+preserving caller-supplied `fetch` and `actions`. A composed canonical owner
+without its required declared route fails before React or contribution mount.
+Canvas Studio owns the proxy targets and service lifecycle; none are embedded
+in the static host.
+
+Locked portal persistence is project-file persistence, not IndexedDB. The host
+creates the tldraw store with every composed custom record before loading data,
+then uses this same-origin API contract:
+
+- `GET /__canvas/project` returns `{ "snapshot": <TLStoreSnapshot> }` and a
+  strong `ETag`.
+- `PUT /__canvas/project` receives the same body with `If-Match: <ETag>` and
+  returns a different strong `ETag` after the write.
+
+Writes are debounced and flushed with `keepalive` when the page is hidden or
+unloaded. A missing API, invalid snapshot, weak or absent ETag, failed write,
+non-advancing ETag, or `409`/`412` revision conflict is terminal. Locked mode
+never falls back to a local browser store.
+
+Native tldraw Offline has no custom-record registration seam. Its explicit base
+composition includes Workbench, layout, and Markdown but omits comments. Any
+caller-supplied contribution that requests custom records fails before config
+creation; records are never advertised and silently filtered. Record-free
+owner kits can still be built statically:
 
 ```sh
 npm run offline:build-config -- \
   --outfile /path/to/tldraw/working/<document-id>/script/config.js \
-  --contribution /absolute/path/to/grok-canvas-kit.js \
-  --contribution /absolute/path/to/structurizr-canvas-kit.js
+  --contribution /absolute/path/to/canonical-canvas-kit.js
 ```
 
-`--contribution` accepts an absolute path to an existing regular local module
-and may be repeated up to 16 times. Before writing the config, the builder runs
-a bounded child-process preflight that imports trusted modules against the
-composer-owned `tldraw`, `@tldraw/*`, React, and React DOM packages, validates duplicate
-kit, preset, shape, binding, and tool identifiers, and exits explicitly even
-when a kit installs module-level timers. The long-lived builder process never
-imports contribution code. The final browser config still statically imports
-each contribution and leaves the shared runtime external. With no contribution
-arguments, the builder preserves the Workbench-only composition used by
-existing callers. Canvas Studio Go code must pass its trusted module paths as
-repeated `--contribution` arguments; it must not copy or patch Canvapocalypse
-host source.
-
-The public browser bundle built by `npm run canvas-studio:build-kits --
---outfile /path/to/canvapocalypse-canvas-kits.js` exports:
-
-- `createCanvapocalypseCanvasKitComposition(externalContributions?)`, which
-  composes the four Workbench contributions with supplied external
-  contributions and validates duplicate kit, preset, shape, binding, and tool
-  identifiers.
-- `CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION`, the existing Workbench-only default.
-- `composeCanvasKitContributions`, the lower-level composition validator.
-
-The Offline host factory is
-`createTldrawDesktopEvalLabConfig(composition)` from
-`scripts/tldraw-desktop-eval-lab-config-factory.tsx`. The builder calls this
-factory with the single static composition that also drives `WorkbenchShell`
-and `CanvasStudioPalette`, so custom shape, binding, and tool registrations are
-installed before document load and palette dispatch uses the same route table.
-Host-native registrations still use last-registration-wins deduplication; this
-preserves production registrations already owned by Canvapocalypse, including
-the Agents / Models shape and workflow tools.
+The public composition library remains available through `npm run
+canvas-studio:build-kits -- --outfile /path/to/canvapocalypse-canvas-kits.js`.
+It exports the caller-supplied browser and explicit Offline composition
+factories plus the lower-level validator; it does not bundle owner artifacts.
 
 Native tldraw is the default surface for every pack. Isoflow is used only for an
 explicit DevOps, DevSecOps, deployment, or infrastructure-contour request that

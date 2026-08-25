@@ -37,60 +37,43 @@ describe('tldraw Offline config parity', () => {
 		)
 	})
 
-	it('registers the native Agents / Models workflow cards', () => {
-		expect(desktopConfigSource).toContain(
-			"import { AgentsModelsShapeUtil } from '../client/agents-models/AgentsModelsShape'"
-		)
-		expect(desktopConfigSource).toContain(
-			'...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil])'
-		)
+	it('does not install a Canvapocalypse Agents / Models fallback', () => {
+		expect(desktopConfigSource).not.toContain('AgentsModelsShapeUtil')
+		expect(desktopConfigSource).not.toContain('suppliesCanonicalAgentsModelsShape')
 	})
 
-	it('keeps host-native registrations deduped after external registrations', () => {
-		expect(desktopConfigSource.indexOf('...desktopComposition.shapeUtils')).toBeLessThan(
-			desktopConfigSource.indexOf(
-				'...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil])'
-			)
+	it('keeps caller-supplied registrations ahead of generic host registrations', () => {
+		expect(desktopConfigSource.indexOf('...composition.shapeUtils')).toBeLessThan(
+			desktopConfigSource.indexOf('ExperimentCardShapeUtil,')
 		)
 		expect(
-			desktopConfigSource.indexOf('...desktopComposition.tools')
+			desktopConfigSource.indexOf('...composition.tools')
 		).toBeLessThan(
 			desktopConfigSource.indexOf('TargetShapeTool,')
 		)
 	})
 
-	it('uses the Offline-compatible slice of one supplied composition', () => {
+	it('uses one supplied composition without filtering it', () => {
 		expect(desktopConfigSource).toContain(
 			'export function createTldrawDesktopEvalLabConfig('
 		)
-		expect(desktopConfigSource).toContain('...desktopComposition.shapeUtils')
-		expect(desktopConfigSource).toContain('desktopComposition.bindingUtils')
-		expect(desktopConfigSource).toContain('...desktopComposition.tools')
-		expect(desktopConfigSource).toContain(
-			'composition={desktopComposition}'
-		)
+		expect(desktopConfigSource).toContain('...composition.shapeUtils')
+		expect(desktopConfigSource).toContain('composition.bindingUtils')
+		expect(desktopConfigSource).toContain('...composition.tools')
+		expect(desktopConfigSource).toContain('composition={composition}')
 	})
 
-	it('keeps the Grok Agents / Models util canonical and registers its port gesture', () => {
-		expect(desktopConfigSource).toContain(
-			'suppliesCanonicalAgentsModelsShape'
-		)
-		expect(desktopConfigSource).toContain(
-			'...(suppliesCanonicalAgentsModelsShape ? [] : [AgentsModelsShapeUtil])'
-		)
-		expect(desktopConfigSource).toContain('...desktopComposition.tools')
+	it('requires canonical Grok to supply its own shape and lifecycle-installed port gesture', () => {
+		expect(desktopConfigSource).not.toContain('AgentsModelsShapeUtil')
+		expect(desktopConfigSource).toContain('...composition.tools')
 	})
 
-	it('fails custom-record kits closed with an explicit diagnostic', () => {
+	it('fails custom-record compositions before creating an Offline config', () => {
 		expect(desktopConfigSource).toContain(
 			"Object.keys(contribution.records ?? {}).length > 0"
 		)
-		expect(desktopConfigSource).toContain(
-			'Unavailable in tldraw Offline:'
-		)
-		expect(desktopConfigSource).toContain(
-			'its document-script host cannot register.'
-		)
+		expect(desktopConfigSource).toContain('tldraw Offline cannot register custom records')
+		expect(desktopConfigSource).toContain('throw new Error(')
 	})
 
 	it('mounts and disposes live contributions with the supplied composition', () => {

@@ -73,6 +73,8 @@ const MarkdownDocumentVersions = createShapePropsMigrationIds(
 	MARKDOWN_DOCUMENT_SHAPE_TYPE,
 	{ AddRevisionedSource: 1 }
 )
+export const MARKDOWN_DOCUMENT_MIGRATION_ID =
+	MarkdownDocumentVersions.AddRevisionedSource
 
 export const markdownDocumentShapeMigrations = createShapePropsMigrationSequence({
 	sequence: [

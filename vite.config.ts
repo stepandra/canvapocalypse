@@ -2,11 +2,15 @@ import { fileURLToPath } from 'url'
 import { cloudflare } from '@cloudflare/vite-plugin'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { createCanvasStudioPortalPlugin } from './scripts/vite-canvas-studio-portal-plugin.mjs'
 import { zodLocalePlugin } from './scripts/vite-zod-locale-plugin.js'
 
 // https://vitejs.dev/config/
 export default defineConfig(() => {
 	return {
+		resolve: {
+			dedupe: ['react', 'react-dom', 'tldraw'],
+		},
 		server: {
 			allowedHosts: process.env.AMP_ORB ? true : undefined,
 			proxy: {
@@ -40,6 +44,10 @@ export default defineConfig(() => {
 			},
 		},
 		plugins: [
+			createCanvasStudioPortalPlugin(
+				process.env.CANVAS_STUDIO_PORTAL_MANIFEST,
+				process.env.CANVAS_STUDIO_PORTAL_BUILD_CONFIG
+			),
 			zodLocalePlugin(fileURLToPath(new URL('./scripts/zod-locales-shim.js', import.meta.url))),
 			...(process.env.CANVAS_STUDIO_STORIES ? [] : [cloudflare()]),
 			react(),

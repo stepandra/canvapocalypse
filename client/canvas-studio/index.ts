@@ -12,6 +12,7 @@ export { composeCanvasKitContributions } from './compose'
 export {
 	CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
 	createCanvapocalypseCanvasKitComposition,
+	createCanvapocalypseOfflineCanvasKitComposition,
 } from './host'
 export type {
 	CanvasKitComposition,

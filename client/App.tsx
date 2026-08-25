@@ -7,6 +7,7 @@ import {
 	Tldraw,
 	TldrawUiToastsProvider,
 	TLUiOverrides,
+	type TLStoreWithStatus,
 	defaultAssetUtils,
 	defaultBindingUtils,
 	defaultShapeUtils,
@@ -21,8 +22,15 @@ import { mountGrokWorkspaceRuntime } from './agents-models/grokWorkspaceRuntime'
 import { resolveAgentPageRegistrations } from './canvas-studio/agentPageRegistrations'
 import { readEmbeddedCanvasStudioCatalog } from './canvas-studio/catalog'
 import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from './canvas-studio/host'
+import {
+	CANVAS_STUDIO_PORTAL_COMPOSITION,
+	CANVAS_STUDIO_PORTAL_LOCKED,
+	CANVAS_STUDIO_PORTAL_RUNTIME,
+} from './canvas-studio/portalComposition'
+import { useCanvasStudioProjectStore } from './canvas-studio/projectStore'
 import { buildCanvasRuntimeCapabilityCatalog } from './canvas-studio/runtimeCapabilityCatalog'
 import { resolveCanvasRuntimePageMode } from './canvas-studio/runtimeCapabilityCatalog'
+import type { CanvasKitComposition } from './canvas-studio/types'
 import { useCanvasStudioLocalStore } from './canvas-studio/useCanvasStudioLocalStore'
 import { CommentOverlay } from './comments/CommentOverlay'
 import { CustomHelperButtons } from './components/CustomHelperButtons'
@@ -57,20 +65,17 @@ const hostTools = [
 	EmojiStampTool,
 	...WORKFLOW_TOOLS,
 ]
-const tools = [...hostTools, ...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.tools]
 const IsoflowEmbedShapeUtil = EmbedShapeUtil.configure({
 	embedDefinitions: [ISOFLOW_EMBED_DEFINITION, ...DEFAULT_EMBED_DEFINITIONS],
 })
-const shapeUtils = [
+const hostShapeUtils = [
 	ExperimentCardShapeUtil,
 	WorkflowNodeShapeUtil,
 	WorkflowRichOutputShapeUtil,
 	DesignSystemShapeUtil,
 	LocalHtmlMockupShapeUtil,
 	IsoflowEmbedShapeUtil,
-	...CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.shapeUtils,
 ]
-const bindingUtils = CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.bindingUtils
 const overlayUtils = [AgentHighlightOverlayUtil]
 
 function mergeRegistrationsByType<
@@ -87,8 +92,25 @@ function mergeRegistrationsByType<
 	]
 }
 
-const storeShapeUtils = mergeRegistrationsByType(defaultShapeUtils, shapeUtils)
-const storeBindingUtils = mergeRegistrationsByType(defaultBindingUtils, bindingUtils)
+function createCanvasRegistrations(composition: CanvasKitComposition) {
+	const tools = [...hostTools, ...composition.tools]
+	const shapeUtils = [...hostShapeUtils, ...composition.shapeUtils]
+	const bindingUtils = composition.bindingUtils
+	return {
+		tools,
+		shapeUtils,
+		bindingUtils,
+		storeShapeUtils: mergeRegistrationsByType(defaultShapeUtils, shapeUtils),
+		storeBindingUtils: mergeRegistrationsByType(defaultBindingUtils, bindingUtils),
+	}
+}
+
+const standaloneRegistrations = createCanvasRegistrations(
+	CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION
+)
+const portalRegistrations = createCanvasRegistrations(
+	CANVAS_STUDIO_PORTAL_COMPOSITION
+)
 
 const overrides: TLUiOverrides = {
 	tools: (editor, tools) => {
@@ -117,18 +139,72 @@ const overrides: TLUiOverrides = {
 }
 
 function App() {
+	return CANVAS_STUDIO_PORTAL_LOCKED ? (
+		<LockedCanvasStudioPortal />
+	) : (
+		<StandaloneCanvasStudio />
+	)
+}
+
+function StandaloneCanvasStudio() {
+	const persistenceKey = resolveCanvasPersistenceKey(window.location.search)
+	const store = useCanvasStudioLocalStore({
+		persistenceKey,
+		shapeUtils: standaloneRegistrations.storeShapeUtils,
+		bindingUtils: standaloneRegistrations.storeBindingUtils,
+		assetUtils: defaultAssetUtils,
+		records: CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.records,
+	})
+	return (
+		<CanvasStudioApp
+			composition={CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION}
+			registrations={standaloneRegistrations}
+			store={store}
+			mountStandaloneGrokRuntime
+		/>
+	)
+}
+
+function LockedCanvasStudioPortal() {
+	const projectStoreOptions = useMemo(
+		() => ({
+			endpoint: CANVAS_STUDIO_PORTAL_RUNTIME.projectApi,
+			inventorySha256: CANVAS_STUDIO_PORTAL_RUNTIME.inventorySha256,
+			shapeUtils: portalRegistrations.storeShapeUtils,
+			bindingUtils: portalRegistrations.storeBindingUtils,
+			assetUtils: defaultAssetUtils,
+			records: CANVAS_STUDIO_PORTAL_COMPOSITION.records,
+		}),
+		[]
+	)
+	const store = useCanvasStudioProjectStore(projectStoreOptions)
+	return (
+		<CanvasStudioApp
+			composition={CANVAS_STUDIO_PORTAL_COMPOSITION}
+			registrations={portalRegistrations}
+			store={store}
+			mountStandaloneGrokRuntime={false}
+		/>
+	)
+}
+
+function CanvasStudioApp({
+	composition,
+	registrations,
+	store,
+	mountStandaloneGrokRuntime,
+}: {
+	composition: CanvasKitComposition
+	registrations: ReturnType<typeof createCanvasRegistrations>
+	store: TLStoreWithStatus
+	mountStandaloneGrokRuntime: boolean
+}) {
 	const [app, setApp] = useState<TldrawAgentApp | null>(null)
 	const disposeCanvasKits = useRef<(() => void) | undefined>(undefined)
 	const disposeCapabilityCatalog = useRef<(() => void) | undefined>(undefined)
 	const disposeGrokWorkspace = useRef<(() => void) | undefined>(undefined)
-	const persistenceKey = resolveCanvasPersistenceKey(window.location.search)
-	const store = useCanvasStudioLocalStore({
-		persistenceKey,
-		shapeUtils: storeShapeUtils,
-		bindingUtils: storeBindingUtils,
-		assetUtils: defaultAssetUtils,
-		records: CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.records,
-	})
+	const { tools, shapeUtils, bindingUtils, storeShapeUtils, storeBindingUtils } =
+		registrations
 
 	const handleUnmount = useCallback(() => {
 		disposeGrokWorkspace.current?.()
@@ -144,7 +220,7 @@ function App() {
 		disposeCapabilityCatalog.current?.()
 		disposeCanvasKits.current?.()
 		disposeCanvasKits.current =
-			CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION.onMount(nextApp.editor) ?? undefined
+			composition.onMount(nextApp.editor) ?? undefined
 		const search = new URLSearchParams(window.location.search)
 		const hasRequestedMode =
 			search.has('pack') ||
@@ -161,7 +237,9 @@ function App() {
 			nextApp.editor,
 			requestedPageMode
 		)
-		disposeGrokWorkspace.current = mountGrokWorkspaceRuntime(nextApp.editor)
+		disposeGrokWorkspace.current = mountStandaloneGrokRuntime
+			? mountGrokWorkspaceRuntime(nextApp.editor)
+			: undefined
 		const studioCatalog = readEmbeddedCanvasStudioCatalog()
 		let pageSignature = ''
 		let disposePublishedCatalog: (() => void) | undefined
@@ -177,7 +255,7 @@ function App() {
 			const pageMode = resolveCanvasRuntimePageMode(page)
 			const registrations = resolveAgentPageRegistrations({
 				pageMode,
-				composition: CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+				composition,
 				shapeUtils: storeShapeUtils,
 				bindingUtils: storeBindingUtils,
 				tools,
@@ -185,7 +263,7 @@ function App() {
 			disposePublishedCatalog?.()
 			disposePublishedCatalog = publishCompanionCanvasCapabilityCatalog(
 				buildCanvasRuntimeCapabilityCatalog({
-				composition: CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+				composition,
 				studioCatalog,
 				page,
 				shapeUtils: registrations.shapeUtils,
@@ -208,14 +286,18 @@ function App() {
 		if (search.get('workflow') === 'ml-intern') {
 			bootstrapMlInternWorkflows(nextApp.editor)
 		}
-	}, [])
+	}, [composition, mountStandaloneGrokRuntime, storeBindingUtils, storeShapeUtils, tools])
 
 	// Custom components that need the agent app's React context
 	const components: TLComponents = useMemo(() => {
 		return {
 			InFrontOfTheCanvas: () => (
 				<>
-					<WorkbenchShell app={app} showCommentTools />
+					<WorkbenchShell
+						app={app}
+						canvasKitComposition={composition}
+						showCommentTools={Boolean(composition.getContribution('canvas.comments'))}
+					/>
 					<CommentOverlay />
 				</>
 			),
@@ -229,7 +311,7 @@ function App() {
 			Toolbar: WorkbenchToolbar,
 			LoadingScreen: () => null,
 		}
-	}, [app])
+	}, [app, composition])
 
 	return (
 		<TldrawUiToastsProvider>

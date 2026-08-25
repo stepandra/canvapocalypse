@@ -1,6 +1,19 @@
 import { CONSTRAINT_LAYOUT_SHAPE_UTILS, mountConstraintLayout } from './binding'
 import { FLEX_LAYOUT_SHAPE_UTILS, mountFlexLayout } from './flex'
 
+export const CANVAS_LAYOUT_SCHEMA_IDS = [
+	'canvas.layout/flex/v1',
+	'canvas.layout/constraint/v1',
+	'canvas.layout/constraint-item/v1',
+] as const
+export const CANVAS_LAYOUT_MIGRATION_IDS = [
+	'com.tldraw.binding.canvapocalypse-layout-item/1',
+] as const
+export const CANVAS_LAYOUT_LIFECYCLE_IDS = [
+	'canvas.layout/flex-lifecycle/v1',
+	'canvas.layout/constraint-lifecycle/v1',
+] as const
+
 export {
 	CANVAS_LAYOUT_COMPONENTS,
 	CanvasLayoutControls,

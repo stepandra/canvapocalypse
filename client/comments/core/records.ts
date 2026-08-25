@@ -237,6 +237,20 @@ export const CANVAS_COMMENT_RECORDS = {
 	'comment-reaction': commentReactionRecord,
 } satisfies Record<'comment-thread' | 'comment' | 'comment-reaction', CustomRecordInfo>
 
+export const CANVAS_COMMENT_SCHEMA_IDS = [
+	'canvas.comments/comment-thread/v3',
+	'canvas.comments/comment/v1',
+	'canvas.comments/comment-reaction/v1',
+] as const
+
+export const CANVAS_COMMENT_MIGRATION_IDS = [
+	'com.tldraw.comment-thread/1',
+	'com.tldraw.comment-thread/2',
+	'com.tldraw.comment-thread/3',
+	'com.tldraw.comment/1',
+	'com.tldraw.comment-reaction/1',
+] as const
+
 export function createCommentThreadId(id?: string): TLCommentThreadId {
 	return createCustomRecordId('comment-thread', id) as TLCommentThreadId
 }

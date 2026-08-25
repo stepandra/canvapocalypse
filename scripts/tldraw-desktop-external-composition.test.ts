@@ -32,6 +32,16 @@ export class FixtureBinding { static type = ${JSON.stringify(bindingType)} }
 export class FixtureTool { static id = ${JSON.stringify(toolId)} }
 export const CANVAS_KIT_CONTRIBUTIONS = [{
 	kitId: ${JSON.stringify(kitId)},
+	runtimeContract: {
+		schema: 'canvas.kit-runtime/v1',
+		owner: ${JSON.stringify(kitId)},
+		tldrawVersion: '5.2.5',
+		toolPaths: [${JSON.stringify(toolId)}],
+		migrationIds: [],
+		schemaIds: [],
+		lifecycleIds: [],
+		bridgeIds: [],
+	},
 	presetIds: [${JSON.stringify(presetId)}],
 	shapeUtils: [FixtureShape],
 	bindingUtils: [FixtureBinding],
@@ -168,6 +178,10 @@ class TimerShape {
 }
 export const CANVAS_KIT_CONTRIBUTIONS = [{
 	kitId: 'timer.kit',
+	runtimeContract: {
+		schema: 'canvas.kit-runtime/v1', owner: 'timer.kit', tldrawVersion: '5.2.5',
+		toolPaths: [], migrationIds: [], schemaIds: [], lifecycleIds: [], bridgeIds: [],
+	},
 	presetIds: ['timer.preset'],
 	shapeUtils: [TimerShape],
 	bindingUtils: [],
@@ -225,7 +239,7 @@ export const CANVAS_KIT_CONTRIBUTIONS = [{
 		{
 			label: 'tool registration',
 			duplicate: { toolId: 'workflow-agent' },
-			error: /Duplicate Canvas Studio tool id workflow-agent/,
+			error: /Duplicate Canvas Studio tool path workflow-agent/,
 		},
 	])(
 		'rejects duplicate $label ids before writing a config',

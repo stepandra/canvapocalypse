@@ -21,7 +21,7 @@ import {
 import type { TldrawAgent } from '../agent/TldrawAgent'
 import { useAgent } from '../agent/TldrawAgentAppProvider'
 import { getPublishedCompanionCanvasCapabilityCatalog } from '../agent/companionCanvasBinding'
-import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../canvas-studio/host'
+import type { CanvasKitComposition } from '../canvas-studio/types'
 import type { CanvasRuntimeCapabilityCatalog } from '../canvas-studio/runtimeCapabilityCatalog'
 
 const POLL_INTERVAL_MS = 1_500
@@ -197,8 +197,10 @@ export function resolveCompanionCanvasBridgeIdlePresentation(
  */
 export function CompanionCanvasBridgeController({
 	children,
+	composition,
 }: {
 	children: ReactNode
+	composition: CanvasKitComposition
 }) {
 	const agent = useAgent()
 	const [status, setStatus] = useState<CompanionCanvasToolStatus | null>(null)
@@ -307,7 +309,7 @@ export function CompanionCanvasBridgeController({
 							executeCompanionCanvasToolRequest(
 								currentAgent,
 								currentRequest,
-								CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION,
+								composition,
 								getPublishedCompanionCanvasCapabilityCatalog<CanvasRuntimeCapabilityCatalog>()
 							)
 					)
@@ -337,6 +339,7 @@ export function CompanionCanvasBridgeController({
 		},
 		[
 			agent,
+			composition,
 			deliveryQueue,
 			isGenerating,
 			latestReceipt,

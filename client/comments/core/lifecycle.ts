@@ -14,6 +14,9 @@ type PendingShapeAnchor = {
 	point: { x: number; y: number }
 }
 
+export const CANVAS_COMMENT_LIFECYCLE_ID =
+	'canvas.comments/anchor-lifecycle/v1' as const
+
 function commentThreads(editor: Editor) {
 	return editor.store
 		.allRecords()

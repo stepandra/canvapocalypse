@@ -161,7 +161,7 @@ function renderStaticCompositionEntry(contributionModules) {
 		(_, index) => `...contribution${index}`
 	)
 	return [
-		`import { createCanvapocalypseCanvasKitComposition } from ${JSON.stringify(canvasKitHostModule)}`,
+		`import { createCanvapocalypseOfflineCanvasKitComposition } from ${JSON.stringify(canvasKitHostModule)}`,
 		`import { createTldrawDesktopEvalLabConfig } from ${JSON.stringify(configFactoryModule)}`,
 		`import { installHtmlMockupResidentCapability } from ${JSON.stringify(htmlMockupBridgeModule)}`,
 		`import { installBridgeSupervisorResidentCapability } from ${JSON.stringify(bridgeSupervisorClientModule)}`,
@@ -170,7 +170,7 @@ function renderStaticCompositionEntry(contributionModules) {
 		'installHtmlMockupResidentCapability(__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__)',
 		'installBridgeSupervisorResidentCapability(__TLDRAW_HTML_MOCKUP_RESIDENT_CAPABILITY__)',
 		`const externalContributions = [${contributions.join(', ')}]`,
-		'export const CANVAS_KIT_COMPOSITION = createCanvapocalypseCanvasKitComposition(externalContributions)',
+		'export const CANVAS_KIT_COMPOSITION = createCanvapocalypseOfflineCanvasKitComposition(externalContributions)',
 		'export default createTldrawDesktopEvalLabConfig(CANVAS_KIT_COMPOSITION)',
 		'',
 	].join('\n')

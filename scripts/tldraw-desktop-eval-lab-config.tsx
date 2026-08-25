@@ -1,4 +1,4 @@
-import { CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION } from '../client/canvas-studio/host'
+import { createCanvapocalypseOfflineCanvasKitComposition } from '../client/canvas-studio/host'
 import { installBridgeSupervisorResidentCapability } from '../client/bridges/bridgeSupervisorClient'
 import { installHtmlMockupResidentCapability } from '../client/html-mockup/htmlMockupBridge'
 import { createTldrawDesktopEvalLabConfig } from './tldraw-desktop-eval-lab-config-factory'
@@ -14,5 +14,5 @@ installBridgeSupervisorResidentCapability(
 
 /** @param {import('../.script-workspace/script-context').ConfigScriptContext} ctx */
 export default createTldrawDesktopEvalLabConfig(
-	CANVAPOCALYPSE_CANVAS_KIT_COMPOSITION
+	createCanvapocalypseOfflineCanvasKitComposition()
 )

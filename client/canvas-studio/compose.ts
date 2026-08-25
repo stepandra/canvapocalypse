@@ -7,8 +7,29 @@ import type {
 	CanvasKitComposition,
 	CanvasKitContribution,
 } from './types'
+import {
+	CANVAS_KIT_RUNTIME_SCHEMA,
+	CANVAS_KIT_TLDRAW_VERSION,
+} from './types'
 
 const contributionIdPattern = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/
+const runtimeContractKeys = [
+	'schema',
+	'owner',
+	'tldrawVersion',
+	'toolPaths',
+	'migrationIds',
+	'schemaIds',
+	'lifecycleIds',
+	'bridgeIds',
+] as const
+const runtimeContractListKeys = [
+	'toolPaths',
+	'migrationIds',
+	'schemaIds',
+	'lifecycleIds',
+	'bridgeIds',
+] as const
 const reservedAgentCapabilityIds = new Set([
 	'canvas.catalog',
 	'canvas.inspect',
@@ -23,6 +44,10 @@ type Registration =
 	| TLAnyShapeUtilConstructor
 	| TLAnyBindingUtilConstructor
 	| TLStateNodeConstructor
+
+type ToolRegistration = TLStateNodeConstructor & {
+	children?: () => readonly ToolRegistration[]
+}
 
 function assertContributionId(value: string, kind: string) {
 	if (!contributionIdPattern.test(value)) {
@@ -64,6 +89,98 @@ function rejectDuplicateRegistrationIds(
 	}
 }
 
+function inferToolPaths(
+	tool: ToolRegistration,
+	parentPath: string | undefined,
+	paths: string[],
+	ancestors: Set<ToolRegistration>
+) {
+	if (ancestors.has(tool)) {
+		throw new Error('Canvas Studio tool state chart contains a recursive constructor cycle')
+	}
+	const id = registrationId(tool, 'id', 'tool')
+	const path = parentPath ? `${parentPath}.${id}` : id
+	paths.push(path)
+	const nextAncestors = new Set(ancestors).add(tool)
+	const children = typeof tool.children === 'function' ? tool.children() : []
+	if (!Array.isArray(children)) {
+		throw new Error(`Canvas Studio tool ${path} children must be an array`)
+	}
+	for (const child of children) {
+		inferToolPaths(child, path, paths, nextAncestors)
+	}
+}
+
+function assertRuntimeContract(
+	contribution: CanvasKitContribution
+) {
+	const contract = contribution.runtimeContract
+	if (!contract || typeof contract !== 'object' || Array.isArray(contract)) {
+		throw new Error(`Canvas Studio kit ${contribution.kitId} is missing runtimeContract`)
+	}
+	const keys = Object.keys(contract).sort()
+	const expectedKeys = [...runtimeContractKeys].sort()
+	if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+		throw new Error(`Canvas Studio kit ${contribution.kitId} runtimeContract has an invalid shape`)
+	}
+	if (contract.schema !== CANVAS_KIT_RUNTIME_SCHEMA) {
+		throw new Error(`Canvas Studio kit ${contribution.kitId} must use runtime schema ${CANVAS_KIT_RUNTIME_SCHEMA}`)
+	}
+	if (contract.owner !== contribution.kitId) {
+		throw new Error(`Canvas Studio runtime owner ${contract.owner} must equal kit id ${contribution.kitId}`)
+	}
+	if (contract.tldrawVersion !== CANVAS_KIT_TLDRAW_VERSION) {
+		throw new Error(`Canvas Studio kit ${contribution.kitId} requires tldraw ${CANVAS_KIT_TLDRAW_VERSION}`)
+	}
+	for (const key of runtimeContractListKeys) {
+		const values = contract[key]
+		if (!Array.isArray(values)) {
+			throw new Error(`Canvas Studio kit ${contribution.kitId} runtimeContract.${key} must be an array`)
+		}
+		const seen = new Set<string>()
+		for (const value of values) {
+			if (typeof value !== 'string' || value.trim() !== value || !value) {
+				throw new Error(`Canvas Studio kit ${contribution.kitId} runtimeContract.${key} contains an invalid id`)
+			}
+			if (seen.has(value)) {
+				throw new Error(`Canvas Studio kit ${contribution.kitId} runtimeContract.${key} contains duplicate id ${value}`)
+			}
+			seen.add(value)
+		}
+	}
+	if (contribution.onMount && contract.lifecycleIds.length === 0) {
+		throw new Error(`Canvas Studio kit ${contribution.kitId} onMount requires a lifecycle id`)
+	}
+
+	const inferredToolPaths: string[] = []
+	for (const tool of contribution.tools) {
+		inferToolPaths(tool as ToolRegistration, undefined, inferredToolPaths, new Set())
+	}
+	const declaredToolPaths = new Set(contract.toolPaths)
+	for (const path of inferredToolPaths) {
+		if (!declaredToolPaths.has(path)) {
+			throw new Error(`Canvas Studio kit ${contribution.kitId} must declare tool path ${path}`)
+		}
+	}
+}
+
+function rejectDuplicateToolPaths(
+	contributions: readonly CanvasKitContribution[]
+) {
+	const owners = new Map<string, string>()
+	for (const contribution of contributions) {
+		for (const path of contribution.runtimeContract.toolPaths) {
+			const existingOwner = owners.get(path)
+			if (existingOwner) {
+				throw new Error(
+					`Duplicate Canvas Studio tool path ${path} in ${existingOwner} and ${contribution.kitId}`
+				)
+			}
+			owners.set(path, contribution.kitId)
+		}
+	}
+}
+
 export function composeCanvasKitContributions(
 	contributions: readonly CanvasKitContribution[]
 ): CanvasKitComposition {
@@ -82,6 +199,7 @@ export function composeCanvasKitContributions(
 			throw new Error(`Duplicate Canvas Studio kit id ${contribution.kitId}`)
 		}
 		byKitId.set(contribution.kitId, contribution)
+		assertRuntimeContract(contribution)
 
 		const localPresetIds = new Set<string>()
 		for (const presetId of contribution.presetIds) {
@@ -146,6 +264,7 @@ export function composeCanvasKitContributions(
 	rejectDuplicateRegistrationIds(contributions, 'shapeUtils', 'type', 'shape')
 	rejectDuplicateRegistrationIds(contributions, 'bindingUtils', 'type', 'binding')
 	rejectDuplicateRegistrationIds(contributions, 'tools', 'id', 'tool')
+	rejectDuplicateToolPaths(contributions)
 
 	const stableContributions = [...contributions]
 	const shapeUtils = stableContributions.flatMap((contribution) => [
@@ -170,7 +289,10 @@ export function composeCanvasKitContributions(
 		agentCapabilities,
 		onMount(editor) {
 			const disposers: Array<() => void> = []
+			let disposed = false
 			const dispose = () => {
+				if (disposed) return
+				disposed = true
 				let firstError: unknown
 				let failed = false
 				for (let index = disposers.length - 1; index >= 0; index -= 1) {
